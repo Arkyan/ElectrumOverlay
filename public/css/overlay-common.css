@@ -43,82 +43,95 @@ body {
     font-style: normal;
 }
 
-/* ========== CONTENEUR D'ALERTES ========== */
+/* ========== CONTENEUR D'ALERTES ==========
+ * Une seule couleur d'accent par type d'alerte (--alert-accent, posée en JS depuis
+ * display.alerts.types.<type>.border) plutôt qu'un dégradé plein cadre : bordure, badge
+ * icône, titre et glow reprennent cette couleur, le fond reste une surface neutre.
+ */
 .alert-container {
+    --alert-accent: var(--theme-primary, #a855f7);
     position: fixed;
     top: 20%;
     left: 50%;
-    transform: translate(-50%, -50%) scale(0.8);
+    transform: translate(-50%, -50%) translateY(14px);
     width: 40vw;
     max-width: 600px;
-    background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
-    border-radius: 20px;
-    padding: 3vh 2vw;
-    box-shadow: 0 12px 48px rgba(0, 0, 0, 0.5);
-    border: 3px solid #475569;
-    text-align: center;
-    opacity: 0;
-    transition: opacity 0.6s ease, transform 0.6s ease;
-    z-index: 300;
     display: none;
+    align-items: center;
+    gap: 1.6vw;
+    background: rgba(15, 23, 42, 0.92);
+    backdrop-filter: blur(16px);
+    border-radius: 16px;
+    padding: 2.2vh 2vw;
+    border: 1.5px solid var(--alert-accent);
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45), 0 0 60px -22px var(--alert-accent);
+    text-align: left;
+    opacity: 0;
+    transition: opacity 0.4s ease, transform 0.45s cubic-bezier(0.22, 1, 0.36, 1);
+    z-index: 300;
 }
 
 .alert-container.show {
-    display: block;
+    display: flex;
     opacity: 1;
-    transform: translate(-50%, -50%) scale(1);
+    transform: translate(-50%, -50%) translateY(0);
 }
 
 .alert-container.hide {
     opacity: 0;
-    transform: translate(-50%, -50%) scale(0.8);
+    transform: translate(-50%, -50%) translateY(-10px);
 }
 
 .alert-icon {
-    font-size: 5vh;
-    margin-bottom: 2vh;
-    color: var(--theme-primary, #a855f7);
-    animation: bounce 0.5s infinite alternate;
+    flex-shrink: 0;
+    width: 6vh;
+    height: 6vh;
+    border-radius: 50%;
+    background: var(--alert-accent);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 2.6vh;
+    color: #0b0d12;
+    box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.08);
+}
+
+.alert-body {
+    min-width: 0;
 }
 
 .alert-title {
-    color: var(--theme-primary, #a855f7);
-    font-size: 2.5vh;
-    font-weight: 800;
-    margin-bottom: 1vh;
+    font-family: 'Baron Neue Black', 'Inter', sans-serif;
+    color: var(--alert-accent);
+    font-size: 2vh;
+    letter-spacing: 1px;
     text-transform: uppercase;
-    letter-spacing: 2px;
+    margin-bottom: 0.4vh;
 }
 
 .alert-username {
-    color: #f1f5f9;
-    font-size: 3vh;
-    font-weight: 700;
-    margin-bottom: 1vh;
-    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+    font-family: 'Baron Neue Black', 'Inter', sans-serif;
+    color: #f8fafc;
+    font-size: 2.8vh;
+    line-height: 1.15;
+    margin-bottom: 0.4vh;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .alert-message {
-    color: rgba(255, 255, 255, 0.9);
-    font-size: 1.6vh;
+    color: rgba(226, 232, 240, 0.75);
+    font-size: 1.5vh;
     font-weight: 500;
 }
 
 .alert-amount {
-    color: #fbbf24;
-    font-size: 2.2vh;
-    font-weight: 800;
-    margin: 1vh 0;
-}
-
-/* ========== ANIMATIONS COMMUNES ========== */
-@keyframes bounce {
-    0% {
-        transform: translateY(0);
-    }
-    100% {
-        transform: translateY(-10px);
-    }
+    display: inline-block;
+    margin-top: 0.6vh;
+    color: var(--alert-accent);
+    font-family: 'Baron Neue Black', 'Inter', sans-serif;
+    font-size: 2vh;
 }
 
 @keyframes pulse {

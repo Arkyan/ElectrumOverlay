@@ -1,6 +1,5 @@
 const ngrok = require('ngrok');
 const fs = require('fs').promises;
-const path = require('path');
 
 /**
  * Gestionnaire pour ngrok - démarrage automatique et récupération d'URL
@@ -18,28 +17,39 @@ class NgrokManager {
      * @returns {Promise<string>} URL publique du tunnel
      */
     async start(port = 8080, options = {}) {
-        try {
-            console.log('🚀 Démarrage de ngrok...');
+        const ngrokOptions = {
+            addr: port,
+            onLogEvent: (msg) => console.log('   [ngrok]', msg),
+            ...options
+        };
 
-            // Options par défaut pour ngrok
-            const ngrokOptions = {
-                addr: port,
-                ...options
-            };
+        // Le lancement du process ngrok local peut occasionnellement perdre la course entre
+        // "il annonce être prêt" et "son API locale (127.0.0.1:4040) accepte vraiment des
+        // connexions" (ECONNREFUSED) — quelques tentatives suffisent à absorber ça.
+        const MAX_ATTEMPTS = 3;
+        let lastError;
 
-            // Connecter ngrok
-            this.tunnelUrl = await ngrok.connect(ngrokOptions);
-            this.isConnected = true;
+        for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+            try {
+                console.log(`🚀 Démarrage de ngrok... (tentative ${attempt}/${MAX_ATTEMPTS})`);
+                this.tunnelUrl = await ngrok.connect(ngrokOptions);
+                this.isConnected = true;
 
-            console.log(`✅ Tunnel ngrok établi !`);
-            console.log(`🌐 URL publique: ${this.tunnelUrl}`);
-            console.log(`📡 Redirige vers: http://localhost:${port}`);
+                console.log(`✅ Tunnel ngrok établi !`);
+                console.log(`🌐 URL publique: ${this.tunnelUrl}`);
+                console.log(`📡 Redirige vers: http://localhost:${port}`);
 
-            return this.tunnelUrl + '/eventsub';
-        } catch (error) {
-            console.error('❌ Erreur lors du démarrage de ngrok:', error.message);
-            throw error;
+                return this.tunnelUrl + '/eventsub';
+            } catch (error) {
+                lastError = error;
+                console.error(`❌ Erreur lors du démarrage de ngrok (tentative ${attempt}/${MAX_ATTEMPTS}):`, error.message);
+                if (attempt < MAX_ATTEMPTS) {
+                    await new Promise((resolve) => setTimeout(resolve, 1500));
+                }
+            }
         }
+
+        throw lastError;
     }
 
     /**

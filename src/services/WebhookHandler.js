@@ -1,5 +1,5 @@
 const crypto = require('crypto');
-const config = require('../config/config');
+const config = require('../config/store');
 
 /**
  * Classe pour gérer les webhooks EventSub

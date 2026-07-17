@@ -1,6 +1,6 @@
 const axios = require('axios');
 const qs = require('qs');
-const config = require('../config/config');
+const config = require('../config/store');
 
 /**
  * Classe pour gérer l'authentification Twitch
@@ -47,6 +47,24 @@ class TwitchAuth {
     }
 
     /**
+     * Interroger l'endpoint /validate de Twitch pour un token utilisateur donné.
+     * Retourne { client_id, user_id, login, scopes } ou null si le token est invalide.
+     */
+    async validateUserToken(token) {
+        try {
+            const response = await axios.get('https://id.twitch.tv/oauth2/validate', {
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+            return response.data;
+        } catch (error) {
+            console.error('❌ Token utilisateur invalide:', error.response?.data || error.message);
+            return null;
+        }
+    }
+
+    /**
      * Vérifier les scopes du User Access Token
      */
     async verifyUserToken() {
@@ -55,34 +73,28 @@ class TwitchAuth {
             return false;
         }
 
-        try {
-            const response = await axios.get('https://id.twitch.tv/oauth2/validate', {
-                headers: {
-                    'Authorization': `Bearer ${this.userAccessToken}`
-                }
-            });
-
-            console.log('✅ Token utilisateur vérifié:');
-            console.log(`   - Client ID: ${response.data.client_id}`);
-            console.log(`   - User ID: ${response.data.user_id}`);
-            console.log(`   - Scopes: ${response.data.scopes.join(', ')}`);
-
-            // Vérifier si les scopes requis sont présents
-            const hasAllScopes = config.twitch.SCOPES.every(scope =>
-                response.data.scopes.includes(scope)
-            );
-
-            if (!hasAllScopes) {
-                console.warn('⚠️  Scopes manquants pour les messages de chat');
-                console.warn(`   - Requis: ${config.twitch.SCOPES.join(', ')}`);
-                console.warn(`   - Présents: ${response.data.scopes.join(', ')}`);
-            }
-
-            return hasAllScopes;
-        } catch (error) {
-            console.error('❌ Erreur lors de la vérification du token utilisateur:', error.response?.data || error.message);
+        const data = await this.validateUserToken(this.userAccessToken);
+        if (!data) {
             return false;
         }
+
+        console.log('✅ Token utilisateur vérifié:');
+        console.log(`   - Client ID: ${data.client_id}`);
+        console.log(`   - User ID: ${data.user_id}`);
+        console.log(`   - Scopes: ${data.scopes.join(', ')}`);
+
+        // Vérifier si les scopes requis sont présents
+        const hasAllScopes = config.twitch.SCOPES.every(scope =>
+            data.scopes.includes(scope)
+        );
+
+        if (!hasAllScopes) {
+            console.warn('⚠️  Scopes manquants pour les messages de chat');
+            console.warn(`   - Requis: ${config.twitch.SCOPES.join(', ')}`);
+            console.warn(`   - Présents: ${data.scopes.join(', ')}`);
+        }
+
+        return hasAllScopes;
     }
 
     /**

@@ -1,11 +1,11 @@
 const express = require('express');
-const config = require('../config/config');
+const config = require('../config/store');
 const TruckyApi = require('../services/TruckyApi');
 
 /**
  * Créer les routes pour l'API
  */
-function createRoutes(eventSubManager, streamStats, auth) {
+function createRoutes(eventSubManager, streamStats, auth, getNgrokManager) {
     const router = express.Router();
 
     // Route pour favicon (éviter les erreurs 404)
@@ -25,41 +25,39 @@ function createRoutes(eventSubManager, streamStats, auth) {
     });
 
     router.get('/api/info-panel', async (req, res) => {
+        if (!config.trucky.enable) {
+            return res.status(404).json({ error: 'Intégration Trucky désactivée' });
+        }
+
         try {
             const truckyapi = new TruckyApi();
-            if (config.trucky.enable) {
-                try {
-                    console.log('🔌 Initialisation de l\'API Trucky...');
-                    const userData = await truckyapi.getUserData();
-                    if (!userData) {
-                        console.log('⚠️ Aucun utilisateur trouvé pour l\'API Trucky.');
-                        return;
-                    }
-                    const lastJobData = await truckyapi.getUserLastJob();
-                    if (!lastJobData) {
-                        console.log('⚠️ Aucun job trouvé pour l\'utilisateur Trucky.');
-                        return;
-                    }
-                    
-                    var companyStats;
-                    var companyDetails;
-                    if (!userData.company_id) {
-                        console.log('⚠️ L\'utilisateur Trucky n\'a pas de société associée.');
-                        companyStats = null;
-                    } else {
-                        companyStats = await truckyapi.getCompanyStats(userData.company_id);
-                        companyDetails = await truckyapi.getCompanyDetails(userData.company_id);
-                    }
-                    return res.json({
-                        userData: userData,
-                        lastJob: lastJobData,
-                        companyStats: companyStats,
-                        companyDetails: companyDetails
-                    });
-                } catch (error) {
-                    console.error('❌ Erreur lors de l\'initialisation de l\'API Trucky:', error.message);
-                }
+            console.log('🔌 Initialisation de l\'API Trucky...');
+            const userData = await truckyapi.getUserData();
+            if (!userData) {
+                console.log('⚠️ Aucun utilisateur trouvé pour l\'API Trucky.');
+                return res.status(404).json({ error: 'Aucun utilisateur trouvé pour l\'API Trucky' });
             }
+            const lastJobData = await truckyapi.getUserLastJob();
+            if (!lastJobData) {
+                console.log('⚠️ Aucun job trouvé pour l\'utilisateur Trucky.');
+                return res.status(404).json({ error: 'Aucun job trouvé pour l\'utilisateur Trucky' });
+            }
+
+            var companyStats;
+            var companyDetails;
+            if (!userData.company_id) {
+                console.log('⚠️ L\'utilisateur Trucky n\'a pas de société associée.');
+                companyStats = null;
+            } else {
+                companyStats = await truckyapi.getCompanyStats(userData.company_id);
+                companyDetails = await truckyapi.getCompanyDetails(userData.company_id);
+            }
+            return res.json({
+                userData: userData,
+                lastJob: lastJobData,
+                companyStats: companyStats,
+                companyDetails: companyDetails
+            });
         } catch (error) {
             console.error('❌ Erreur lors de la récupération des données du panneau d\'information:', error.message);
             return res.status(500).json({ error: 'Erreur lors de la récupération des données' });
@@ -94,90 +92,30 @@ function createRoutes(eventSubManager, streamStats, auth) {
         res.send(`
             <html>
                 <head>
-                    <title>Autorisation Twitch</title>
-                    <style>
-                        body { 
-                            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
-                            padding: 30px; 
-                            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                            color: white;
-                            line-height: 1.6;
-                        }
-                        .container { 
-                            max-width: 600px; 
-                            margin: 0 auto; 
-                            background: rgba(255,255,255,0.1); 
-                            padding: 40px; 
-                            border-radius: 15px;
-                            backdrop-filter: blur(10px);
-                            box-shadow: 0 8px 32px rgba(0,0,0,0.3);
-                        }
-                        .auth-button {
-                            display: inline-block;
-                            background: #9146FF;
-                            color: white;
-                            padding: 15px 30px;
-                            text-decoration: none;
-                            border-radius: 8px;
-                            font-size: 18px;
-                            font-weight: bold;
-                            transition: all 0.3s ease;
-                            box-shadow: 0 4px 15px rgba(145, 70, 255, 0.4);
-                        }
-                        .auth-button:hover {
-                            background: #7928ca;
-                            transform: translateY(-2px);
-                            box-shadow: 0 6px 20px rgba(145, 70, 255, 0.6);
-                        }
-                        .scope-list {
-                            background: rgba(0,0,0,0.2);
-                            padding: 20px;
-                            border-radius: 8px;
-                            margin: 20px 0;
-                        }
-                        .steps {
-                            background: rgba(0,0,0,0.2);
-                            padding: 20px;
-                            border-radius: 8px;
-                            margin: 20px 0;
-                        }
-                        .steps ol { margin: 0; padding-left: 20px; }
-                        .steps li { margin: 8px 0; }
-                    </style>
+                    <title>Autorisation Twitch - ElectrumOverlay</title>
+                    <meta charset="UTF-8">
+                    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                    <link rel="stylesheet" href="/css/app-ui.css">
                 </head>
                 <body>
-                    <div class="container">
-                        <h1>🔐 Autorisation Twitch Requise</h1>
-                        <p>Pour utiliser EventSub avec les messages de chat, vous devez autoriser l'application avec les bons scopes.</p>
-                        
-                        <div class="scope-list">
-                            <h3>🎯 Scopes requis :</h3>
-                            <ul>
-                                <li><code>user:read:chat</code> - Lire les messages de chat</li>
-                                <li><code>user:bot</code> - Agir en tant que bot utilisateur</li>
-                                <li><code>channel:bot</code> - Agir en tant que bot sur la chaîne</li>
+                    <script src="/js/app-titlebar.js"></script>
+                    <div class="page in-app">
+                        <a class="back-link" href="/app">← Retour</a>
+                        <h1>Autorisation Twitch requise</h1>
+                        <p>Pour utiliser EventSub avec les messages de chat, l'application doit être autorisée avec les bons scopes.</p>
+
+                        <div class="card">
+                            <h2 class="card-title">Scopes requis</h2>
+                            <ul class="requirements">
+                                <li><code>user:read:chat</code> — lire les messages de chat</li>
+                                <li><code>user:bot</code> — agir en tant que bot utilisateur</li>
+                                <li><code>channel:bot</code> — agir en tant que bot sur la chaîne</li>
                             </ul>
                         </div>
 
-                        <div style="text-align: center; margin: 30px 0;">
-                            <a href="${authUrl}" target="_blank" class="auth-button">
-                                👉 Autoriser l'application Twitch
-                            </a>
-                        </div>
+                        <a href="${authUrl}" class="btn btn-primary" style="margin: var(--space-4) 0;">Autoriser l'application Twitch</a>
 
-                        <div class="steps">
-                            <h3>📝 Instructions :</h3>
-                            <ol>
-                                <li>Cliquez sur le bouton ci-dessus</li>
-                                <li>Connectez-vous à Twitch si nécessaire</li>
-                                <li>Autorisez l'application en cliquant sur "Autoriser"</li>
-                                <li>Copiez le token depuis l'URL de redirection</li>
-                                <li>Remplacez USER_ACCESS_TOKEN dans la configuration</li>
-                                <li>Redémarrez le serveur</li>
-                            </ol>
-                        </div>
-
-                        <p><small>Après autorisation, vous serez redirigé automatiquement.</small></p>
+                        <p class="hint">Vous serez redirigé vers Twitch, puis automatiquement ramené ici — le token est enregistré tout seul, rien à copier-coller.</p>
                     </div>
                 </body>
             </html>
@@ -194,61 +132,79 @@ function createRoutes(eventSubManager, streamStats, auth) {
         res.send(`
             <html>
                 <head>
-                    <title>Autorisation Réussie</title>
-                    <style>
-                        body { 
-                            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
-                            padding: 30px; 
-                            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                            color: white;
-                            line-height: 1.6;
-                        }
-                        .container { 
-                            max-width: 700px; 
-                            margin: 0 auto; 
-                            background: rgba(255,255,255,0.1); 
-                            padding: 40px; 
-                            border-radius: 15px;
-                            backdrop-filter: blur(10px);
-                            box-shadow: 0 8px 32px rgba(0,0,0,0.3);
-                        }
-                        .token-display {
-                            background: rgba(0,0,0,0.3);
-                            padding: 20px;
-                            margin: 20px 0;
-                            border-radius: 8px;
-                            word-break: break-all;
-                            font-family: 'Courier New', monospace;
-                            border-left: 4px solid #4ade80;
-                        }
-                        .success-icon { font-size: 48px; text-align: center; margin: 20px 0; }
-                    </style>
+                    <title>Autorisation - ElectrumOverlay</title>
+                    <meta charset="UTF-8">
+                    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                    <link rel="stylesheet" href="/css/app-ui.css">
                 </head>
                 <body>
-                    <div class="container">
-                        <div class="success-icon">✅</div>
-                        <h1>Autorisation Réussie !</h1>
-                        <p>Votre token d'accès a été généré avec succès.</p>
-                        <p><strong>📋 Copiez le token ci-dessous et remplacez USER_ACCESS_TOKEN dans votre configuration :</strong></p>
-                        <div id="token-container"></div>
-                        <p><strong>⚠️ Important :</strong> Gardez ce token secret et ne le partagez jamais !</p>
+                    <script src="/js/app-titlebar.js"></script>
+                    <div class="page in-app">
+                        <a class="back-link" href="/app">← Retour</a>
+                        <h1>Autorisation Twitch</h1>
+                        <div class="card" id="token-container">
+                            <p>Traitement en cours…</p>
+                        </div>
                     </div>
                     <script>
-                        // Extraire le token de l'URL
                         const hash = window.location.hash.substring(1);
                         const params = new URLSearchParams(hash);
                         const token = params.get('access_token');
                         const container = document.getElementById('token-container');
-                        
+
                         if (token) {
-                            container.innerHTML = '<div class="token-display"><strong>Votre token :</strong><br>' + token + '</div>';
+                            fetch('/api/oauth-callback', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ token })
+                            })
+                                .then(r => r.json())
+                                .then(data => {
+                                    if (data.ok) {
+                                        container.innerHTML = '<p class="msg success">Autorisation réussie pour <strong>' + data.login + '</strong> (ID ' + data.broadcasterId + ').</p><p class="hint">Vous pouvez fermer cet onglet et revenir à ElectrumOverlay.</p>';
+                                    } else {
+                                        container.innerHTML = '<p class="msg error">' + (data.error || 'Erreur inconnue') + '</p>';
+                                    }
+                                })
+                                .catch(() => {
+                                    container.innerHTML = '<p class="msg error">Impossible de contacter le serveur pour enregistrer le token.</p>';
+                                });
                         } else {
-                            container.innerHTML = '<p style="color: #ef4444;">❌ Aucun token trouvé dans l\\'URL. Vérifiez que l\\'autorisation s\\'est bien déroulée.</p>';
+                            container.innerHTML = '<p class="msg error">Aucun token trouvé dans l\\'URL. Vérifiez que l\\'autorisation s\\'est bien déroulée.</p>';
                         }
                     </script>
                 </body>
             </html>
         `);
+    });
+
+    // Reçoit le token depuis /auth-callback, le valide et persiste userAccessToken + broadcasterId
+    router.post('/api/oauth-callback', async (req, res) => {
+        try {
+            const { token } = req.body || {};
+            if (!token) {
+                return res.status(400).json({ error: 'Token manquant' });
+            }
+
+            const tokenInfo = await auth.validateUserToken(token);
+            if (!tokenInfo) {
+                return res.status(400).json({ error: 'Token invalide' });
+            }
+
+            auth.setUserAccessToken(token);
+            config.saveConfig({
+                twitch: {
+                    USER_ACCESS_TOKEN: token,
+                    BROADCASTER_ID: tokenInfo.user_id,
+                    BROADCASTER_LOGIN: tokenInfo.login
+                }
+            });
+
+            res.json({ ok: true, broadcasterId: tokenInfo.user_id, login: tokenInfo.login });
+        } catch (error) {
+            console.error('❌ Erreur lors du traitement du callback OAuth:', error.message);
+            res.status(500).json({ error: 'Erreur serveur' });
+        }
     });
 
     // Route pour obtenir les statistiques du stream
@@ -266,12 +222,17 @@ function createRoutes(eventSubManager, streamStats, auth) {
         try {
             const twitchAuthenticated = auth.isAuthenticated();
             const subscriptions = eventSubManager.getActiveSubscriptions();
+            const ngrokManager = getNgrokManager ? getNgrokManager() : null;
 
             res.json({
                 status: 'online',
                 twitchAuthenticated,
                 subscriptionsCount: subscriptions.length,
-                serverTime: new Date().toISOString()
+                serverTime: new Date().toISOString(),
+                ngrok: {
+                    enabled: config.ngrok.ENABLED,
+                    connected: Boolean(ngrokManager?.isConnected)
+                }
             });
         } catch (error) {
             res.status(500).json({ error: 'Erreur serveur' });

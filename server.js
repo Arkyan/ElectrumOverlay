@@ -1,12 +1,17 @@
 const express = require('express');
 const path = require('path');
 const WebSocket = require('ws');
-const config = require('./src/config/config');
+const config = require('./src/config/store');
 const TwitchAuth = require('./src/services/TwitchAuth');
 const EventSubManager = require('./src/services/EventSubManager');
 const StreamStatsManager = require('./src/services/StreamStatsManager');
 const WebhookHandler = require('./src/services/WebhookHandler');
 const createRoutes = require('./src/routes/api');
+const createSetupRoutes = require('./src/routes/setup');
+const createSettingsRoutes = require('./src/routes/settings');
+const createLogsRoutes = require('./src/routes/logs');
+const createTestToolsRoutes = require('./src/routes/testtools');
+const LogBuffer = require('./src/services/LogBuffer');
 
 /**
  * Classe principale de l'application
@@ -16,24 +21,55 @@ class TwitchOverlayServer {
         this.app = express();
         this.port = config.server.PORT;
 
+        // Capture console.log/warn/error dès le tout début pour ne rater aucun log dans /logs —
+        // utile une fois l'app packagée, où il n'y a plus de terminal visible.
+        LogBuffer.init(this.broadcastEvent.bind(this));
+
         // Initialisation des services
         this.auth = new TwitchAuth();
         this.streamStats = new StreamStatsManager();
         this.eventSubManager = new EventSubManager(this.auth);
         this.webhookHandler = new WebhookHandler(this.streamStats, this.broadcastEvent.bind(this));
 
+        this.isRunning = false;
+
         this.setupMiddleware();
         this.setupRoutes();
         this.setupGracefulShutdown();
-        this.setupWebSocket();
     }
 
     /**
      * Configuration des middlewares
      */
     setupMiddleware() {
-        // Middleware pour servir les fichiers statiques
-        this.app.use(express.static('public'));
+        // Tant que l'assistant n'est pas terminé, rediriger toute page (overlays inclus, servis
+        // statiquement plus bas et qui court-circuiteraient sinon ce contrôle) vers /setup.
+        const SETUP_ALLOWED_PREFIXES = [
+            '/setup', '/api/', '/auth-url', '/auth-callback', '/auth/callback', '/favicon.ico',
+            // Utile pour diagnostiquer un souci (ex: ngrok) avant même d'avoir fini l'assistant.
+            '/logs',
+            // Assets statiques : toujours servables, y compris avant la fin de l'assistant
+            // (sinon /setup lui-même se retrouve sans CSS/JS/icône).
+            '/css/', '/js/', '/fonts/', '/logo.png'
+        ];
+        this.app.use((req, res, next) => {
+            if (config.isConfigured() || req.method !== 'GET') return next();
+            const isAllowed = SETUP_ALLOWED_PREFIXES.some(p => req.path === p || req.path.startsWith(p));
+            return isAllowed ? next() : res.redirect('/setup');
+        });
+
+        // Génère js/config.js dynamiquement à partir de la config centralisée (config/overlay-config.json).
+        // Enregistré avant express.static pour intercepter la requête en priorité.
+        this.app.get('/js/config.js', (req, res) => {
+            res.type('application/javascript');
+            res.send(`globalThis.OVERLAY_CONFIG = ${JSON.stringify(config.toFrontendConfig())};`);
+        });
+
+        // Middleware pour servir les fichiers statiques. `/` sert directement public/index.html
+        // (comportement par défaut d'express.static) : c'est l'URL que les sources navigateur
+        // OBS utilisent pour l'overlay — elle ne doit jamais afficher autre chose. Le panneau
+        // d'administration de l'app vit sur /app, un chemin séparé (voir setupRoutes()).
+        this.app.use(express.static(path.join(config.appRoot(), 'public')));
 
         // Middleware JSON standard pour les routes API
         this.app.use(express.json());
@@ -47,98 +83,162 @@ class TwitchOverlayServer {
             this.webhookHandler.handleWebhook(req, res);
         });
 
-        // Routes API
-        const apiRoutes = createRoutes(this.eventSubManager, this.streamStats, this.auth);
+        // Routes API. this.ngrokManager change à chaque start()/stop() : on passe un accesseur
+        // plutôt que la valeur (capturée une seule fois ici, à la construction).
+        const apiRoutes = createRoutes(this.eventSubManager, this.streamStats, this.auth, () => this.ngrokManager);
         this.app.use('/', apiRoutes);
 
-        // Route par défaut
-        this.app.get('/', (req, res) => {
+        // Assistant de premier lancement
+        const setupRoutes = createSetupRoutes(this.auth, () => this.stop());
+        this.app.use('/', setupRoutes);
+
+        // Panneau de réglages permanent (couleurs, textes, alertes, animations)
+        const settingsRoutes = createSettingsRoutes(this.broadcastEvent.bind(this));
+        this.app.use('/', settingsRoutes);
+
+        // Logs en direct
+        const logsRoutes = createLogsRoutes();
+        this.app.use('/', logsRoutes);
+
+        // Simulation d'événements pour tester les overlays sans attendre un vrai follow/sub/raid
+        const testToolsRoutes = createTestToolsRoutes(this.webhookHandler);
+        this.app.use('/', testToolsRoutes);
+
+        // Panneau d'administration (accueil de la fenêtre Electron) — volontairement séparé de
+        // `/`, qui doit toujours rester l'overlay pour les sources navigateur OBS.
+        this.app.get('/app', (req, res) => {
+            if (!config.isConfigured()) {
+                return res.redirect('/setup');
+            }
+
             res.send(`
                 <html>
                     <head>
-                        <title>Twitch Overlay Server</title>
-                        <style>
-                            body { 
-                                font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
-                                padding: 30px; 
-                                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                                color: white;
-                                margin: 0;
-                                min-height: 100vh;
-                            }
-                            .container { 
-                                max-width: 800px; 
-                                margin: 0 auto; 
-                                background: rgba(255,255,255,0.1); 
-                                padding: 40px; 
-                                border-radius: 15px;
-                                backdrop-filter: blur(10px);
-                                box-shadow: 0 8px 32px rgba(0,0,0,0.3);
-                            }
-                            .link-grid {
-                                display: grid;
-                                grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-                                gap: 15px;
-                                margin-top: 30px;
-                            }
-                            .link-card {
-                                background: rgba(0,0,0,0.2);
-                                padding: 20px;
-                                border-radius: 10px;
-                                text-decoration: none;
-                                color: white;
-                                transition: all 0.3s ease;
-                                border-left: 4px solid #4ade80;
-                            }
-                            .link-card:hover {
-                                background: rgba(0,0,0,0.3);
-                                transform: translateY(-2px);
-                            }
-                            .status { 
-                                background: rgba(34, 197, 94, 0.2); 
-                                padding: 15px; 
-                                border-radius: 8px; 
-                                margin: 20px 0;
-                                border-left: 4px solid #22c55e;
-                            }
-                        </style>
+                        <title>ElectrumOverlay</title>
+                        <meta charset="UTF-8">
+                        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                        <link rel="stylesheet" href="/css/app-ui.css">
                     </head>
                     <body>
-                        <div class="container">
-                            <h1>🎮 Twitch Overlay Server v2.0</h1>
-                            <div class="status">
-                                <strong>✅ Serveur actif</strong> - Toutes les fonctionnalités sont opérationnelles
+                        <script src="/js/app-titlebar.js"></script>
+                        <div class="page in-app">
+                            <h1>ElectrumOverlay</h1>
+                            <div class="field-row">
+                                <div class="status-pill" id="serverStatusPill"><span class="dot"></span> Serveur actif</div>
+                                <button type="button" class="btn" id="btnServerToggle">Arrêter le serveur</button>
                             </div>
-                            
-                            <h2>🔗 Liens utiles :</h2>
-                            <div class="link-grid">
-                                <a href="/stream-stats-html" class="link-card">
-                                    <h3>📊 Statistiques en temps réel</h3>
-                                    <p>Interface visuelle des stats du stream</p>
-                                </a>
-                                <a href="/subscriptions" class="link-card">
-                                    <h3>📋 Abonnements EventSub</h3>
-                                    <p>Liste des webhooks actifs</p>
-                                </a>
-                                <a href="/auth-url" class="link-card">
-                                    <h3>🔐 Autorisation Twitch</h3>
-                                    <p>Configurer l'accès aux messages de chat</p>
-                                </a>
-                                <a href="/status" class="link-card">
-                                    <h3>📈 Statut du serveur</h3>
-                                    <p>Informations système et performance</p>
-                                </a>
+                            <p class="hint" id="serverStatusHint" style="display:none;">Le serveur est arrêté : les overlays (OBS) et le chat ne fonctionnent plus tant qu'il n'est pas redémarré.</p>
+                            <p class="msg error" id="ngrokWarning" style="display:none;">ngrok est activé mais pas connecté — vérifiez votre authtoken dans <a href="/setup">Configuration</a>. Sans ça, aucun événement Twitch (chat, follows, alertes...) ne peut arriver.</p>
+
+                            <div class="card" id="updateBanner" style="display:none; margin-top:var(--space-4);">
+                                <p id="updateBannerText" style="margin:0 0 var(--space-3);"></p>
+                                <button type="button" class="btn btn-primary" id="btnInstallUpdate" style="display:none;">Installer et redémarrer</button>
                             </div>
 
-                            <h3>🛠️ API Endpoints :</h3>
-                            <ul style="background: rgba(0,0,0,0.2); padding: 20px; border-radius: 8px;">
-                                <li><code>/stream-stats</code> - Statistiques JSON</li>
-                                <li><code>/change-channel/[username]</code> - Changer de chaîne</li>
-                                <li><code>/channel-info/[username]</code> - Infos chaîne</li>
-                                <li><code>/test-subscriptions</code> - Tester les abonnements</li>
-                                <li><code>/clear-subscriptions</code> - Supprimer tous les abonnements</li>
-                            </ul>
+                            <h2 style="margin-top:var(--space-6);">Raccourcis</h2>
+                            <div class="link-grid">
+                                <a href="/settings" class="link-card">
+                                    <h3>Paramètres</h3>
+                                    <p>Couleurs, textes, alertes, animations</p>
+                                </a>
+                                <a href="/logs" class="link-card">
+                                    <h3>Logs</h3>
+                                    <p>Journal du serveur en direct</p>
+                                </a>
+                                <a href="/tests" class="link-card">
+                                    <h3>Tests</h3>
+                                    <p>Simuler follow, sub, raid, alertes...</p>
+                                </a>
+                                <a href="/stream-stats-html" class="link-card">
+                                    <h3>Statistiques</h3>
+                                    <p>Stats du stream en temps réel</p>
+                                </a>
+                                <a href="/auth-url" class="link-card" target="_blank">
+                                    <h3>Autorisation Twitch</h3>
+                                    <p>Ouvre dans le navigateur</p>
+                                </a>
+                                <a href="/setup" class="link-card">
+                                    <h3>Assistant de configuration</h3>
+                                    <p>Identifiants Twitch, ngrok, Trucky</p>
+                                </a>
+                                <a href="/subscriptions" class="link-card" target="_blank">
+                                    <h3>Abonnements EventSub (JSON)</h3>
+                                    <p>Ouvre dans le navigateur</p>
+                                </a>
+                                <a href="/status" class="link-card" target="_blank">
+                                    <h3>Statut (JSON)</h3>
+                                    <p>Ouvre dans le navigateur</p>
+                                </a>
+                            </div>
                         </div>
+
+                        <script>
+                            (function () {
+                                if (!window.electronAPI) return; // page ouverte hors Electron : rien à piloter
+
+                                const pill = document.getElementById('serverStatusPill');
+                                const hint = document.getElementById('serverStatusHint');
+                                const btn = document.getElementById('btnServerToggle');
+                                const ngrokWarning = document.getElementById('ngrokWarning');
+
+                                function render(isRunning) {
+                                    pill.innerHTML = isRunning
+                                        ? '<span class="dot"></span> Serveur actif'
+                                        : 'Serveur arrêté';
+                                    hint.style.display = isRunning ? 'none' : '';
+                                    btn.textContent = isRunning ? 'Arrêter le serveur' : 'Démarrer le serveur';
+                                    if (!isRunning) ngrokWarning.style.display = 'none';
+                                }
+
+                                function checkNgrokStatus() {
+                                    fetch('/status').then(r => r.json()).then(data => {
+                                        ngrokWarning.style.display = (data.ngrok?.enabled && !data.ngrok?.connected) ? '' : 'none';
+                                    }).catch(() => {});
+                                }
+
+                                const updateBanner = document.getElementById('updateBanner');
+                                const updateBannerText = document.getElementById('updateBannerText');
+                                const btnInstallUpdate = document.getElementById('btnInstallUpdate');
+
+                                function renderUpdater(state) {
+                                    if (state.status === 'downloading') {
+                                        updateBanner.style.display = '';
+                                        updateBannerText.textContent = 'Téléchargement de la mise à jour v' + state.version + '... (' + (state.percent || 0) + '%)';
+                                        btnInstallUpdate.style.display = 'none';
+                                    } else if (state.status === 'downloaded') {
+                                        updateBanner.style.display = '';
+                                        updateBannerText.textContent = 'Mise à jour v' + state.version + ' prête à installer.';
+                                        btnInstallUpdate.style.display = '';
+                                    } else {
+                                        updateBanner.style.display = 'none';
+                                    }
+                                }
+
+                                window.electronAPI.getUpdaterStatus().then(renderUpdater);
+                                window.electronAPI.onUpdaterStatusChange(renderUpdater);
+                                btnInstallUpdate.addEventListener('click', () => window.electronAPI.installUpdate());
+
+                                window.electronAPI.getServerStatus().then((isRunning) => {
+                                    render(isRunning);
+                                    if (isRunning) checkNgrokStatus();
+                                });
+                                window.electronAPI.onServerStatusChange((isRunning) => {
+                                    render(isRunning);
+                                    if (isRunning) setTimeout(checkNgrokStatus, 3000);
+                                });
+                                setInterval(() => {
+                                    window.electronAPI.getServerStatus().then((isRunning) => { if (isRunning) checkNgrokStatus(); });
+                                }, 10000);
+
+                                btn.addEventListener('click', async () => {
+                                    btn.disabled = true;
+                                    const isRunning = await window.electronAPI.getServerStatus();
+                                    await (isRunning ? window.electronAPI.stopServer() : window.electronAPI.startServer());
+                                    render(await window.electronAPI.getServerStatus());
+                                    btn.disabled = false;
+                                });
+                            })();
+                        </script>
                     </body>
                 </html>
             `);
@@ -200,46 +300,127 @@ class TwitchOverlayServer {
     }
 
     /**
-     * Démarrer le serveur
+     * Démarrer le serveur. Résout une fois le serveur HTTP effectivement en écoute
+     * (nécessaire pour qu'Electron puisse attendre avant de charger sa fenêtre dessus).
      */
     async start() {
-        // démarrer ngrok si configuré
+        if (this.isRunning) {
+            console.log('ℹ️  Le serveur tourne déjà.');
+            return;
+        }
+
+        // Recréé à chaque démarrage : après un stop(), l'ancien serveur WebSocket est fermé et
+        // sa référence effacée (voir stop()).
+        this.setupWebSocket();
+
+        // Première utilisation : ne pas toucher à ngrok/EventSub tant que l'assistant
+        // n'a pas été complété, se contenter de servir la page /setup.
+        if (!config.isConfigured()) {
+            return new Promise((resolve, reject) => {
+                this.httpServer = this.app.listen(this.port, () => {
+                    console.log('🧙 Configuration initiale requise.');
+                    console.log(`   Assistant : http://localhost:${this.port}/setup`);
+                    this.isRunning = true;
+                    resolve();
+                });
+                // Sans ça, un port déjà occupé (ex: une autre instance encore en train de se
+                // fermer) laisse ce listen() échouer silencieusement et le process reste bloqué
+                // pour toujours au lieu d'échouer proprement.
+                this.httpServer.on('error', (error) => {
+                    console.error(`❌ Impossible de démarrer le serveur sur le port ${this.port}:`, error.message);
+                    reject(error);
+                });
+            });
+        }
+
+        // démarrer ngrok si configuré. Une erreur ici ne doit PAS empêcher le serveur HTTP (donc
+        // la fenêtre Electron) de démarrer — sans ça, le moindre souci ngrok fait que l'app
+        // semble ne "rien ouvrir du tout". Les abonnements EventSub échoueront proprement plus
+        // tard (déjà géré par initializeTwitchServices) si WEBHOOK_URL reste indéfini.
         var WEBHOOK_URL;
         if (config.ngrok.ENABLED) {
             const NgrokManager = require('./src/services/NgrokManager');
             this.ngrokManager = new NgrokManager();
-            WEBHOOK_URL = await this.ngrokManager.start();
+            try {
+                WEBHOOK_URL = await this.ngrokManager.start(this.port, {
+                    authtoken: config.ngrok.AUTHTOKEN || undefined
+                });
+            } catch (error) {
+                console.error('⚠️  ngrok indisponible, le serveur démarre quand même sans webhook Twitch fonctionnel.');
+            }
         } else {
             WEBHOOK_URL = config.twitch.WEBHOOK_URL;
         }
 
-        this.app.listen(this.port, async () => {
-            console.log('🚀 ================================');
-            console.log('🎮 Twitch Overlay Server v1.0');
-            console.log('🚀 ================================');
-            console.log(`🌐 Serveur: http://localhost:${this.port}`);
-            console.log(`📊 Stats: http://localhost:${this.port}/stream-stats-html`);
-            console.log(`🔐 Auth: http://localhost:${this.port}/auth-url`);
-            console.log(`📋 API: http://localhost:${this.port}/status`);
-            console.log(`🔌 Webhook: ${WEBHOOK_URL}`);
-            console.log('');
-            console.log(`🎯 Chaîne: ID ${this.eventSubManager.currentBroadcasterId}`);
-            console.log('🟢 Serveur prêt ! Appuyez sur Ctrl+C pour arrêter.');
-            console.log('');
+        return new Promise((resolve, reject) => {
+            this.httpServer = this.app.listen(this.port, async () => {
+                console.log('🚀 ================================');
+                console.log('🎮 Twitch Overlay Server v1.0');
+                console.log('🚀 ================================');
+                console.log(`🌐 Serveur: http://localhost:${this.port}`);
+                console.log(`📊 Stats: http://localhost:${this.port}/stream-stats-html`);
+                console.log(`🔐 Auth: http://localhost:${this.port}/auth-url`);
+                console.log(`📋 API: http://localhost:${this.port}/status`);
+                console.log(`🔌 Webhook: ${WEBHOOK_URL}`);
+                console.log('');
+                console.log(`🎯 Chaîne: ID ${this.eventSubManager.currentBroadcasterId}`);
+                console.log('🟢 Serveur prêt !');
+                console.log('');
 
-            // Heartbeat pour maintenir le processus actif
-            this.startHeartbeat();
+                // Heartbeat pour maintenir le processus actif
+                this.startHeartbeat();
 
-            // Initialisation des services Twitch
-            await this.initializeTwitchServices(WEBHOOK_URL);
+                this.isRunning = true;
+                resolve();
+
+                // Initialisation des services Twitch
+                await this.initializeTwitchServices(WEBHOOK_URL);
+            });
+            this.httpServer.on('error', (error) => {
+                console.error(`❌ Impossible de démarrer le serveur sur le port ${this.port}:`, error.message);
+                reject(error);
+            });
         });
+    }
+
+    /**
+     * Arrête proprement le serveur (WebSocket, ngrok, HTTP) — nécessaire avant tout redémarrage
+     * du process (ex: fin de l'assistant /setup) pour que le nouveau process retrouve les ports
+     * 8080/8081/4040 (ngrok) réellement libres. Sans ça, le nouveau process peut rester bloqué
+     * indéfiniment sur un `listen()` dont le callback ne se déclenchera jamais.
+     */
+    async stop() {
+        if (this.heartbeatInterval) {
+            clearInterval(this.heartbeatInterval);
+            this.heartbeatInterval = null;
+        }
+        if (this.wss) {
+            await new Promise((resolve) => this.wss.close(resolve));
+            this.wss = null;
+        }
+        if (this.ngrokManager) {
+            await this.ngrokManager.stop();
+            this.ngrokManager = null;
+        }
+        if (this.httpServer) {
+            await new Promise((resolve) => {
+                this.httpServer.close(resolve);
+                // Sans ça, close() peut rester bloqué en attendant qu'une connexion keep-alive
+                // se termine d'elle-même (ex: la requête fetch() qui a déclenché ce redémarrage).
+                if (typeof this.httpServer.closeAllConnections === 'function') {
+                    this.httpServer.closeAllConnections();
+                }
+            });
+            this.httpServer = null;
+        }
+        this.isRunning = false;
     }
 
     /**
      * Démarrer le heartbeat
      */
     startHeartbeat() {
-        setInterval(() => {
+        this.heartbeatInterval = setInterval(() => {
             // Heartbeat silencieux pour maintenir le processus actif
         }, 30000);
     }

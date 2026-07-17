@@ -1,7 +1,27 @@
 const axios = require('axios');
 const qs = require('qs');
-const config = require('../config/config');
-const puppeteer = require('puppeteer');
+const config = require('../config/store');
+const puppeteer = require('puppeteer-core');
+const { Launcher } = require('chrome-launcher');
+
+let cachedExecutablePath = null;
+
+/**
+ * Résout le chemin d'un Chrome/Edge déjà installé sur la machine (pas de Chromium embarqué).
+ */
+function resolveExecutablePath() {
+    if (cachedExecutablePath) return cachedExecutablePath;
+
+    const installations = Launcher.getInstallations();
+    if (installations.length === 0) {
+        throw new Error(
+            "Aucun navigateur Chrome ou Edge détecté sur cette machine. Installez Google Chrome ou Microsoft Edge pour utiliser l'intégration Trucky."
+        );
+    }
+
+    cachedExecutablePath = installations[0];
+    return cachedExecutablePath;
+}
 
 /**
  * Classe pour gérer l'API Trucky
@@ -38,6 +58,7 @@ class TruckyApi {
     async requestApi(link) {
         try {
             const browser = await puppeteer.launch({
+                executablePath: resolveExecutablePath(),
                 headless: 'shell',  // nouveau mode headless
                 args: [
                     '--no-sandbox',
@@ -76,7 +97,9 @@ class TruckyApi {
             const data = JSON.parse(content);
             return data;
         } catch (error) {
-            console.log(error.response.data);
+            if (error.response) {
+                console.log(error.response.data);
+            }
             console.error('❌ Erreur lors de la récupération des données utilisateur Trucky:', error.message);
             throw error;
         }

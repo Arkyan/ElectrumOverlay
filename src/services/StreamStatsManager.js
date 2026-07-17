@@ -166,113 +166,74 @@ class StreamStatsManager {
      * Générer une page HTML des statistiques
      */
     generateHTMLStats() {
-        const duration = this.getStreamDuration();
         const stats = this.stats;
 
         return `
         <html>
             <head>
-                <title>Statistiques du Stream</title>
-                <meta http-equiv="refresh" content="5">
+                <title>Statistiques - ElectrumOverlay</title>
+                <meta charset="UTF-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <link rel="stylesheet" href="/css/app-ui.css">
                 <style>
-                    body { 
-                        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
-                        padding: 20px; 
-                        background: linear-gradient(135deg, #1a1a2e, #16213e); 
-                        color: white; 
-                        margin: 0;
-                    }
-                    .container { max-width: 800px; margin: 0 auto; }
-                    .stat-card { 
-                        background: rgba(45, 45, 45, 0.8); 
-                        padding: 20px; 
-                        margin: 15px 0; 
-                        border-radius: 12px; 
-                        border-left: 4px solid #5352ed;
-                        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
-                    }
-                    .live { color: #ff4757; font-weight: bold; }
-                    .offline { color: #747d8c; }
-                    .number { 
-                        font-size: 32px; 
-                        font-weight: bold; 
-                        color: #5352ed; 
-                        text-shadow: 0 2px 4px rgba(0,0,0,0.5);
-                    }
-                    .header { text-align: center; margin-bottom: 30px; }
-                    .status-indicator {
-                        display: inline-block;
-                        width: 12px;
-                        height: 12px;
-                        border-radius: 50%;
-                        margin-right: 8px;
-                        background: ${stats.isLive ? '#ff4757' : '#747d8c'};
-                        animation: ${stats.isLive ? 'pulse 2s infinite' : 'none'};
-                    }
-                    @keyframes pulse {
-                        0% { opacity: 1; }
-                        50% { opacity: 0.5; }
-                        100% { opacity: 1; }
-                    }
                     .grid {
                         display: grid;
-                        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-                        gap: 15px;
-                        margin-top: 20px;
+                        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+                        gap: var(--space-3);
+                        margin-top: var(--space-4);
                     }
-                    .mini-card {
-                        background: rgba(83, 82, 237, 0.1);
-                        padding: 15px;
-                        border-radius: 8px;
-                        text-align: center;
-                        border: 1px solid rgba(83, 82, 237, 0.3);
-                    }
+                    .mini-card { background: var(--surface-elevated); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: var(--space-4); text-align: center; }
+                    .mini-card .number { font-size: 30px; font-weight: 700; color: var(--accent); }
+                    .mini-card .label { font-size: 13px; color: var(--text-muted); margin-top: 4px; }
+                    .status-indicator { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: var(--space-2); }
+                    .status-indicator.live { background: var(--error); }
+                    .status-indicator.offline { background: var(--text-faint); }
                 </style>
             </head>
             <body>
-                <div class="container">
-                    <div class="header">
-                        <h1>📊 Statistiques du Stream en Temps Réel</h1>
-                    </div>
-                    
-                    <div class="stat-card">
-                        <h2>
-                            <span class="status-indicator"></span>
-                            Statut du Stream
+                <script src="/js/app-titlebar.js"></script>
+                <div class="page in-app">
+                    <a class="back-link" href="/app">← Retour</a>
+                    <h1>Statistiques du stream</h1>
+
+                    <div class="card">
+                        <h2 class="card-title" id="statusTitle">
+                            <span class="status-indicator" id="statusDot"></span>
+                            <span id="statusText"></span>
                         </h2>
-                        <p class="${stats.isLive ? 'live' : 'offline'}">
-                            ${stats.isLive ? 'EN DIRECT' : 'HORS LIGNE'}
-                        </p>
-                        ${stats.isLive ? `
-                            <p><strong>⏱️ Durée:</strong> ${duration}</p>
-                            <p><strong>📺 Titre:</strong> ${stats.title || 'Non défini'}</p>
-                            <p><strong>🎮 Jeu:</strong> ${stats.game || 'Non défini'}</p>
-                            ${stats.viewerCount > 0 ? `<p><strong>👥 Viewers:</strong> ${stats.viewerCount}</p>` : ''}
-                        ` : ''}
+                        <p id="statusDetails" class="hint"></p>
                     </div>
-                    
-                    <div class="stat-card">
-                        <h2>📈 Statistiques de ce Stream</h2>
+
+                    <div class="card">
+                        <h2 class="card-title">Ce stream</h2>
                         <div class="grid">
-                            <div class="mini-card">
-                                <div class="number">${stats.follows}</div>
-                                <div>💙 Nouveaux follows</div>
-                            </div>
-                            <div class="mini-card">
-                                <div class="number">${stats.subscribers}</div>
-                                <div>⭐ Nouveaux abonnés</div>
-                            </div>
-                            <div class="mini-card">
-                                <div class="number">${stats.chatMessages}</div>
-                                <div>💬 Messages de chat</div>
-                            </div>
+                            <div class="mini-card"><div class="number" id="statFollows">0</div><div class="label">Nouveaux follows</div></div>
+                            <div class="mini-card"><div class="number" id="statSubs">0</div><div class="label">Nouveaux abonnés</div></div>
+                            <div class="mini-card"><div class="number" id="statChat">0</div><div class="label">Messages de chat</div></div>
                         </div>
                     </div>
-                    
-                    <p style="text-align: center; opacity: 0.7; margin-top: 30px;">
-                        <small>🔄 Page actualisée automatiquement toutes les 5 secondes</small>
-                    </p>
+
+                    <p class="hint">Mise à jour automatique toutes les 5 secondes.</p>
                 </div>
+
+                <script>
+                    function render(stats) {
+                        document.getElementById('statusDot').className = 'status-indicator ' + (stats.isLive ? 'live' : 'offline');
+                        document.getElementById('statusText').textContent = stats.isLive ? 'En direct' : 'Hors ligne';
+                        document.getElementById('statusDetails').textContent = stats.isLive
+                            ? [stats.streamDuration, stats.title, stats.game, stats.viewerCount ? stats.viewerCount + ' viewers' : ''].filter(Boolean).join(' • ')
+                            : '';
+                        document.getElementById('statFollows').textContent = stats.follows;
+                        document.getElementById('statSubs').textContent = stats.subscribers;
+                        document.getElementById('statChat').textContent = stats.chatMessages;
+                    }
+
+                    render(${JSON.stringify(this.getStats()).replace(/</g, '\\u003c')});
+
+                    setInterval(() => {
+                        fetch('/api/stream-stats').then(r => r.json()).then(render).catch(() => {});
+                    }, 5000);
+                </script>
             </body>
         </html>
         `;

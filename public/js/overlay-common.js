@@ -92,6 +92,14 @@ function applyThemeFromConfig() {
     }
 }
 
+function applyBottomBarVisibilityFromConfig() {
+    const cfg = getOverlayConfig();
+    const visible = cfg.panels?.bottom?.enabled !== false;
+    document.querySelectorAll('.bottom-bar, #bottomBar').forEach(el => {
+        el.style.display = visible ? '' : 'none';
+    });
+}
+
 function applyBottomBarContentFromConfig() {
     const cfg = getOverlayConfig();
     const content = cfg.panels?.bottom?.content;
@@ -190,12 +198,13 @@ function showAlert(type, username, message = '', amount = '') {
         alertUsername.textContent = username || 'Anonymous';
         alertMessage.textContent = message || config.defaultMessage;
 
-        alertContainer.style.background = config.gradient;
-        alertContainer.style.borderColor = config.border;
+        // Une seule couleur d'accent par type (bordure, badge icône, titre, glow) plutôt qu'un
+        // dégradé plein cadre — voir --alert-accent dans overlay-common.css.
+        alertContainer.style.setProperty('--alert-accent', config.border || 'var(--theme-primary, #a855f7)');
 
         if (amount) {
             alertAmount.textContent = amount;
-            alertAmount.style.display = 'block';
+            alertAmount.style.display = 'inline-block';
         } else {
             alertAmount.style.display = 'none';
         }
@@ -205,13 +214,14 @@ function showAlert(type, username, message = '', amount = '') {
         alertContainer.classList.add('show');
         alertContainer.style.opacity = 1;
 
-        // Ajouter l'effet de confettis avec la config
+        // Ajouter l'effet de confettis avec la config, assortis à la couleur de l'alerte
         if (typeof confetti !== 'undefined' && (!cfg.alerts || cfg.alerts.confettiEnabled !== false)) {
             confetti({
                 particleCount: cfg.alerts?.confettiParticles ?? 300,
                 startVelocity: cfg.alerts?.confettiVelocity ?? 50,
                 spread: cfg.alerts?.confettiSpread ?? 360,
                 ticks: cfg.alerts?.confettiTicks ?? 250,
+                colors: config.border ? [config.border, '#ffffff'] : undefined,
                 origin: { y: 0.5 }
             });
         }
@@ -338,6 +348,18 @@ function initWebSocket() {
 
     ws.onmessage = function (event) {
         const data = JSON.parse(event.data);
+
+        if (data.type === 'config-updated') {
+            // Réglages changés depuis /settings : réappliquer sans recharger la page.
+            // Les alertes lisent déjà getOverlayConfig() à chaque déclenchement, donc suivent
+            // automatiquement. Les compteurs/toggles d'animations, eux, ne sont posés qu'au
+            // chargement de la page et ne peuvent pas être réappliqués ici.
+            globalThis.OVERLAY_CONFIG = data.config;
+            applyThemeFromConfig();
+            applyBottomBarContentFromConfig();
+            applyBottomBarVisibilityFromConfig();
+            return;
+        }
 
         if (data.type === 'message') {
             if (data.message.startsWith('!')) {
@@ -553,11 +575,7 @@ function initCommonOverlay() {
     applyBottomBarContentFromConfig();
 
     // Panneaux statiques (starting/ending) : possibilité de les masquer via config
-    if (cfg.panels?.bottom?.enabled === false) {
-        document.querySelectorAll('.bottom-bar, #bottomBar').forEach(el => {
-            el.style.display = 'none';
-        });
-    }
+    applyBottomBarVisibilityFromConfig();
 
     // Charger les badges
     if (cfg.twitch?.broadcasterId) {
