@@ -209,6 +209,15 @@ function showAlert(type, username, message = '', amount = '') {
             alertAmount.style.display = 'none';
         }
 
+        // Son personnalisé pour ce type d'alerte (uploadé depuis /settings), best-effort : ne
+        // doit jamais bloquer l'alerte visuelle si le fichier est absent ou si le navigateur
+        // refuse la lecture automatique.
+        if (config.sound) {
+            const audio = new Audio(config.sound);
+            audio.volume = Math.min(1, Math.max(0, cfg.alerts?.soundVolume ?? 0.8));
+            audio.play().catch(() => {});
+        }
+
         // Afficher l'alerte
         alertContainer.classList.remove('hide');
         alertContainer.classList.add('show');

@@ -236,6 +236,13 @@ summary:focus-visible {
 }
 .btn-ghost:hover { color: var(--text); background: var(--surface-elevated); }
 
+.btn-danger {
+    background: transparent;
+    border-color: var(--danger);
+    color: var(--danger);
+}
+.btn-danger:hover { background: var(--danger); color: white; }
+
 /* ===== Messages d'état ===== */
 
 .msg {

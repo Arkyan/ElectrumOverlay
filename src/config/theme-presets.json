@@ -1,0 +1,29 @@
+[
+    {
+        "name": "Bleu Cyber",
+        "themes": {
+            "starting": { "primary": "#3b82f6", "secondary": "#2563eb", "accent": "#1d4ed8", "panelBorder": "#2563eb" },
+            "index": { "primary": "#3b82f6", "secondary": "#2563eb", "accent": "#1e293b", "panelBorder": "#2563eb" },
+            "pause": { "primary": "#3b82f6", "secondary": "#2563eb", "accent": "#1d4ed8", "panelBorder": "#3b82f6" },
+            "ending": { "primary": "#60a5fa", "secondary": "#3b82f6", "accent": "#2563eb", "panelBorder": "#60a5fa" }
+        }
+    },
+    {
+        "name": "Vert Émeraude",
+        "themes": {
+            "starting": { "primary": "#10b981", "secondary": "#059669", "accent": "#047857", "panelBorder": "#059669" },
+            "index": { "primary": "#10b981", "secondary": "#059669", "accent": "#1e293b", "panelBorder": "#059669" },
+            "pause": { "primary": "#10b981", "secondary": "#059669", "accent": "#047857", "panelBorder": "#10b981" },
+            "ending": { "primary": "#34d399", "secondary": "#10b981", "accent": "#059669", "panelBorder": "#34d399" }
+        }
+    },
+    {
+        "name": "Rouge Braise",
+        "themes": {
+            "starting": { "primary": "#ef4444", "secondary": "#dc2626", "accent": "#b91c1c", "panelBorder": "#dc2626" },
+            "index": { "primary": "#ef4444", "secondary": "#dc2626", "accent": "#1e293b", "panelBorder": "#dc2626" },
+            "pause": { "primary": "#ef4444", "secondary": "#dc2626", "accent": "#b91c1c", "panelBorder": "#ef4444" },
+            "ending": { "primary": "#f87171", "secondary": "#ef4444", "accent": "#dc2626", "panelBorder": "#f87171" }
+        }
+    }
+]

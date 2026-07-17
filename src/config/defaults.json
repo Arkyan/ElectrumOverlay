@@ -86,6 +86,7 @@
             "confettiSpread": 360,
             "confettiVelocity": 50,
             "confettiTicks": 250,
+            "soundVolume": 0.8,
             "types": {
                 "follow": {
                     "icon": "<i class=\"fas fa-heart\"></i>",

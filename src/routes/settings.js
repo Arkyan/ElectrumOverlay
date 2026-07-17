@@ -36,21 +36,38 @@ function num(value, fallback) {
 }
 
 /**
- * Routes du panneau de réglages permanent (couleurs, textes, alertes, animations, panneaux) —
- * séparé de /setup (identifiants Twitch/ngrok/Trucky). Sauvegarde immédiate, sans redémarrage :
- * les overlays déjà ouverts se mettent à jour via la diffusion WebSocket 'config-updated'
- * (sauf les paramètres d'animations, appliqués au prochain rafraîchissement de page — voir le
- * commentaire dans overlay-common.js).
+ * Routes du panneau de réglages permanent (profils, couleurs, textes, alertes, sons, animations,
+ * panneaux) — séparé de /setup (identifiants Twitch/ngrok/Trucky). Sauvegarde immédiate, sans
+ * redémarrage : les overlays déjà ouverts se mettent à jour via la diffusion WebSocket
+ * 'config-updated' (sauf les paramètres d'animations, appliqués au prochain rafraîchissement de
+ * page — voir le commentaire dans overlay-common.js). Les réglages édités ici appartiennent
+ * toujours au profil actif (voir routes/profiles.js pour la gestion des profils eux-mêmes).
  */
 function createSettingsRoutes(broadcastEvent) {
     const router = express.Router();
 
     router.get('/settings', (req, res) => {
-        res.send(SETTINGS_PAGE_HTML(config.display));
+        const activeId = config.getActiveProfileId();
+        const profiles = config.listProfiles();
+        const requestedId = typeof req.query.profile === 'string' ? req.query.profile : null;
+        // On ne peut consulter/éditer qu'un profil qui existe réellement — retombe sur l'actif
+        // si l'id demandé est absent ou a été supprimé entre-temps.
+        const viewedId = (requestedId && profiles.some(p => p.id === requestedId)) ? requestedId : activeId;
+        const viewedProfile = config.getProfileFull(viewedId);
+
+        res.send(SETTINGS_PAGE_HTML(config.getEffectiveDisplay(viewedId), {
+            activeId,
+            viewedId,
+            profiles,
+            audio: viewedProfile.audio || {}
+        }));
     });
 
     router.post('/api/settings', (req, res) => {
         const body = req.body || {};
+        // Cible le profil affiché à l'écran au moment de l'enregistrement, pas forcément l'actif
+        // (voir GET /settings) — repli sur l'actif si absent, par compatibilité.
+        const profileId = body.profileId || config.getActiveProfileId();
 
         const themes = {};
         for (const { key } of THEME_PAGES) {
@@ -101,8 +118,8 @@ function createSettingsRoutes(broadcastEvent) {
             };
         }
 
-        config.saveConfig({
-            display: {
+        try {
+            config.saveProfileDisplay(profileId, {
                 themes,
                 alerts: {
                     enabled: Boolean(body.alertsEnabled),
@@ -113,6 +130,7 @@ function createSettingsRoutes(broadcastEvent) {
                     confettiSpread: num(body.confettiSpread, 360),
                     confettiVelocity: num(body.confettiVelocity, 50),
                     confettiTicks: num(body.confettiTicks, 250),
+                    soundVolume: num(body.soundVolume, 80) / 100,
                     types: alertTypes
                 },
                 panels: {
@@ -143,17 +161,23 @@ function createSettingsRoutes(broadcastEvent) {
                     updateInterval: num(body.statsUpdateInterval, 30000),
                     simulateData: Boolean(body.statsSimulateData)
                 }
-            }
-        });
+            });
+        } catch (error) {
+            return res.status(400).json({ error: error.message });
+        }
 
-        broadcastEvent({ type: 'config-updated', config: config.toFrontendConfig() });
+        // Ne diffuse aux overlays que si c'est bien le profil actif qui vient d'être modifié —
+        // éditer un profil qu'on ne fait que consulter ne doit rien changer en direct.
+        if (profileId === config.getActiveProfileId()) {
+            broadcastEvent({ type: 'config-updated', config: config.toFrontendConfig() });
+        }
         res.json({ ok: true });
     });
 
     return router;
 }
 
-const SETTINGS_PAGE_HTML = (display) => `
+const SETTINGS_PAGE_HTML = (display, profileCtx) => `
 <html>
 <head>
     <title>Paramètres - ElectrumOverlay</title>
@@ -168,6 +192,7 @@ const SETTINGS_PAGE_HTML = (display) => `
             background: linear-gradient(to top, var(--bg) 60%, transparent);
         }
         input[type="number"] { width: 90px; }
+        input[type="file"] { max-width: 220px; }
     </style>
 </head>
 <body>
@@ -175,7 +200,43 @@ const SETTINGS_PAGE_HTML = (display) => `
     <div class="page in-app">
         <a class="back-link" href="/app">← Retour</a>
         <h1>Paramètres</h1>
-        <p>Les couleurs et textes s'appliquent immédiatement aux overlays déjà ouverts dans OBS. Les paramètres d'animations/panneaux s'appliquent au prochain rafraîchissement de la source.</p>
+        <p>${profileCtx.viewedId === profileCtx.activeId
+            ? "Les couleurs et textes s'appliquent immédiatement aux overlays déjà ouverts dans OBS. Les paramètres d'animations/panneaux s'appliquent au prochain rafraîchissement de la source."
+            : "Tu consultes/modifies un profil qui n'est pas actif : les changements sont enregistrés mais ne s'appliqueront aux overlays qu'une fois ce profil activé (bouton « Activer » ci-dessous)."}</p>
+
+        <details class="card" open>
+            <summary>Profils</summary>
+            <div class="details-body">
+                <p class="hint">Choisis un profil pour voir/modifier ses réglages ci-dessous. Un seul profil est actif (visible sur les overlays) à la fois.</p>
+                <div class="field-row">
+                    <div class="field">
+                        <label for="profileSelect">Profil affiché</label>
+                        <select id="profileSelect">
+                            ${profileCtx.profiles.map(p => `<option value="${esc(p.id)}" ${p.id === profileCtx.viewedId ? 'selected' : ''}>${esc(p.name)}${p.id === profileCtx.activeId ? ' (actif)' : ''}</option>`).join('')}
+                        </select>
+                    </div>
+                </div>
+                <div class="field-row" style="margin-top:var(--space-3);">
+                    <button type="button" class="btn btn-primary" id="btnProfileActivate" ${profileCtx.viewedId === profileCtx.activeId ? 'disabled' : ''}>${profileCtx.viewedId === profileCtx.activeId ? 'Déjà actif' : 'Activer ce profil'}</button>
+                    <button type="button" class="btn" id="btnProfileNew">Nouveau (copie de celui-ci)</button>
+                    <button type="button" class="btn" id="btnProfileRename">Renommer</button>
+                    <button type="button" class="btn" id="btnProfileExport">Exporter</button>
+                    <button type="button" class="btn" id="btnProfileImport">Importer</button>
+                    <button type="button" class="btn" id="btnProfileSeedThemes">Ajouter les profils de thèmes</button>
+                    <button type="button" class="btn btn-danger" id="btnProfileDelete">Supprimer</button>
+                    <input type="file" id="profileImportFile" accept="application/json" style="display:none;">
+                </div>
+                <div class="field-row" id="profileNameForm" style="display:none; margin-top:var(--space-3);">
+                    <div class="field">
+                        <label for="profileNameInput" id="profileNameFormLabel">Nom</label>
+                        <input type="text" id="profileNameInput">
+                    </div>
+                    <button type="button" class="btn btn-primary" id="btnProfileNameConfirm">Valider</button>
+                    <button type="button" class="btn btn-ghost" id="btnProfileNameCancel">Annuler</button>
+                </div>
+                <p class="msg" id="profileMsg" role="status"></p>
+            </div>
+        </details>
 
         <details class="card" open>
             <summary>Thèmes par page</summary>
@@ -205,6 +266,7 @@ const SETTINGS_PAGE_HTML = (display) => `
                         <label class="checkbox-row"><input type="checkbox" id="alertsEnabled" ${display.alerts?.enabled !== false ? 'checked' : ''}> Activées</label>
                         <div class="field"><label for="alertsDuration">Durée affichage (ms)</label><input type="number" id="alertsDuration" value="${esc(display.alerts?.duration ?? 6000)}" min="500" step="500"></div>
                         <div class="field"><label for="alertsQueueDelay">Délai entre alertes (ms)</label><input type="number" id="alertsQueueDelay" value="${esc(display.alerts?.queueDelay ?? 500)}" min="0" step="100"></div>
+                        <div class="field"><label for="soundVolume">Volume des sons (%)</label><input type="number" id="soundVolume" value="${esc(Math.round((display.alerts?.soundVolume ?? 0.8) * 100))}" min="0" max="100" step="5"></div>
                     </div>
                     <div class="field-row" style="margin-top:var(--space-3);">
                         <label class="checkbox-row"><input type="checkbox" id="confettiEnabled" ${display.alerts?.confettiEnabled !== false ? 'checked' : ''}> Confettis</label>
@@ -216,6 +278,7 @@ const SETTINGS_PAGE_HTML = (display) => `
                 </div>
                 ${ALERT_TYPES.map(({ key, label }) => {
                     const a = display.alerts?.types?.[key] || {};
+                    const audioMeta = profileCtx.audio[key];
                     return `
                     <div class="sub-block">
                         <h4>${esc(label)}</h4>
@@ -223,7 +286,12 @@ const SETTINGS_PAGE_HTML = (display) => `
                             <div class="field"><label for="alert_${key}_title">Titre</label><input type="text" id="alert_${key}_title" value="${esc(a.title || '')}"></div>
                             <div class="field"><label for="alert_${key}_message">Message par défaut</label><input type="text" id="alert_${key}_message" value="${esc(a.defaultMessage || '')}"></div>
                             <div class="field"><label for="alert_${key}_border">Couleur</label><input type="color" id="alert_${key}_border" value="${esc(a.border || '#8b45f6')}"></div>
+                            <div class="field">
+                                <label for="alert_${key}_sound">Son personnalisé</label>
+                                <input type="file" id="alert_${key}_sound" class="alert-sound-input" data-alert-type="${key}" accept="audio/*">
+                            </div>
                         </div>
+                        ${audioMeta ? `<p class="hint">🔊 ${esc(audioMeta.filename)} <button type="button" class="btn btn-ghost alert-sound-remove" data-alert-type="${key}">Supprimer le son</button></p>` : ''}
                     </div>`;
                 }).join('')}
                 <p class="hint">L'icône et le dégradé de fond de chaque alerte restent réservés à l'édition manuelle de config/overlay-config.json (display.alerts.types).</p>
@@ -329,7 +397,150 @@ const SETTINGS_PAGE_HTML = (display) => `
         const THEME_PAGES = ${JSON.stringify(THEME_PAGES.map(p => p.key))};
         const ALERT_TYPES = ${JSON.stringify(ALERT_TYPES.map(a => a.key))};
         const PARTICLE_ANIMATIONS = ${JSON.stringify(PARTICLE_ANIMATIONS.map(a => a.key))};
+        const VIEWED_PROFILE_ID = ${JSON.stringify(profileCtx.viewedId)};
 
+        // ---------- Profils ----------
+        const profileSelect = document.getElementById('profileSelect');
+        const profileMsg = document.getElementById('profileMsg');
+
+        function setProfileMsg(text, ok) {
+            profileMsg.textContent = text;
+            profileMsg.className = 'msg ' + (ok ? 'success' : 'error');
+        }
+
+        // computeRedirect(data) : où naviguer après succès (ex: vers le profil nouvellement créé).
+        // Sans elle, on recharge simplement la page courante (même ?profile=...).
+        async function callProfileApi(url, options, computeRedirect) {
+            try {
+                const res = await fetch(url, options);
+                const data = await res.json();
+                if (data.ok) {
+                    if (computeRedirect) {
+                        window.location.href = computeRedirect(data);
+                    } else {
+                        location.reload();
+                    }
+                } else {
+                    setProfileMsg(data.error || 'Erreur', false);
+                }
+            } catch (e) {
+                setProfileMsg('Impossible de contacter le serveur.', false);
+            }
+        }
+
+        // Changer de profil dans la liste charge immédiatement SES réglages (voir GET /settings) —
+        // ça ne l'active pas, ça permet juste de le consulter/modifier.
+        profileSelect.addEventListener('change', () => {
+            window.location.href = '/settings?profile=' + encodeURIComponent(profileSelect.value);
+        });
+
+        document.getElementById('btnProfileActivate').addEventListener('click', () => {
+            callProfileApi('/api/profiles/' + VIEWED_PROFILE_ID + '/activate', { method: 'POST' });
+        });
+
+        // Electron n'implémente pas window.prompt() (l'appel échoue silencieusement, aucune boîte
+        // de dialogue ne s'affiche) — on utilise donc un petit champ inline plutôt qu'un prompt().
+        const profileNameForm = document.getElementById('profileNameForm');
+        const profileNameInput = document.getElementById('profileNameInput');
+        const profileNameFormLabel = document.getElementById('profileNameFormLabel');
+        let pendingProfileAction = null;
+
+        function openProfileNameForm(mode, label, prefill) {
+            pendingProfileAction = mode;
+            profileNameFormLabel.textContent = label;
+            profileNameInput.value = prefill || '';
+            profileNameForm.style.display = '';
+            profileNameInput.focus();
+        }
+
+        function closeProfileNameForm() {
+            profileNameForm.style.display = 'none';
+            pendingProfileAction = null;
+        }
+
+        document.getElementById('btnProfileNew').addEventListener('click', () => {
+            openProfileNameForm('new', 'Nom du nouveau profil (copie de celui affiché)', '');
+        });
+
+        document.getElementById('btnProfileRename').addEventListener('click', () => {
+            const current = profileSelect.options[profileSelect.selectedIndex]?.text.replace(' (actif)', '') || '';
+            openProfileNameForm('rename', 'Nouveau nom', current);
+        });
+
+        document.getElementById('btnProfileNameCancel').addEventListener('click', closeProfileNameForm);
+
+        document.getElementById('btnProfileNameConfirm').addEventListener('click', () => {
+            const name = profileNameInput.value.trim();
+            if (!name) return;
+            if (pendingProfileAction === 'new') {
+                callProfileApi('/api/profiles', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name, basedOn: VIEWED_PROFILE_ID })
+                }, (data) => '/settings?profile=' + encodeURIComponent(data.profile.id));
+            } else if (pendingProfileAction === 'rename') {
+                callProfileApi('/api/profiles/' + VIEWED_PROFILE_ID, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name })
+                });
+            }
+            closeProfileNameForm();
+        });
+
+        profileNameInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') document.getElementById('btnProfileNameConfirm').click();
+            if (e.key === 'Escape') closeProfileNameForm();
+        });
+
+        document.getElementById('btnProfileDelete').addEventListener('click', () => {
+            if (!confirm('Supprimer ce profil ? Cette action est irréversible.')) return;
+            callProfileApi('/api/profiles/' + VIEWED_PROFILE_ID, { method: 'DELETE' }, () => '/settings');
+        });
+
+        document.getElementById('btnProfileSeedThemes').addEventListener('click', () => {
+            callProfileApi('/api/profiles/seed-theme-presets', { method: 'POST' });
+        });
+
+        document.getElementById('btnProfileExport').addEventListener('click', () => {
+            window.location.href = '/api/profiles/' + VIEWED_PROFILE_ID + '/export';
+        });
+
+        document.getElementById('btnProfileImport').addEventListener('click', () => {
+            document.getElementById('profileImportFile').click();
+        });
+
+        document.getElementById('profileImportFile').addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            const formData = new FormData();
+            formData.append('file', file);
+            callProfileApi('/api/profiles/import', { method: 'POST', body: formData }, (data) => '/settings?profile=' + encodeURIComponent(data.profile.id));
+        });
+
+        // ---------- Sons d'alerte (upload immédiat, indépendant du bouton Enregistrer) ----------
+        // Portent sur le profil affiché (VIEWED_PROFILE_ID), pas forcément l'actif — comme le
+        // reste des réglages de cette page.
+        document.querySelectorAll('.alert-sound-input').forEach((input) => {
+            input.addEventListener('change', (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                const formData = new FormData();
+                formData.append('file', file);
+                callProfileApi('/api/profiles/' + VIEWED_PROFILE_ID + '/audio/' + input.dataset.alertType, {
+                    method: 'POST',
+                    body: formData
+                });
+            });
+        });
+
+        document.querySelectorAll('.alert-sound-remove').forEach((btn) => {
+            btn.addEventListener('click', () => {
+                callProfileApi('/api/profiles/' + VIEWED_PROFILE_ID + '/audio/' + btn.dataset.alertType, { method: 'DELETE' });
+            });
+        });
+
+        // ---------- Réglages d'affichage ----------
         document.getElementById('btnSave').addEventListener('click', async () => {
             const themes = {};
             for (const key of THEME_PAGES) {
@@ -351,11 +562,13 @@ const SETTINGS_PAGE_HTML = (display) => `
             }
 
             const payload = {
+                profileId: VIEWED_PROFILE_ID,
                 themes,
                 alerts,
                 alertsEnabled: document.getElementById('alertsEnabled').checked,
                 alertsDuration: document.getElementById('alertsDuration').value,
                 alertsQueueDelay: document.getElementById('alertsQueueDelay').value,
+                soundVolume: document.getElementById('soundVolume').value,
                 confettiEnabled: document.getElementById('confettiEnabled').checked,
                 confettiParticles: document.getElementById('confettiParticles').value,
                 confettiSpread: document.getElementById('confettiSpread').value,
@@ -413,7 +626,9 @@ const SETTINGS_PAGE_HTML = (display) => `
                 });
                 const data = await res.json();
                 if (data.ok) {
-                    msg.textContent = 'Enregistré — les overlays ouverts se mettent à jour.';
+                    msg.textContent = (VIEWED_PROFILE_ID === ${JSON.stringify(profileCtx.activeId)})
+                        ? 'Enregistré — les overlays ouverts se mettent à jour.'
+                        : 'Enregistré sur ce profil (non actif — les overlays ne changent pas).';
                     msg.className = 'msg success';
                 } else {
                     msg.textContent = data.error || 'Erreur';

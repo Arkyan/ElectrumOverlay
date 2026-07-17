@@ -9,6 +9,7 @@ const WebhookHandler = require('./src/services/WebhookHandler');
 const createRoutes = require('./src/routes/api');
 const createSetupRoutes = require('./src/routes/setup');
 const createSettingsRoutes = require('./src/routes/settings');
+const createProfilesRoutes = require('./src/routes/profiles');
 const createLogsRoutes = require('./src/routes/logs');
 const createTestToolsRoutes = require('./src/routes/testtools');
 const LogBuffer = require('./src/services/LogBuffer');
@@ -95,6 +96,10 @@ class TwitchOverlayServer {
         // Panneau de réglages permanent (couleurs, textes, alertes, animations)
         const settingsRoutes = createSettingsRoutes(this.broadcastEvent.bind(this));
         this.app.use('/', settingsRoutes);
+
+        // Profils de configuration (display + sons d'alerte), créables/activables/exportables
+        const profilesRoutes = createProfilesRoutes(this.broadcastEvent.bind(this));
+        this.app.use('/', profilesRoutes);
 
         // Logs en direct
         const logsRoutes = createLogsRoutes();

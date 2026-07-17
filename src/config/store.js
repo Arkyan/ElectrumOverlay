@@ -1,5 +1,6 @@
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 
 /**
  * Racine de l'application (dossier contenant server.js, src/, public/).
@@ -15,6 +16,7 @@ const DEFAULTS_PATH = path.join(__dirname, 'defaults.json');
 // de l'exécutable ne fonctionne pas s'il est installé dans Program Files.
 const CONFIG_DIR = process.env.ELECTRUM_CONFIG_DIR || path.join(appRoot(), 'config');
 const CONFIG_PATH = path.join(CONFIG_DIR, 'overlay-config.json');
+const PROFILES_DIR = path.join(CONFIG_DIR, 'profiles');
 
 function isPlainObject(value) {
     return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
@@ -51,6 +53,13 @@ function readJson(filePath) {
     return JSON.parse(fs.readFileSync(filePath, 'utf-8'));
 }
 
+const DEFAULTS = readJson(DEFAULTS_PATH);
+const THEME_PRESETS = readJson(path.join(__dirname, 'theme-presets.json'));
+
+// Types d'alertes valides, dérivés de defaults.json plutôt que recopiés en dur ailleurs
+// (settings.js et routes/profiles.js s'appuient dessus pour valider les uploads de sons).
+const ALERT_TYPES = Object.keys(DEFAULTS.display.alerts.types);
+
 /**
  * Lit les overrides utilisateur (config/overlay-config.json). Fichier absent = première utilisation.
  */
@@ -62,15 +71,20 @@ function loadOverrides() {
     }
 }
 
+function writeOverrides(overrides) {
+    fs.mkdirSync(CONFIG_DIR, { recursive: true });
+    fs.writeFileSync(CONFIG_PATH, JSON.stringify(overrides, null, 2), 'utf-8');
+}
+
 /**
  * Fusionne un patch partiel dans les overrides existants, l'écrit sur disque, et met à jour
  * en place l'objet config partagé pour que les changements soient visibles immédiatement
  * par tous les modules (utile pendant l'assistant de configuration, avant tout redémarrage).
+ * Ne concerne plus `display` (voir saveActiveProfileDisplay) : uniquement twitch/ngrok/trucky/server.
  */
 function saveConfig(partial) {
     const overrides = deepMerge(loadOverrides(), partial);
-    fs.mkdirSync(CONFIG_DIR, { recursive: true });
-    fs.writeFileSync(CONFIG_PATH, JSON.stringify(overrides, null, 2), 'utf-8');
+    writeOverrides(overrides);
     deepMergeInPlace(config, partial);
     return config;
 }
@@ -80,11 +94,370 @@ function isConfigured(cfg) {
     return Boolean(twitch.CLIENT_ID && twitch.CLIENT_SECRET && twitch.BROADCASTER_ID && twitch.USER_ACCESS_TOKEN);
 }
 
+// ============================================================================
+// Profils (display + sons d'alerte). Un seul profil actif à la fois ; son
+// contenu "display" remplace entièrement (pas fusionne) config.display, contrairement
+// à saveConfig() qui ne patch qu'un sous-ensemble des clés racine (twitch/ngrok/...).
+// ============================================================================
+
+function profilePath(id) {
+    return path.join(PROFILES_DIR, `${id}.json`);
+}
+
+function profileAudioDir(id) {
+    return path.join(PROFILES_DIR, 'audio', id);
+}
+
+function listProfileIds() {
+    fs.mkdirSync(PROFILES_DIR, { recursive: true });
+    return fs.readdirSync(PROFILES_DIR)
+        .filter((f) => f.endsWith('.json'))
+        .map((f) => f.slice(0, -5));
+}
+
+function readProfileFile(id) {
+    return readJson(profilePath(id));
+}
+
+function writeProfileFile(profile) {
+    fs.mkdirSync(PROFILES_DIR, { recursive: true });
+    fs.writeFileSync(profilePath(profile.id), JSON.stringify(profile, null, 2), 'utf-8');
+}
+
+/**
+ * Profil complet (display + audio), en tenant compte du cache mémoire si c'est l'actif
+ * (évite une relecture disque et reste cohérent avec des écritures pas encore "settle").
+ */
+function getProfileFull(id) {
+    return (id === getActiveProfileId()) ? activeProfile : readProfileFile(id);
+}
+
+function listProfiles() {
+    return listProfileIds()
+        .map((id) => {
+            try {
+                const p = readProfileFile(id);
+                return { id: p.id, name: p.name, createdAt: p.createdAt, updatedAt: p.updatedAt };
+            } catch (error) {
+                return null;
+            }
+        })
+        .filter(Boolean)
+        .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+let activeProfile = null;
+
+function getActiveProfileId() {
+    return activeProfile ? activeProfile.id : null;
+}
+
+function recomputeDisplay() {
+    config.display = deepMerge(DEFAULTS.display, (activeProfile && activeProfile.display) || {});
+}
+
+/**
+ * Charge (ou migre) le profil actif au démarrage du process. Si aucun profil n'existe encore
+ * (install neuve, ou mise à jour depuis une version antérieure à cette fonctionnalité), on crée
+ * un profil "Défaut" à partir du display déjà chargé (préserve toute personnalisation existante)
+ * et on retire la clé "display" désormais obsolète à la racine d'overlay-config.json.
+ */
+function loadActiveProfile() {
+    const overrides = loadOverrides();
+    let ids = listProfileIds();
+    let id = overrides.activeProfileId;
+
+    if (ids.length === 0) {
+        const now = new Date().toISOString();
+        const initial = {
+            id: crypto.randomUUID(),
+            name: 'Défaut',
+            createdAt: now,
+            updatedAt: now,
+            display: JSON.parse(JSON.stringify(config.display)),
+            audio: {}
+        };
+        writeProfileFile(initial);
+        id = initial.id;
+        ids = [id];
+
+        const { display, ...rest } = overrides;
+        writeOverrides({ ...rest, activeProfileId: id });
+
+        // Quelques profils de thème prêts à l'emploi pour découvrir le système de profils dès la
+        // première utilisation, sans repartir d'une page blanche.
+        ensureThemePresetProfiles();
+    } else if (!id || !ids.includes(id)) {
+        id = ids[0];
+        writeOverrides({ ...overrides, activeProfileId: id });
+    }
+
+    activeProfile = readProfileFile(id);
+    if (!activeProfile.audio) activeProfile.audio = {};
+    recomputeDisplay();
+}
+
+function createProfile(name, basedOnId) {
+    const now = new Date().toISOString();
+    // Copie du profil consulté (celui affiché dans /settings au moment du clic, pas forcément
+    // l'actif) plutôt que des defaults : un nouveau profil sert en général à partir d'un
+    // réglage existant pour n'en personnaliser qu'une partie.
+    const base = getProfileFull(basedOnId || getActiveProfileId());
+    const profile = {
+        id: crypto.randomUUID(),
+        name: String(name || '').trim() || 'Nouveau profil',
+        createdAt: now,
+        updatedAt: now,
+        display: JSON.parse(JSON.stringify((base && base.display) || {})),
+        audio: {}
+    };
+    writeProfileFile(profile);
+    return { id: profile.id, name: profile.name, createdAt: profile.createdAt, updatedAt: profile.updatedAt };
+}
+
+/**
+ * Crée un profil à partir d'un thème de couleurs prêt à l'emploi (src/config/theme-presets.json).
+ * Ne touche qu'à `display.themes` : tout le reste (alertes, animations, panneaux...) reste celui
+ * des defaults, comme n'importe quel profil neuf.
+ */
+function createProfileFromThemePreset(presetName) {
+    const preset = THEME_PRESETS.find((p) => p.name === presetName);
+    if (!preset) throw new Error('Thème inconnu');
+
+    const now = new Date().toISOString();
+    const profile = {
+        id: crypto.randomUUID(),
+        name: preset.name,
+        createdAt: now,
+        updatedAt: now,
+        display: { themes: JSON.parse(JSON.stringify(preset.themes)) },
+        audio: {}
+    };
+    writeProfileFile(profile);
+    return { id: profile.id, name: profile.name, createdAt: profile.createdAt, updatedAt: profile.updatedAt };
+}
+
+/**
+ * Crée les profils de thème manquants (identifiés par nom, pas par contenu — un profil renommé
+ * par l'utilisateur vers le même nom qu'un thème ne sera pas dupliqué). Appelé à la migration
+ * initiale (install neuve) et exposé via un bouton dans /settings pour les installations
+ * existantes qui n'en ont pas encore profité.
+ */
+function ensureThemePresetProfiles() {
+    const existingNames = new Set(listProfiles().map((p) => p.name));
+    const created = [];
+    for (const preset of THEME_PRESETS) {
+        if (!existingNames.has(preset.name)) {
+            created.push(createProfileFromThemePreset(preset.name));
+        }
+    }
+    return created;
+}
+
+function renameProfile(id, name) {
+    const profile = readProfileFile(id);
+    profile.name = String(name || '').trim() || profile.name;
+    profile.updatedAt = new Date().toISOString();
+    writeProfileFile(profile);
+    if (activeProfile && activeProfile.id === id) activeProfile.name = profile.name;
+    return { id: profile.id, name: profile.name, createdAt: profile.createdAt, updatedAt: profile.updatedAt };
+}
+
+function deleteProfile(id) {
+    const ids = listProfileIds();
+    if (ids.length <= 1) {
+        throw new Error('Impossible de supprimer le dernier profil restant');
+    }
+    if (id === getActiveProfileId()) {
+        throw new Error('Impossible de supprimer le profil actif — activez-en un autre d\'abord');
+    }
+    if (!ids.includes(id)) {
+        throw new Error('Profil introuvable');
+    }
+    fs.rmSync(profilePath(id), { force: true });
+    fs.rmSync(profileAudioDir(id), { recursive: true, force: true });
+}
+
+function setActiveProfile(id) {
+    if (!listProfileIds().includes(id)) {
+        throw new Error('Profil introuvable');
+    }
+    writeOverrides({ ...loadOverrides(), activeProfileId: id });
+    activeProfile = readProfileFile(id);
+    if (!activeProfile.audio) activeProfile.audio = {};
+    recomputeDisplay();
+}
+
+/**
+ * Display "effectif" (defaults + overrides) d'un profil quelconque, actif ou non — utilisé par
+ * /settings pour afficher/éditer un profil qu'on ne fait que consulter, sans toucher à
+ * config.display (qui reste toujours celui du profil actif, seul à s'appliquer aux overlays).
+ */
+function getEffectiveDisplay(id) {
+    const profile = getProfileFull(id);
+    return deepMerge(DEFAULTS.display, (profile && profile.display) || {});
+}
+
+/**
+ * Patch le display d'un profil quelconque (actif ou non). Ne recalcule config.display (et donc
+ * ne devient visible sur les overlays) que si `id` est bien le profil actif — éditer un profil
+ * qu'on ne fait que consulter dans /settings ne doit jamais changer ce qui tourne en direct.
+ */
+function saveProfileDisplay(id, partial) {
+    const profile = getProfileFull(id);
+    profile.display = deepMerge(profile.display, partial);
+    profile.updatedAt = new Date().toISOString();
+    writeProfileFile(profile);
+    if (id === getActiveProfileId()) {
+        recomputeDisplay();
+    }
+}
+
+const AUDIO_EXT_BY_MIME = {
+    'audio/mpeg': 'mp3',
+    'audio/mp3': 'mp3',
+    'audio/wav': 'wav',
+    'audio/x-wav': 'wav',
+    'audio/ogg': 'ogg',
+    'audio/webm': 'weba',
+    'audio/mp4': 'm4a',
+    'audio/x-m4a': 'm4a',
+    'audio/aac': 'aac'
+};
+
+function extFor(originalName, mimeType) {
+    const fromMime = AUDIO_EXT_BY_MIME[mimeType];
+    if (fromMime) return fromMime;
+    const fromName = path.extname(originalName || '').replace('.', '').toLowerCase();
+    return fromName || 'bin';
+}
+
+/**
+ * Enregistre (ou remplace) le son d'un type d'alerte pour un profil. `id` peut être n'importe
+ * quel profil, actif ou non (utilisé aussi bien par l'upload direct que par l'import de profil).
+ */
+function setProfileAudio(id, alertType, { filename, mimeType, buffer }) {
+    if (!ALERT_TYPES.includes(alertType)) {
+        throw new Error('Type d\'alerte inconnu');
+    }
+    const profile = getProfileFull(id);
+    const dir = profileAudioDir(id);
+    fs.mkdirSync(dir, { recursive: true });
+
+    // Un remplacement peut changer d'extension (ex: .mp3 -> .wav) : supprimer l'ancien fichier
+    // pour ne pas laisser de résidu orphelin sur disque.
+    const previous = profile.audio && profile.audio[alertType];
+    if (previous && previous.ext) {
+        fs.rmSync(path.join(dir, `${alertType}.${previous.ext}`), { force: true });
+    }
+
+    const ext = extFor(filename, mimeType);
+    fs.writeFileSync(path.join(dir, `${alertType}.${ext}`), buffer);
+
+    profile.audio = profile.audio || {};
+    profile.audio[alertType] = {
+        filename: filename || `${alertType}.${ext}`,
+        mimeType: mimeType || 'application/octet-stream',
+        ext,
+        updatedAt: new Date().toISOString()
+    };
+    profile.updatedAt = new Date().toISOString();
+    writeProfileFile(profile);
+    if (id === getActiveProfileId()) {
+        activeProfile = profile;
+        recomputeDisplay();
+    }
+}
+
+function deleteProfileAudio(id, alertType) {
+    const profile = getProfileFull(id);
+    const entry = profile.audio && profile.audio[alertType];
+    if (!entry) return;
+
+    fs.rmSync(path.join(profileAudioDir(id), `${alertType}.${entry.ext}`), { force: true });
+    delete profile.audio[alertType];
+    profile.updatedAt = new Date().toISOString();
+    writeProfileFile(profile);
+    if (id === getActiveProfileId()) {
+        activeProfile = profile;
+        recomputeDisplay();
+    }
+}
+
+/**
+ * Chemin + métadonnées du fichier son d'un type d'alerte pour un profil, ou null si aucun son
+ * n'est configuré. Utilisé par la route qui sert le fichier binaire et par l'export de profil.
+ */
+function getProfileAudioFilePath(id, alertType) {
+    let profile;
+    try {
+        profile = getProfileFull(id);
+    } catch (error) {
+        return null;
+    }
+    const entry = profile.audio && profile.audio[alertType];
+    if (!entry) return null;
+    return {
+        path: path.join(profileAudioDir(id), `${alertType}.${entry.ext}`),
+        mimeType: entry.mimeType,
+        filename: entry.filename,
+        updatedAt: entry.updatedAt
+    };
+}
+
+function readProfileAudioBuffer(id, alertType) {
+    const info = getProfileAudioFilePath(id, alertType);
+    if (!info) return null;
+    return { buffer: fs.readFileSync(info.path), mimeType: info.mimeType, filename: info.filename };
+}
+
+/**
+ * Crée un nouveau profil à partir d'un export précédent (voir routes/profiles.js). Génère
+ * toujours un nouvel id (jamais celui de l'export) pour ne jamais entrer en collision avec un
+ * profil existant sur la machine qui importe.
+ */
+function importProfile({ name, display, audio }) {
+    const now = new Date().toISOString();
+    const profile = {
+        id: crypto.randomUUID(),
+        name: String(name || '').trim() || 'Profil importé',
+        createdAt: now,
+        updatedAt: now,
+        display: isPlainObject(display) ? display : {},
+        audio: {}
+    };
+    writeProfileFile(profile);
+
+    for (const [type, entry] of Object.entries(audio || {})) {
+        if (!ALERT_TYPES.includes(type) || !entry || !entry.dataBase64) continue;
+        setProfileAudio(profile.id, type, {
+            filename: entry.filename,
+            mimeType: entry.mimeType,
+            buffer: Buffer.from(entry.dataBase64, 'base64')
+        });
+    }
+
+    return { id: profile.id, name: profile.name, createdAt: profile.createdAt, updatedAt: profile.updatedAt };
+}
+
 /**
  * Construit l'objet OVERLAY_CONFIG exposé au frontend (route /js/config.js et diffusion
  * WebSocket 'config-updated') — un seul endroit pour définir cette forme.
  */
 function toFrontendConfig() {
+    const display = JSON.parse(JSON.stringify(config.display));
+    const activeId = getActiveProfileId();
+
+    if (display.alerts && display.alerts.types && activeId) {
+        for (const type of Object.keys(display.alerts.types)) {
+            const audioMeta = activeProfile.audio && activeProfile.audio[type];
+            display.alerts.types[type] = {
+                ...display.alerts.types[type],
+                sound: audioMeta ? `/api/profiles/${activeId}/audio/${type}?v=${encodeURIComponent(audioMeta.updatedAt)}` : null
+            };
+        }
+    }
+
     return {
         server: {
             host: config.server.HOST,
@@ -94,11 +467,12 @@ function toFrontendConfig() {
         twitch: {
             broadcasterId: config.twitch.BROADCASTER_ID
         },
-        ...config.display
+        ...display
     };
 }
 
-const config = deepMerge(readJson(DEFAULTS_PATH), loadOverrides());
+const config = deepMerge(DEFAULTS, loadOverrides());
+loadActiveProfile();
 
 module.exports = config;
 module.exports.saveConfig = saveConfig;
@@ -106,3 +480,20 @@ module.exports.isConfigured = () => isConfigured(config);
 module.exports.getConfigPath = () => CONFIG_PATH;
 module.exports.appRoot = appRoot;
 module.exports.toFrontendConfig = toFrontendConfig;
+
+module.exports.ALERT_TYPES = ALERT_TYPES;
+module.exports.listProfiles = listProfiles;
+module.exports.getActiveProfileId = getActiveProfileId;
+module.exports.getProfileFull = getProfileFull;
+module.exports.createProfile = createProfile;
+module.exports.renameProfile = renameProfile;
+module.exports.deleteProfile = deleteProfile;
+module.exports.setActiveProfile = setActiveProfile;
+module.exports.ensureThemePresetProfiles = ensureThemePresetProfiles;
+module.exports.getEffectiveDisplay = getEffectiveDisplay;
+module.exports.saveProfileDisplay = saveProfileDisplay;
+module.exports.setProfileAudio = setProfileAudio;
+module.exports.deleteProfileAudio = deleteProfileAudio;
+module.exports.getProfileAudioFilePath = getProfileAudioFilePath;
+module.exports.readProfileAudioBuffer = readProfileAudioBuffer;
+module.exports.importProfile = importProfile;
