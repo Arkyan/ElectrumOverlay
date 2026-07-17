@@ -80,12 +80,12 @@ const OVERLAY_CONFIG = {
             duration: [1.5, 2.5]
         },
         meteors: {
-            enabled: true,
+            enabled: false,
             count: 8,
             duration: [2, 3]
         },
         circuitLines: {
-            enabled: true,
+            enabled: false,
             horizontal: 10,
             vertical: 8,
             duration: 6
@@ -108,13 +108,13 @@ const OVERLAY_CONFIG = {
     // ========== PANNEAUX (INDEX.HTML) ==========
     panels: {
         left: {
-            enabled: true,
+            enabled: false,
             interval: 300000,    // 5 minutes
             duration: 15000,     // 15 secondes
             firstDelay: 30000    // Première popup après 30s
         },
         bottom: {
-            enabled: true,
+            enabled: false,
             interval: 180000,    // 3 minutes
             duration: 20000,     // 20 secondes
             firstDelay: 10000,   // Première popup après 10s
@@ -216,7 +216,7 @@ const OVERLAY_CONFIG = {
 
     // ========== DEBUG ==========
     debug: {
-        enabled: true,
+        enabled: false,
         logLevel: 'info',        // 'error', 'warn', 'info', 'debug'
         showWebSocketLogs: true,
         showAlertLogs: true
