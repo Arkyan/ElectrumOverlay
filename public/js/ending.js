@@ -5,13 +5,6 @@
 
 // Code spécifique à ending.html
 
-function getOverlayConfig() {
-    if (typeof globalThis !== 'undefined' && globalThis.OVERLAY_CONFIG) {
-        return globalThis.OVERLAY_CONFIG;
-    }
-    return {};
-}
-
 function renderStreamStats(data) {
     const streamTimeMs = data.streamDurationMs || 0;
     const streamTimeSec = Math.floor(streamTimeMs / 1000);

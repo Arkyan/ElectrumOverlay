@@ -9,13 +9,6 @@ let clockInterval = null;
 let messageRotationInterval = null;
 let progressInterval = null;
 
-function getOverlayConfig() {
-    if (typeof globalThis !== 'undefined' && globalThis.OVERLAY_CONFIG) {
-        return globalThis.OVERLAY_CONFIG;
-    }
-    return {};
-}
-
 // Messages de pause rotatifs
 const pauseMessages = [
     "🎮 Pause technique - On revient tout de suite !",
@@ -190,8 +183,14 @@ function startElementAnimations() {
 function initializeParticleEffects() {
     const cfg = getOverlayConfig();
     if (cfg.animations?.enabled === false) return;
-    if (typeof globalThis !== 'undefined' && globalThis.__OVERLAY_COMMON_ANIMATIONS_DONE) {
-        return;
+
+    if (typeof globalThis !== 'undefined') {
+        // If common overlay animations have already been initialized elsewhere, do nothing.
+        if (globalThis.__OVERLAY_COMMON_ANIMATIONS_DONE) {
+            return;
+        }
+        // Mark animations as initialized to prevent duplicate initialization in other scripts.
+        globalThis.__OVERLAY_COMMON_ANIMATIONS_DONE = true;
     }
 
     if (typeof createStars === 'function') {

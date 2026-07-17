@@ -187,7 +187,7 @@ body {
     overflow: hidden;
     white-space: nowrap;
     position: relative;
-    background: rgba(139, 69, 246, 0.1);
+    background: rgba(var(--theme-secondary-rgb, 139, 69, 246), 0.1);
     padding: 1.5vh 2vw;
     border-radius: 10px;
     margin-left: 2vw;

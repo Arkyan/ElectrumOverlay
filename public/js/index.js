@@ -8,13 +8,7 @@ let progress = 0;
 const interval = 500;
 let totalSteps = 0;
 
-function getOverlayConfig() {
-    if (typeof globalThis !== 'undefined' && globalThis.OVERLAY_CONFIG) {
-        return globalThis.OVERLAY_CONFIG;
-    }
-    return {};
-}
-
+// getOverlayConfig is defined globally in overlay-common.js and reused here.
 // Système de popup toutes les 5 minutes
 async function showInfoPanel() {
     const cfg = getOverlayConfig();
@@ -65,7 +59,7 @@ async function showInfoPanel() {
 function updateTimer(timer) {
     if (!totalSteps || totalSteps <= 0) return;
     progress += (100 / totalSteps);
-    timer.style.background = `conic-gradient(#ef4444 ${progress}%, transparent ${progress}%)`;
+    timer.style.background = `conic-gradient(var(--timer-color, #ef4444) ${progress}%, transparent ${progress}%)`;
 
     if (progress >= 100) {
         clearInterval(timerInterval);
