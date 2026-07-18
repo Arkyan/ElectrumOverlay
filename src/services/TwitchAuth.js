@@ -144,6 +144,30 @@ class TwitchAuth {
     }
 
     /**
+     * Nombre de viewers actuels si la chaîne est en direct, 0 sinon (hors ligne ou erreur).
+     * Twitch ne pousse pas cette donnée via EventSub (contrairement aux follows/subs) — il n'y a
+     * pas d'autre moyen que d'interroger Helix directement, d'où ce polling périodique
+     * (voir TwitchOverlayServer.startViewerCountPolling() dans server.js).
+     */
+    async getViewerCount(broadcasterId) {
+        try {
+            const accessToken = await this.getAppAccessToken();
+            const response = await axios.get(`https://api.twitch.tv/helix/streams?user_id=${broadcasterId}`, {
+                headers: {
+                    'Authorization': `Bearer ${accessToken}`,
+                    'Client-Id': config.twitch.CLIENT_ID
+                }
+            });
+
+            const stream = response.data.data[0];
+            return stream ? stream.viewer_count : 0;
+        } catch (error) {
+            console.error('❌ Erreur lors de la récupération du nombre de viewers:', error.response?.data || error.message);
+            return 0;
+        }
+    }
+
+    /**
      * Vérifier si l'authentification est active
      */
     isAuthenticated() {

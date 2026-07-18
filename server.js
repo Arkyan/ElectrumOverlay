@@ -374,6 +374,7 @@ class TwitchOverlayServer {
 
                 // Heartbeat pour maintenir le processus actif
                 this.startHeartbeat();
+                this.startViewerCountPolling();
 
                 this.isRunning = true;
                 resolve();
@@ -398,6 +399,10 @@ class TwitchOverlayServer {
         if (this.heartbeatInterval) {
             clearInterval(this.heartbeatInterval);
             this.heartbeatInterval = null;
+        }
+        if (this.viewerCountInterval) {
+            clearInterval(this.viewerCountInterval);
+            this.viewerCountInterval = null;
         }
         if (this.wss) {
             await new Promise((resolve) => this.wss.close(resolve));
@@ -428,6 +433,25 @@ class TwitchOverlayServer {
         this.heartbeatInterval = setInterval(() => {
             // Heartbeat silencieux pour maintenir le processus actif
         }, 30000);
+    }
+
+    /**
+     * Twitch ne pousse pas le nombre de viewers via EventSub (contrairement aux follows/subs) —
+     * seul un polling périodique de l'API Helix permet de l'obtenir, d'où cet intervalle séparé
+     * du heartbeat. 60s : largement sous les limites de quota Twitch, suffisant pour un affichage
+     * (ex: overlay de fin de stream, touche Stream Deck) qui n'a pas besoin d'être seconde-près.
+     */
+    startViewerCountPolling() {
+        const poll = async () => {
+            try {
+                const count = await this.auth.getViewerCount(this.eventSubManager.currentBroadcasterId);
+                this.streamStats.updateViewerCount(count);
+            } catch (error) {
+                // best-effort : un souci ponctuel de l'API Twitch ne doit jamais interrompre le serveur
+            }
+        };
+        poll();
+        this.viewerCountInterval = setInterval(poll, 60000);
     }
 
     /**
