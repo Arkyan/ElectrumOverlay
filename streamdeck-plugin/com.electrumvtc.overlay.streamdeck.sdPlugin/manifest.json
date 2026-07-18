@@ -1,0 +1,95 @@
+{
+	"Name": "ElectrumOverlay Deck",
+	"Version": "0.1.0.0",
+	"Author": "Arkyan",
+	"Actions": [
+		{
+			"Name": "Alerte de test",
+			"UUID": "com.electrumvtc.overlay.streamdeck.trigger-test-alert",
+			"Icon": "imgs/actions/trigger-test-alert/icon",
+			"Tooltip": "Declenche une alerte de test (follow, sub, raid...) sur ElectrumOverlay.",
+			"PropertyInspectorPath": "ui/trigger-test-alert.html",
+			"Controllers": [
+				"Keypad"
+			],
+			"States": [
+				{
+					"Image": "imgs/actions/trigger-test-alert/key",
+					"TitleAlignment": "middle"
+				}
+			]
+		},
+		{
+			"Name": "Activer un profil",
+			"UUID": "com.electrumvtc.overlay.streamdeck.activate-profile",
+			"Icon": "imgs/actions/activate-profile/icon",
+			"Tooltip": "Active un profil ElectrumOverlay ; l'icone reflete si ce profil est deja actif.",
+			"PropertyInspectorPath": "ui/activate-profile.html",
+			"Controllers": [
+				"Keypad"
+			],
+			"States": [
+				{
+					"Image": "imgs/actions/activate-profile/key-inactive",
+					"TitleAlignment": "middle"
+				},
+				{
+					"Image": "imgs/actions/activate-profile/key-active",
+					"TitleAlignment": "middle"
+				}
+			]
+		},
+		{
+			"Name": "Afficher un panneau",
+			"UUID": "com.electrumvtc.overlay.streamdeck.show-panel",
+			"Icon": "imgs/actions/show-panel/icon",
+			"Tooltip": "Affiche le panneau gauche ou le bandeau bas immediatement (overlay principal uniquement).",
+			"PropertyInspectorPath": "ui/show-panel.html",
+			"Controllers": [
+				"Keypad"
+			],
+			"States": [
+				{
+					"Image": "imgs/actions/show-panel/key",
+					"TitleAlignment": "middle"
+				}
+			]
+		},
+		{
+			"Name": "Statistiques en direct",
+			"UUID": "com.electrumvtc.overlay.streamdeck.stream-stats",
+			"Icon": "imgs/actions/stream-stats/icon",
+			"Tooltip": "Affiche une statistique du stream en direct (viewers, follows, abonnes, messages de chat).",
+			"PropertyInspectorPath": "ui/stream-stats.html",
+			"Controllers": [
+				"Keypad"
+			],
+			"States": [
+				{
+					"Image": "imgs/actions/stream-stats/key",
+					"TitleAlignment": "middle"
+				}
+			]
+		}
+	],
+	"Category": "ElectrumOverlay Deck",
+	"CategoryIcon": "imgs/plugin/category-icon",
+	"CodePath": "bin/plugin.js",
+	"Description": "Controle ElectrumOverlay depuis un Stream Deck.",
+	"Icon": "imgs/plugin/marketplace",
+	"SDKVersion": 3,
+	"Software": {
+		"MinimumVersion": "7.1"
+	},
+	"OS": [
+		{
+			"Platform": "windows",
+			"MinimumVersion": "10"
+		}
+	],
+	"Nodejs": {
+		"Version": "24",
+		"Debug": "enabled"
+	},
+	"UUID": "com.electrumvtc.overlay.streamdeck"
+}

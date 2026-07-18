@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html>
+
+<head lang="fr">
+    <title>Statistiques en direct</title>
+    <meta charset="utf-8" />
+    <script src="https://sdpi-components.dev/releases/v4/sdpi-components.js"></script>
+</head>
+
+<body>
+    <sdpi-item label="Statistique">
+        <sdpi-select setting="stat" placeholder="Choisis une statistique">
+            <option value="viewerCount">Viewers en direct</option>
+            <option value="follows">Follows (depuis le début du stream)</option>
+            <option value="subscribers">Abonnés (depuis le début du stream)</option>
+            <option value="chatMessages">Messages de chat</option>
+        </sdpi-select>
+    </sdpi-item>
+    <p style="font-size: 12px; color: var(--sdpi-color, #969696);">"Follows" et "Abonnés" comptent depuis le début du stream en cours, pas le total de la chaîne.</p>
+
+    <details>
+        <summary>Avancé</summary>
+        <sdpi-item label="Hôte">
+            <sdpi-textfield setting="host" placeholder="localhost"></sdpi-textfield>
+        </sdpi-item>
+        <sdpi-item label="Port">
+            <sdpi-textfield setting="port" placeholder="8080"></sdpi-textfield>
+        </sdpi-item>
+    </details>
+</body>
+
+</html>

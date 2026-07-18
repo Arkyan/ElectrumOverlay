@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html>
+
+<head lang="fr">
+    <title>Alerte de test</title>
+    <meta charset="utf-8" />
+    <script src="https://sdpi-components.dev/releases/v4/sdpi-components.js"></script>
+</head>
+
+<body>
+    <sdpi-item label="Type d'alerte">
+        <sdpi-select setting="alertType" placeholder="Choisis un type">
+            <option value="follow">Follow</option>
+            <option value="sub">Sub</option>
+            <option value="subgift">Sub Gift (x5)</option>
+            <option value="raid">Raid (42 viewers)</option>
+            <option value="bits">Bits (100)</option>
+            <option value="chat">Message de chat</option>
+            <option value="info">Panneau info (!info)</option>
+            <option value="streamOnline">Stream en ligne</option>
+            <option value="streamOffline">Stream hors ligne</option>
+        </sdpi-select>
+    </sdpi-item>
+
+    <details>
+        <summary>Avancé</summary>
+        <sdpi-item label="Hôte">
+            <sdpi-textfield setting="host" placeholder="localhost"></sdpi-textfield>
+        </sdpi-item>
+        <sdpi-item label="Port">
+            <sdpi-textfield setting="port" placeholder="8080"></sdpi-textfield>
+        </sdpi-item>
+    </details>
+</body>
+
+</html>

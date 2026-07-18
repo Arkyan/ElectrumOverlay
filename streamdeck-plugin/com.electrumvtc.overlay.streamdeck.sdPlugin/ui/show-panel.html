@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html>
+
+<head lang="fr">
+    <title>Afficher un panneau</title>
+    <meta charset="utf-8" />
+    <script src="https://sdpi-components.dev/releases/v4/sdpi-components.js"></script>
+</head>
+
+<body>
+    <sdpi-item label="Panneau">
+        <sdpi-select setting="panel" placeholder="Choisis un panneau">
+            <option value="left">Panneau gauche (infos Trucky)</option>
+            <option value="bottom">Bandeau bas</option>
+        </sdpi-select>
+    </sdpi-item>
+    <p style="font-size: 12px; color: var(--sdpi-color, #969696);">Seul l'overlay principal (index.html) a ces panneaux — sans effet sur les autres pages (starting/pause/ending).</p>
+
+    <details>
+        <summary>Avancé</summary>
+        <sdpi-item label="Hôte">
+            <sdpi-textfield setting="host" placeholder="localhost"></sdpi-textfield>
+        </sdpi-item>
+        <sdpi-item label="Port">
+            <sdpi-textfield setting="port" placeholder="8080"></sdpi-textfield>
+        </sdpi-item>
+    </details>
+</body>
+
+</html>
