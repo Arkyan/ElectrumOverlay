@@ -16,6 +16,7 @@ Application Windows (Electron) qui gère vos overlays de stream Twitch : alertes
 - [📷 Aperçu](#-aperçu)
 - [🎨 Personnalisation](#-personnalisation)
 - [🚛 Intégration TruckyApp](#-intégration-truckyapp)
+- [🎛️ Plugin Stream Deck](#️-plugin-stream-deck)
 - [🛠️ Développement (depuis les sources)](#️-développement-depuis-les-sources)
 - [❗ Dépannage](#-dépannage)
 
@@ -48,6 +49,8 @@ Followers, abonnés, spectateurs actuels — mis à jour automatiquement via Web
 1. Téléchargez le dernier installeur (`ElectrumOverlay Setup x.x.x.exe`) depuis la page [Releases](https://github.com/Arkyan/ElectrumOverlay/releases) du projet.
 2. Lancez l'installeur et suivez les étapes (vous pouvez choisir le dossier d'installation).
 3. Au premier lancement, l'application vous guide dans l'assistant de configuration — voir section suivante.
+
+> 🎛️ Vous avez un Stream Deck ? Le fichier `com.electrumvtc.overlay.streamdeck.streamDeckPlugin` est disponible sur la même page de [Releases](https://github.com/Arkyan/ElectrumOverlay/releases) — voir la section [Plugin Stream Deck](#️-plugin-stream-deck).
 
 **Prérequis :**
 - Windows 10/11
@@ -140,6 +143,21 @@ Pour aller plus loin (mise en page, animations CSS personnalisées), les fichier
 
 Pour les streameurs ETS2/ATS : activez l'intégration depuis l'assistant de configuration ou les Paramètres, en renseignant votre ID utilisateur TruckyApp (visible dans l'URL de votre profil sur [truckyapp.com](https://truckyapp.com/) : `truckyapp.com/user/VOTRE_ID`). L'app récupère alors automatiquement votre dernier trajet et vos statistiques de compagnie. Nécessite Google Chrome ou Microsoft Edge installés sur la machine.
 
+## 🎛️ Plugin Stream Deck
+
+Un plugin Stream Deck dédié (« ElectrumOverlay Deck ») permet de piloter l'app directement depuis vos touches :
+- **Alerte de test** — déclenche un follow/sub/raid/bits... de test, comme la page `/tests`
+- **Activer un profil** — bascule sur un profil, avec une icône qui reflète en direct s'il est déjà actif
+- **Afficher un panneau** — affiche le panneau gauche ou le bandeau bas immédiatement (même désactivé dans les réglages)
+- **Statistiques en direct** — affiche viewers, follows, abonnés ou messages de chat sur une touche, mis à jour automatiquement
+
+### Installation
+1. Téléchargez `com.electrumvtc.overlay.streamdeck.streamDeckPlugin` depuis la page [Releases](https://github.com/Arkyan/ElectrumOverlay/releases) (même page que l'installeur de l'app).
+2. Double-cliquez dessus : l'app Stream Deck l'installe automatiquement.
+3. Glissez les actions « ElectrumOverlay Deck » sur vos touches. Le serveur ElectrumOverlay doit être démarré pour qu'elles fonctionnent (il tourne par défaut sur `localhost:8080`, réglable par touche si besoin).
+
+Pour développer ou modifier le plugin, voir `streamdeck-plugin/README.md`.
+
 ## 🛠️ Développement (depuis les sources)
 
 ### Structure du projet
@@ -168,6 +186,7 @@ Ma version/
 │       ├── TruckyApi.js
 │       └── LogBuffer.js
 ├── public/                  # Overlays + pages admin (HTML/CSS/JS statiques)
+├── streamdeck-plugin/       # Plugin Stream Deck (sous-projet séparé, voir son propre README)
 ├── server.js                 # Classe TwitchOverlayServer (start/stop, routes, WebSocket)
 ├── ConfigOBS.json
 └── package.json
@@ -190,8 +209,10 @@ En développement, la configuration est stockée dans `config/overlay-config.jso
 ### Construire l'installeur
 
 ```bash
-npm run package:win     # build local, dist/ElectrumOverlay Setup x.x.x.exe
-npm run publish:win     # build + publication sur GitHub Releases (nécessite GH_TOKEN)
+npm run package:win        # build local, dist/ElectrumOverlay Setup x.x.x.exe
+npm run package:streamdeck # build local du plugin, dist/com.electrumvtc.overlay.streamdeck.streamDeckPlugin
+npm run publish:win        # build + publication de l'app ET du plugin Stream Deck sur GitHub Releases
+                            # (nécessite GH_TOKEN pour electron-builder, et le CLI "gh" authentifié pour l'upload du plugin)
 ```
 
 ### Autres commandes

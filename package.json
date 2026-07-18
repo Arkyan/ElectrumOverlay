@@ -8,7 +8,8 @@
     "dev": "nodemon server.js",
     "electron": "electron .",
     "package:win": "electron-builder --win",
-    "publish:win": "electron-builder --win --publish always",
+    "package:streamdeck": "cd streamdeck-plugin && npm run build && npx streamdeck pack com.electrumvtc.overlay.streamdeck.sdPlugin --output ../dist --force",
+    "publish:win": "electron-builder --win --publish always && npm run package:streamdeck && node scripts/upload-streamdeck-asset.js",
     "clean": "node -e \"const EventSubManager = require('./src/services/EventSubManager'); const TwitchAuth = require('./src/services/TwitchAuth'); new EventSubManager(new TwitchAuth()).cleanupSubscriptions()\"",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
