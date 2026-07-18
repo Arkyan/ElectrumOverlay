@@ -83,6 +83,20 @@ function createTestToolsRoutes(webhookHandler) {
         res.json({ ok: true });
     });
 
+    // Affiche le panneau gauche ou le bandeau bas immédiatement, sans attendre leur cycle
+    // automatique (voir showInfoPanel/showBottomBar dans public/js/index.js) ni passer par le
+    // détour du message de chat "!info" — utilisé par /tests et par le plugin Stream Deck.
+    router.post('/api/panels/:panel/show', (req, res) => {
+        const { panel } = req.params;
+        if (panel !== 'left' && panel !== 'bottom') {
+            return res.status(400).json({ error: 'Panneau inconnu (left ou bottom)' });
+        }
+        if (webhookHandler.broadcastEvent) {
+            webhookHandler.broadcastEvent({ type: 'show-panel', panel });
+        }
+        res.json({ ok: true });
+    });
+
     return router;
 }
 
@@ -117,7 +131,10 @@ const TESTS_PAGE_HTML = () => `
             <div class="field-row">
                 <button type="button" class="btn" data-action="chat">Message de chat</button>
                 <button type="button" class="btn" data-action="info">Afficher le panneau info (!info)</button>
+                <button type="button" class="btn" id="btnShowLeftPanel">Panneau gauche (direct)</button>
+                <button type="button" class="btn" id="btnShowBottomBar">Bandeau bas (direct)</button>
             </div>
+            <p class="hint">Les deux premiers boutons simulent un vrai événement Twitch (utile pour tester le chemin complet) ; les deux derniers déclenchent l'affichage directement, sans passer par un faux message — et s'affichent même si le panneau concerné est désactivé dans les réglages.</p>
         </div>
 
         <div class="card">
@@ -133,6 +150,21 @@ const TESTS_PAGE_HTML = () => `
 
     <script>
         const msg = document.getElementById('msg');
+
+        async function callTestApi(url, btn) {
+            btn.disabled = true;
+            try {
+                const res = await fetch(url, { method: 'POST' });
+                const data = await res.json();
+                msg.textContent = data.ok ? 'Envoyé : ' + btn.textContent : (data.error || 'Erreur');
+                msg.className = 'msg ' + (data.ok ? 'success' : 'error');
+            } catch (e) {
+                msg.textContent = 'Impossible de contacter le serveur.';
+                msg.className = 'msg error';
+            }
+            btn.disabled = false;
+        }
+
         document.querySelectorAll('button[data-action]').forEach((btn) => {
             btn.addEventListener('click', async () => {
                 btn.disabled = true;
@@ -152,6 +184,9 @@ const TESTS_PAGE_HTML = () => `
                 btn.disabled = false;
             });
         });
+
+        document.getElementById('btnShowLeftPanel').addEventListener('click', (e) => callTestApi('/api/panels/left/show', e.target));
+        document.getElementById('btnShowBottomBar').addEventListener('click', (e) => callTestApi('/api/panels/bottom/show', e.target));
     </script>
 </body>
 </html>

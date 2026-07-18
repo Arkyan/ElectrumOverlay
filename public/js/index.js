@@ -10,10 +10,13 @@ let totalSteps = 0;
 
 // getOverlayConfig is defined globally in overlay-common.js and reused here.
 // Système de popup toutes les 5 minutes
-async function showInfoPanel() {
+async function showInfoPanel(force = false) {
     const cfg = getOverlayConfig();
     const panelCfg = cfg.panels?.left;
-    if (panelCfg?.enabled === false) return;
+    // `force` permet à un déclenchement manuel (page /tests, plugin Stream Deck — voir
+    // overlay-common.js) de passer outre le panneau désactivé dans les réglages ; le cycle
+    // automatique, lui, n'appelle jamais cette fonction avec force=true (voir plus bas).
+    if (!force && panelCfg?.enabled === false) return;
 
     if (timerInterval) {
         clearInterval(timerInterval);
@@ -66,10 +69,10 @@ function updateTimer(timer) {
     }
 }
 
-function showBottomBar() {
+function showBottomBar(force = false) {
     const cfg = getOverlayConfig();
     const panelCfg = cfg.panels?.bottom;
-    if (panelCfg?.enabled === false) return;
+    if (!force && panelCfg?.enabled === false) return;
 
     const bottomBar = document.getElementById('bottomBar');
     if (!bottomBar) return;

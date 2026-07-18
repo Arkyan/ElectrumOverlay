@@ -370,6 +370,17 @@ function initWebSocket() {
             return;
         }
 
+        if (data.type === 'show-panel') {
+            // Déclenchement direct (page /tests, plugin Stream Deck...) — pas de simulation de
+            // message de chat. showInfoPanel/showBottomBar sont définis dans index.js (index.html
+            // uniquement) ; sur les autres pages ces fonctions n'existent pas, on ne fait rien.
+            // force=true : un déclenchement manuel doit s'afficher même si le panneau est
+            // désactivé dans les réglages (seul le cycle automatique respecte ce réglage).
+            if (data.panel === 'left' && typeof showInfoPanel === 'function') showInfoPanel(true);
+            if (data.panel === 'bottom' && typeof showBottomBar === 'function') showBottomBar(true);
+            return;
+        }
+
         if (data.type === 'message') {
             if (data.message.startsWith('!')) {
                 if (data.message === '!info' && typeof showInfoPanel === 'function') {
