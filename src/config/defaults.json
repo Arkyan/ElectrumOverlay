@@ -155,6 +155,11 @@
             }
         },
         "chat": {
+            "enabled": {
+                "starting": true,
+                "index": true,
+                "ending": true
+            },
             "maxMessages": 50,
             "scrollBehavior": "smooth",
             "defaultColor": "#3b82f6",

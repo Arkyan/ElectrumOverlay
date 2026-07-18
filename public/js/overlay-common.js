@@ -100,6 +100,15 @@ function applyBottomBarVisibilityFromConfig() {
     });
 }
 
+function applyChatVisibilityFromConfig() {
+    const cfg = getOverlayConfig();
+    const pageKey = getThemeKeyFromLocation();
+    const visible = cfg.chat?.enabled?.[pageKey] !== false;
+    document.querySelectorAll('.chat-panel').forEach(el => {
+        el.style.display = visible ? '' : 'none';
+    });
+}
+
 function applyBottomBarContentFromConfig() {
     const cfg = getOverlayConfig();
     const content = cfg.panels?.bottom?.content;
@@ -367,6 +376,7 @@ function initWebSocket() {
             applyThemeFromConfig();
             applyBottomBarContentFromConfig();
             applyBottomBarVisibilityFromConfig();
+            applyChatVisibilityFromConfig();
             return;
         }
 
@@ -596,6 +606,9 @@ function initCommonOverlay() {
 
     // Panneaux statiques (starting/ending) : possibilité de les masquer via config
     applyBottomBarVisibilityFromConfig();
+
+    // Boîte de chat (index.html) : possibilité de la masquer via config
+    applyChatVisibilityFromConfig();
 
     // Charger les badges
     if (cfg.twitch?.broadcasterId) {

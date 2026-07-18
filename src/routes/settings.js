@@ -153,6 +153,11 @@ function createSettingsRoutes(broadcastEvent) {
                 },
                 animations,
                 chat: {
+                    enabled: {
+                        starting: Boolean(body.chatEnabledStarting),
+                        index: Boolean(body.chatEnabledIndex),
+                        ending: Boolean(body.chatEnabledEnding)
+                    },
                     defaultColor: body.chatColor,
                     maxMessages: num(body.chatMaxMessages, 50)
                 },
@@ -369,6 +374,11 @@ const SETTINGS_PAGE_HTML = (display, profileCtx) => `
         <details class="card">
             <summary>Chat</summary>
             <div class="details-body">
+                <div class="field-row" style="margin-bottom:var(--space-4);">
+                    <label class="checkbox-row"><input type="checkbox" id="chatEnabledStarting" ${display.chat?.enabled?.starting !== false ? 'checked' : ''}> Afficher sur Starting</label>
+                    <label class="checkbox-row"><input type="checkbox" id="chatEnabledIndex" ${display.chat?.enabled?.index !== false ? 'checked' : ''}> Afficher sur Index</label>
+                    <label class="checkbox-row"><input type="checkbox" id="chatEnabledEnding" ${display.chat?.enabled?.ending !== false ? 'checked' : ''}> Afficher sur Ending</label>
+                </div>
                 <div class="field-row">
                     <div class="field"><label for="chatColor">Couleur par défaut</label><input type="color" id="chatColor" value="${esc(display.chat?.defaultColor || '#3b82f6')}"></div>
                     <div class="field"><label for="chatMaxMessages">Messages max affichés</label><input type="number" id="chatMaxMessages" value="${esc(display.chat?.maxMessages ?? 50)}" min="1" max="200"></div>
@@ -600,6 +610,9 @@ const SETTINGS_PAGE_HTML = (display, profileCtx) => `
                 dvdLogoSpeed: document.getElementById('dvdLogoSpeed').value,
                 dvdLogoUpdateInterval: document.getElementById('dvdLogoUpdateInterval').value,
 
+                chatEnabledStarting: document.getElementById('chatEnabledStarting').checked,
+                chatEnabledIndex: document.getElementById('chatEnabledIndex').checked,
+                chatEnabledEnding: document.getElementById('chatEnabledEnding').checked,
                 chatColor: document.getElementById('chatColor').value,
                 chatMaxMessages: document.getElementById('chatMaxMessages').value,
 
