@@ -17,6 +17,7 @@
     "appId": "com.electrumvtc.overlay",
     "productName": "ElectrumOverlay",
     "asar": false,
+    "icon": "build/icon.png",
     "directories": {
       "output": "dist"
     },
