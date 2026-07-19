@@ -210,12 +210,14 @@ const SETTINGS_PAGE_HTML = (display, profileCtx) => `
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="/css/app-ui.css">
     <style>
-        .page { max-width: 900px; }
+        .page { max-width: 900px; padding-bottom: 88px; }
         .save-bar {
-            position: sticky; bottom: 0;
+            position: fixed; left: 0; right: 0; bottom: 0;
             display: flex; align-items: center; gap: var(--space-3);
-            padding: var(--space-4) 0;
-            background: linear-gradient(to top, var(--bg) 60%, transparent);
+            padding: var(--space-4) var(--space-5);
+            background: var(--surface);
+            border-top: 1px solid var(--border);
+            z-index: 20;
         }
         input[type="number"] { width: 90px; }
         input[type="file"] { max-width: 220px; }
