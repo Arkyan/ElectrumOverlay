@@ -544,12 +544,18 @@ function createCircuitLines(horizontal = 10, vertical = 8, duration = 6) {
 
 function initDVDLogo() {
     const cfg = getOverlayConfig();
-    if (cfg.animations?.enabled === false || cfg.animations?.dvdLogo?.enabled === false) return;
-
     const logoContainer = document.getElementById('logoContainer');
     const dvdLogo = document.getElementById('dvdLogo');
 
     if (!logoContainer || !dvdLogo) return;
+
+    // Désactivé : masquer explicitement, sinon le logo reste visible (figé au coin
+    // haut-gauche, sa position CSS par défaut) faute de transform jamais appliqué.
+    if (cfg.animations?.enabled === false || cfg.animations?.dvdLogo?.enabled === false) {
+        logoContainer.style.display = 'none';
+        return;
+    }
+    logoContainer.style.display = '';
 
     const rectWidth = 1916;
     const rectHeight = 1075;
