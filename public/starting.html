@@ -29,7 +29,7 @@
     <div class="particles" id="particles"></div>
 
     <!-- Indicateur de temps d'attente -->
-    <div class="waiting-indicator neon-border">
+    <div class="waiting-indicator neon-border" data-scene-el="waitingIndicator">
         <div class="waiting-label">En attente...</div>
         <div class="waiting-dots">
             <div class="dot"></div>
@@ -44,18 +44,18 @@
     </div>
 
     <div class="overlay">
-        <div>
-            <h1 class="shine-effect" style="font-family: 'Baron Neue Black', Arial, sans-serif;"></i><i
-                    class="far fa-play-circle start-icon-title"></i> Attendez un instant...
+        <div data-scene-el="titleBlock">
+            <h1 class="shine-effect" style="font-family: 'Baron Neue Black', Arial, sans-serif;"><i
+                    class="far fa-play-circle start-icon-title"></i> <span data-scene-text="startingTitle">Attendez un instant...</span>
             </h1>
-            <p class="typing-text" style="font-family: 'Baron Neue Black', Arial, sans-serif; color: #94a3b8;">La
+            <p class="typing-text" style="font-family: 'Baron Neue Black', Arial, sans-serif; color: #94a3b8;" data-scene-text="startingSubtitle">La
                 diffusion commencera
                 bientôt !</p>
         </div>
     </div>
 
     <!-- Alertes Twitch -->
-    <div class="alert-container" id="alertContainer">
+    <div class="alert-container" id="alertContainer" data-scene-el="alertContainer">
         <img class="alert-media" id="alertMedia" alt="">
         <div class="alert-icon" id="alertIcon">
             <i class="fas fa-heart"></i>
@@ -69,17 +69,17 @@
     </div>
 
     <!-- Chat Twitch -->
-    <div class="chat-panel neon-border">
+    <div class="chat-panel neon-border" data-scene-el="chatPanel">
         <div class="chat-header">
             <i class="fas fa-comments"></i>
-            CHAT
+            <span data-scene-text="chatHeaderLabel">CHAT</span>
         </div>
         <div class="chat-container" id="chatContainer">
         </div>
     </div>
 
     <!-- Barre du bas -->
-    <div class="bottom-bar neon-border">
+    <div class="bottom-bar neon-border" data-scene-el="bottomBar">
         <div class="bottom-info">
             <i class="fab fa-twitch info-icon"></i><span class="info-text"></span>
         </div>
@@ -93,6 +93,7 @@
 
     <script src="js/config.js"></script>
     <script src="js/overlay-common.js"></script>
+    <script src="js/scene-editor-bridge.js"></script>
     <script src="js/starting.js"></script>
 
 </body>

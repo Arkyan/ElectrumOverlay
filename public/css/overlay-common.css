@@ -61,6 +61,9 @@ body {
     position: fixed;
     top: 20%;
     left: 50%;
+    /* translate(-50%,-50%) est relatif à la taille ACTUELLE de la boîte : un redimensionnement
+       (width/height posés par l'éditeur de scène) garde donc le centrage automatiquement, sans
+       calcul particulier à faire côté JS. */
     transform: translate(-50%, -50%) var(--alert-enter-transform);
     width: 40vw;
     max-width: 600px;

@@ -196,6 +196,137 @@ function createProfilesRoutes(broadcastEvent) {
         });
     });
 
+    // Position/taille/visibilité custom d'un élément déplaçable (éditeur de scène) — patch partiel
+    // { top?, left?, hidden?, width?, height? } en % (vh/vw pour les 4). width/height sont de
+    // vraies dimensions CSS (pas un transform:scale) : le contenu (texte, icônes) ne se déforme
+    // pas, il dispose juste de plus/moins d'espace — séparés pour permettre un redimensionnement
+    // horizontal, vertical, ou libre selon la poignée utilisée. Ne recrée jamais l'entrée de zéro :
+    // déplacer un élément masqué le laisse masqué, et inversement.
+    router.post('/api/profiles/:id/layout/:page/:elementId', (req, res) => {
+        try {
+            const { top, left, hidden, width, height } = req.body || {};
+            const patch = {};
+            if (typeof top === 'number') patch.top = top;
+            if (typeof left === 'number') patch.left = left;
+            if (typeof hidden === 'boolean') patch.hidden = hidden;
+            if (typeof width === 'number' && width > 0) patch.width = width;
+            if (typeof height === 'number' && height > 0) patch.height = height;
+            config.updateProfileElementLayout(req.params.id, req.params.page, req.params.elementId, patch);
+            if (req.params.id === config.getActiveProfileId()) {
+                broadcastEvent({ type: 'config-updated', config: config.toFrontendConfig() });
+            }
+            res.json({ ok: true });
+        } catch (error) {
+            res.status(400).json({ error: error.message });
+        }
+    });
+
+    // Retire tout override (position + visibilité) — revient à la position/visibilité par défaut.
+    router.delete('/api/profiles/:id/layout/:page/:elementId', (req, res) => {
+        try {
+            config.resetProfileElementLayout(req.params.id, req.params.page, req.params.elementId);
+            if (req.params.id === config.getActiveProfileId()) {
+                broadcastEvent({ type: 'config-updated', config: config.toFrontendConfig() });
+            }
+            res.json({ ok: true });
+        } catch (error) {
+            res.status(400).json({ error: error.message });
+        }
+    });
+
+    // Override de texte d'un élément statique (titre, sous-titre, en-tête de chat...).
+    router.post('/api/profiles/:id/text/:page/:textId', (req, res) => {
+        try {
+            const { value } = req.body || {};
+            config.setProfileText(req.params.id, req.params.page, req.params.textId, typeof value === 'string' ? value : '');
+            if (req.params.id === config.getActiveProfileId()) {
+                broadcastEvent({ type: 'config-updated', config: config.toFrontendConfig() });
+            }
+            res.json({ ok: true });
+        } catch (error) {
+            res.status(400).json({ error: error.message });
+        }
+    });
+
+    router.delete('/api/profiles/:id/text/:page/:textId', (req, res) => {
+        try {
+            config.setProfileText(req.params.id, req.params.page, req.params.textId, '');
+            if (req.params.id === config.getActiveProfileId()) {
+                broadcastEvent({ type: 'config-updated', config: config.toFrontendConfig() });
+            }
+            res.json({ ok: true });
+        } catch (error) {
+            res.status(400).json({ error: error.message });
+        }
+    });
+
+    // Éléments texte ajoutés librement depuis l'éditeur de scène.
+    router.post('/api/profiles/:id/custom-text/:page', (req, res) => {
+        try {
+            const { text, top, left } = req.body || {};
+            const elementId = config.addProfileCustomText(req.params.id, req.params.page, { text, top, left });
+            if (req.params.id === config.getActiveProfileId()) {
+                broadcastEvent({ type: 'config-updated', config: config.toFrontendConfig() });
+            }
+            res.json({ ok: true, elementId });
+        } catch (error) {
+            res.status(400).json({ error: error.message });
+        }
+    });
+
+    router.patch('/api/profiles/:id/custom-text/:page/:elementId', (req, res) => {
+        try {
+            const { text, top, left, width, height } = req.body || {};
+            const patch = {};
+            if (typeof text === 'string') patch.text = text;
+            if (typeof top === 'number') patch.top = top;
+            if (typeof left === 'number') patch.left = left;
+            if (typeof width === 'number' && width > 0) patch.width = width;
+            if (typeof height === 'number' && height > 0) patch.height = height;
+            config.updateProfileCustomText(req.params.id, req.params.page, req.params.elementId, patch);
+            if (req.params.id === config.getActiveProfileId()) {
+                broadcastEvent({ type: 'config-updated', config: config.toFrontendConfig() });
+            }
+            res.json({ ok: true });
+        } catch (error) {
+            res.status(400).json({ error: error.message });
+        }
+    });
+
+    router.delete('/api/profiles/:id/custom-text/:page/:elementId', (req, res) => {
+        try {
+            config.removeProfileCustomText(req.params.id, req.params.page, req.params.elementId);
+            if (req.params.id === config.getActiveProfileId()) {
+                broadcastEvent({ type: 'config-updated', config: config.toFrontendConfig() });
+            }
+            res.json({ ok: true });
+        } catch (error) {
+            res.status(400).json({ error: error.message });
+        }
+    });
+
+    const THEME_FIELDS = ['primary', 'secondary', 'accent', 'background', 'surface', 'text', 'mutedText', 'panelBg', 'panelBorder'];
+
+    // Couleurs de thème d'une page, éditées directement depuis l'éditeur de scène — patch
+    // partiel, fusionné par saveProfileDisplay() qui gère déjà correctement l'imbrication
+    // (les couleurs non fournies restent inchangées).
+    router.patch('/api/profiles/:id/theme/:page', (req, res) => {
+        try {
+            const body = req.body || {};
+            const patch = {};
+            for (const field of THEME_FIELDS) {
+                if (typeof body[field] === 'string') patch[field] = body[field];
+            }
+            config.saveProfileDisplay(req.params.id, { themes: { [req.params.page]: patch } });
+            if (req.params.id === config.getActiveProfileId()) {
+                broadcastEvent({ type: 'config-updated', config: config.toFrontendConfig() });
+            }
+            res.json({ ok: true });
+        } catch (error) {
+            res.status(400).json({ error: error.message });
+        }
+    });
+
     router.get('/api/profiles/:id/export', (req, res) => {
         let profile;
         try {

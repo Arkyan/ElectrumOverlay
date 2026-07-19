@@ -12,6 +12,7 @@ const createSettingsRoutes = require('./src/routes/settings');
 const createProfilesRoutes = require('./src/routes/profiles');
 const createLogsRoutes = require('./src/routes/logs');
 const createTestToolsRoutes = require('./src/routes/testtools');
+const createSceneEditorRoutes = require('./src/routes/sceneEditor');
 const LogBuffer = require('./src/services/LogBuffer');
 
 /**
@@ -109,6 +110,10 @@ class TwitchOverlayServer {
         const testToolsRoutes = createTestToolsRoutes(this.webhookHandler);
         this.app.use('/', testToolsRoutes);
 
+        // Éditeur de scène (positionnement des éléments d'overlay par glisser-déposer)
+        const sceneEditorRoutes = createSceneEditorRoutes();
+        this.app.use('/', sceneEditorRoutes);
+
         // Panneau d'administration (accueil de la fenêtre Electron) — volontairement séparé de
         // `/`, qui doit toujours rester l'overlay pour les sources navigateur OBS.
         this.app.get('/app', (req, res) => {
@@ -145,6 +150,10 @@ class TwitchOverlayServer {
                                 <a href="/settings" class="link-card">
                                     <h3>Paramètres</h3>
                                     <p>Couleurs, textes, alertes, animations</p>
+                                </a>
+                                <a href="/scene-editor" class="link-card">
+                                    <h3>Éditeur de scène</h3>
+                                    <p>Positionner le chat, les panneaux, les alertes...</p>
                                 </a>
                                 <a href="/logs" class="link-card">
                                     <h3>Logs</h3>

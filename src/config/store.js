@@ -323,6 +323,116 @@ function saveProfileDisplay(id, partial) {
     }
 }
 
+/**
+ * Position/visibilité custom (top/left en % de la hauteur/largeur + hidden, cf. l'éditeur de
+ * scène) d'un élément déplaçable sur une page donnée. `patch` ne fait que compléter/écraser les
+ * clés fournies (déplacer un élément ne doit pas effacer son état masqué, et inversement) —
+ * deepMerge ne sachant pas fusionner "en place" à ce niveau précis sans écraser le reste du
+ * display, on manipule l'objet directement plutôt que de passer par saveProfileDisplay().
+ */
+function updateProfileElementLayout(id, page, elementId, patch) {
+    const profile = getProfileFull(id);
+    profile.display = profile.display || {};
+    profile.display.layout = profile.display.layout || {};
+    profile.display.layout[page] = profile.display.layout[page] || {};
+    profile.display.layout[page][elementId] = { ...profile.display.layout[page][elementId], ...patch };
+
+    profile.updatedAt = new Date().toISOString();
+    writeProfileFile(profile);
+    if (id === getActiveProfileId()) {
+        recomputeDisplay();
+    }
+}
+
+/** Retire tout override (position ET visibilité) d'un élément — revient à son état CSS par défaut. */
+function resetProfileElementLayout(id, page, elementId) {
+    const profile = getProfileFull(id);
+    if (profile.display && profile.display.layout && profile.display.layout[page]) {
+        delete profile.display.layout[page][elementId];
+    }
+    profile.updatedAt = new Date().toISOString();
+    writeProfileFile(profile);
+    if (id === getActiveProfileId()) {
+        recomputeDisplay();
+    }
+}
+
+/**
+ * Override de texte pour un élément statique marqué data-scene-text dans le HTML (titre,
+ * sous-titre, en-tête de chat...) — `value` vide retire l'override et revient au texte par défaut.
+ */
+function setProfileText(id, page, textId, value) {
+    const profile = getProfileFull(id);
+    profile.display = profile.display || {};
+    profile.display.texts = profile.display.texts || {};
+    profile.display.texts[page] = profile.display.texts[page] || {};
+
+    if (value) {
+        profile.display.texts[page][textId] = value;
+    } else {
+        delete profile.display.texts[page][textId];
+    }
+
+    profile.updatedAt = new Date().toISOString();
+    writeProfileFile(profile);
+    if (id === getActiveProfileId()) {
+        recomputeDisplay();
+    }
+}
+
+/**
+ * Éléments texte ajoutés librement par l'utilisateur depuis l'éditeur de scène (pas présents dans
+ * le HTML de base) — stockés par id généré, un objet (pas un tableau) pour patch/suppression
+ * directs par id sans avoir à retrouver leur index.
+ */
+function addProfileCustomText(id, page, { text, top, left }) {
+    const profile = getProfileFull(id);
+    profile.display = profile.display || {};
+    profile.display.customTexts = profile.display.customTexts || {};
+    profile.display.customTexts[page] = profile.display.customTexts[page] || {};
+
+    const elementId = crypto.randomUUID();
+    profile.display.customTexts[page][elementId] = {
+        text: text || 'Nouveau texte',
+        top: typeof top === 'number' ? top : 40,
+        left: typeof left === 'number' ? left : 40
+    };
+
+    profile.updatedAt = new Date().toISOString();
+    writeProfileFile(profile);
+    if (id === getActiveProfileId()) {
+        recomputeDisplay();
+    }
+    return elementId;
+}
+
+function updateProfileCustomText(id, page, elementId, patch) {
+    const profile = getProfileFull(id);
+    const entry = profile.display && profile.display.customTexts && profile.display.customTexts[page] && profile.display.customTexts[page][elementId];
+    if (!entry) {
+        throw new Error('Élément introuvable');
+    }
+    Object.assign(entry, patch);
+
+    profile.updatedAt = new Date().toISOString();
+    writeProfileFile(profile);
+    if (id === getActiveProfileId()) {
+        recomputeDisplay();
+    }
+}
+
+function removeProfileCustomText(id, page, elementId) {
+    const profile = getProfileFull(id);
+    if (profile.display && profile.display.customTexts && profile.display.customTexts[page]) {
+        delete profile.display.customTexts[page][elementId];
+    }
+    profile.updatedAt = new Date().toISOString();
+    writeProfileFile(profile);
+    if (id === getActiveProfileId()) {
+        recomputeDisplay();
+    }
+}
+
 const AUDIO_EXT_BY_MIME = {
     'audio/mpeg': 'mp3',
     'audio/mp3': 'mp3',
@@ -595,6 +705,12 @@ module.exports.setActiveProfile = setActiveProfile;
 module.exports.ensureThemePresetProfiles = ensureThemePresetProfiles;
 module.exports.getEffectiveDisplay = getEffectiveDisplay;
 module.exports.saveProfileDisplay = saveProfileDisplay;
+module.exports.updateProfileElementLayout = updateProfileElementLayout;
+module.exports.resetProfileElementLayout = resetProfileElementLayout;
+module.exports.setProfileText = setProfileText;
+module.exports.addProfileCustomText = addProfileCustomText;
+module.exports.updateProfileCustomText = updateProfileCustomText;
+module.exports.removeProfileCustomText = removeProfileCustomText;
 module.exports.setProfileAudio = setProfileAudio;
 module.exports.deleteProfileAudio = deleteProfileAudio;
 module.exports.getProfileAudioFilePath = getProfileAudioFilePath;

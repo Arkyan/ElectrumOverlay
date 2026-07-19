@@ -34,11 +34,11 @@
     </div>
 
     <!-- Indicateur de pause avec animation -->
-    <div class="pause-indicator neon-border">
+    <div class="pause-indicator neon-border" data-scene-el="pauseIndicator">
         <div class="pause-icon">
             <i class="fas fa-pause"></i>
         </div>
-        <div class="pause-indicator-label">PAUSE</div>
+        <div class="pause-indicator-label" data-scene-text="pauseIndicatorLabel">PAUSE</div>
         <div class="pulse-dots">
             <div class="pulse-dot"></div>
             <div class="pulse-dot"></div>
@@ -47,12 +47,12 @@
     </div>
 
     <div class="overlay">
-        <div>
+        <div data-scene-el="titleBlock">
             <h1 class="shine-effect pause-title" style="font-family: 'Baron Neue Black', Arial, sans-serif;">
                 <i class="fas fa-pause pause-icon-title"></i>
-                PAUSE
+                <span data-scene-text="pauseTitle">PAUSE</span>
             </h1>
-            <p class="typing-text pause-subtitle" style="font-family: 'Baron Neue Black', Arial, sans-serif;">
+            <p class="typing-text pause-subtitle" style="font-family: 'Baron Neue Black', Arial, sans-serif;" data-scene-text="pauseSubtitle">
                 Le stream reprendra dans un instant...
             </p>
 
@@ -80,30 +80,31 @@
     </div>
 
     <!-- Horloge en temps réel -->
-    <div class="real-time-clock">
+    <div class="real-time-clock" data-scene-el="realTimeClock">
         <i class="fas fa-clock"></i>
         <span id="currentTime"></span>
     </div>
 
     <!-- Message de retour bientôt -->
-    <div class="back-soon-banner">
+    <div class="back-soon-banner" data-scene-el="backSoonBanner">
         <div class="banner-content">
             <i class="fas fa-arrow-right"></i>
-            <span>De retour bientôt</span>
+            <span data-scene-text="backSoonText">De retour bientôt</span>
             <i class="fas fa-arrow-left"></i>
         </div>
     </div>
 
     <!-- Compteur de spectateurs en pause -->
-    <div class="viewers-waiting">
+    <div class="viewers-waiting" data-scene-el="viewersWaiting">
         <i class="fas fa-users"></i>
         <span id="viewersCount">---</span>
-        <span>en attente</span>
+        <span data-scene-text="viewersWaitingLabel">en attente</span>
     </div>
 
     <!-- Scripts -->
     <script src="js/config.js"></script>
     <script src="js/overlay-common.js"></script>
+    <script src="js/scene-editor-bridge.js"></script>
     <script src="js/pause.js"></script>
 </body>
 

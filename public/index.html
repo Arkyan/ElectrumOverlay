@@ -14,7 +14,7 @@
 
 <body>
     <!-- Panneau popup gauche -->
-    <div class="left-panel" id="leftPanel">
+    <div class="left-panel" id="leftPanel" data-scene-el="leftPanel">
         <div class="panel-close-timer">
             <div class="timer-progress"></div>
         </div>
@@ -22,7 +22,7 @@
         <div class="panel-section">
             <div class="panel-title">
                 <i class="fas fa-truck"></i>
-                TRAJET ACTUEL
+                <span data-scene-text="leftPanelTitle1">TRAJET ACTUEL</span>
             </div>
             <div class="stat-item">
                 <span class="stat-label">Destination</span>
@@ -41,7 +41,7 @@
         <div class="panel-section">
             <div class="panel-title">
                 <i class="fas fa-chart-line"></i>
-                STATS
+                <span data-scene-text="leftPanelTitle2">STATS</span>
             </div>
             <div class="stat-item">
                 <span class="stat-label">Rank VTC</span>
@@ -60,7 +60,7 @@
         <div class="panel-section">
             <div class="panel-title">
                 <i class="fas fa-users"></i>
-                VTC
+                <span data-scene-text="leftPanelTitle3">VTC</span>
             </div>
             <div class="stat-item">
                 <span class="stat-label">Chauffeurs</span>
@@ -74,17 +74,17 @@
     </div>
 
     <!-- Chat Twitch -->
-    <div class="chat-panel">
+    <div class="chat-panel" data-scene-el="chatPanel">
         <div class="chat-header">
             <i class="fas fa-comments"></i>
-            CHAT
+            <span data-scene-text="chatHeaderLabel">CHAT</span>
         </div>
         <div class="chat-container" id="chatContainer">
         </div>
     </div>
 
     <!-- Alertes Twitch -->
-    <div class="alert-container" id="alertContainer">
+    <div class="alert-container" id="alertContainer" data-scene-el="alertContainer">
         <img class="alert-media" id="alertMedia" alt="">
         <div class="alert-icon" id="alertIcon">
             <i class="fas fa-heart"></i>
@@ -99,7 +99,7 @@
 
 
     <!-- Barre du bas -->
-    <div class="bottom-bar" id="bottomBar">
+    <div class="bottom-bar" id="bottomBar" data-scene-el="bottomBar">
         <div class="bottom-info">
             <div class="info-item">
                 <div class="info-icon">
@@ -128,6 +128,7 @@
 
     <script src="js/config.js"></script>
     <script src="js/overlay-common.js"></script>
+    <script src="js/scene-editor-bridge.js"></script>
     <script src="js/index.js"></script>
 
 </body>

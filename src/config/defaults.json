@@ -203,6 +203,9 @@
             "updateInterval": 30000,
             "simulateData": true
         },
+        "layout": {},
+        "texts": {},
+        "customTexts": {},
         "themes": {
             "starting": {
                 "primary": "#a855f7",

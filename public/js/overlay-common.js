@@ -116,6 +116,123 @@ function applyChatVisibilityFromConfig() {
     });
 }
 
+/**
+ * Positions/visibilité custom posées depuis l'éditeur de scène (/scene-editor), par page —
+ * cfg.layout[page] = { elementId: {top?, left?, hidden?} } (top/left en % de la hauteur/largeur).
+ * Entièrement déclaratif : chaque élément déplaçable est reposé à partir de RIEN d'autre que la
+ * config à chaque appel (y compris pour revenir à sa position CSS par défaut quand son override
+ * a été retiré) — indispensable pour que "Réinitialiser" et "Masquer/Afficher" depuis
+ * /scene-editor s'appliquent en direct via la diffusion WebSocket 'config-updated', sans recharger
+ * la page. On ne touche jamais `transform` : les éléments qui en dépendent pour leur
+ * centrage/animation (ex: .alert-container) continuent de fonctionner normalement, seul leur
+ * point d'ancrage top/left change.
+ */
+function applyLayoutFromConfig() {
+    const cfg = getOverlayConfig();
+    const pageKey = getThemeKeyFromLocation();
+    const layout = cfg.layout?.[pageKey] || {};
+
+    document.querySelectorAll('[data-scene-el]').forEach((el) => {
+        const elementId = el.dataset.sceneEl;
+        if (elementId.startsWith('custom:')) return; // gérés par renderCustomTextsFromConfig()
+        const pos = layout[elementId];
+
+        if (pos && typeof pos.top === 'number' && typeof pos.left === 'number') {
+            el.style.position = 'fixed';
+            el.style.top = pos.top + 'vh';
+            el.style.left = pos.left + 'vw';
+            el.style.right = 'auto';
+            el.style.bottom = 'auto';
+        } else {
+            el.style.position = '';
+            el.style.top = '';
+            el.style.left = '';
+            el.style.right = '';
+            el.style.bottom = '';
+        }
+
+        // Ne touche display que si l'éditeur de scène a un avis explicite dessus — sinon on
+        // laisse la main à applyChatVisibilityFromConfig()/applyBottomBarVisibilityFromConfig()
+        // (chat/bandeau bas ont leur propre bascule dans les réglages classiques).
+        if (pos && typeof pos.hidden === 'boolean') {
+            el.style.display = pos.hidden ? 'none' : '';
+        }
+
+        // Taille : de vraies dimensions CSS (pas transform:scale, qui déformerait le texte/les
+        // icônes) — l'élément dispose juste de plus/moins d'espace. Pour .alert-container, sa
+        // propre transform: translate(-50%,-50%) est relative à sa taille courante, donc le
+        // centrage reste correct automatiquement sans rien de spécial ici. Axes indépendants :
+        // redimensionner horizontalement ne doit pas affecter la hauteur, et inversement. On lève
+        // aussi max-width/max-height (ex: .alert-container a max-width:600px) : sans ça, un
+        // override plus grand que le plafond CSS serait silencieusement ignoré.
+        const hasWidth = pos && typeof pos.width === 'number' && pos.width > 0;
+        const hasHeight = pos && typeof pos.height === 'number' && pos.height > 0;
+        el.style.width = hasWidth ? pos.width + 'vw' : '';
+        el.style.maxWidth = hasWidth ? 'none' : '';
+        el.style.height = hasHeight ? pos.height + 'vh' : '';
+        el.style.maxHeight = hasHeight ? 'none' : '';
+    });
+}
+
+/**
+ * Overrides de texte posés depuis l'éditeur de scène pour les éléments statiques marqués
+ * data-scene-text dans le HTML (titre, sous-titre, en-tête de chat...) — cfg.texts[page] =
+ * { textId: "valeur" }.
+ */
+function applyTextOverridesFromConfig() {
+    const cfg = getOverlayConfig();
+    const pageKey = getThemeKeyFromLocation();
+    const texts = cfg.texts?.[pageKey];
+    if (!texts) return;
+    for (const [textId, value] of Object.entries(texts)) {
+        const el = document.querySelector('[data-scene-text="' + textId + '"]');
+        if (el && value) el.textContent = value;
+    }
+}
+
+/**
+ * Éléments texte ajoutés librement depuis l'éditeur de scène (pas dans le HTML de base) —
+ * cfg.customTexts[page] = { id: {text, top, left} }. Recréés en entier à chaque appel plutôt que
+ * diffés un par un : plus simple et cet appel reste rare (init + config-updated).
+ */
+function renderCustomTextsFromConfig() {
+    const cfg = getOverlayConfig();
+    const pageKey = getThemeKeyFromLocation();
+    document.querySelectorAll('[data-scene-custom-text]').forEach((el) => el.remove());
+
+    const customTexts = cfg.customTexts?.[pageKey];
+    if (!customTexts) return;
+
+    for (const [id, item] of Object.entries(customTexts)) {
+        const el = document.createElement('div');
+        el.textContent = item.text || '';
+        el.dataset.sceneEl = 'custom:' + id;
+        el.dataset.sceneCustomText = '1';
+        // Copie indépendante du texte réel : une fois en mode édition de scène, un badge
+        // d'étiquette est ajouté comme enfant DOM de cet élément (voir addLabel() dans
+        // scene-editor-bridge.js), ce qui pollue el.textContent — ce dataset reste la source
+        // fiable pour retrouver le texte "propre" depuis la sidebar.
+        el.dataset.textValue = item.text || '';
+        el.style.position = 'fixed';
+        el.style.top = (item.top ?? 40) + 'vh';
+        el.style.left = (item.left ?? 40) + 'vw';
+        el.style.color = '#fff';
+        el.style.font = "600 2.4vh 'Baron Neue Black', Inter, sans-serif";
+        el.style.textShadow = '0 2px 8px rgba(0, 0, 0, 0.6)';
+        el.style.zIndex = '250';
+        // De vraies dimensions CSS (pas transform:scale, qui déformerait le texte) : le texte
+        // dispose de plus/moins d'espace et wrappe normalement au lieu d'être étiré.
+        if (typeof item.width === 'number' && item.width > 0) el.style.width = item.width + 'vw';
+        if (typeof item.height === 'number' && item.height > 0) el.style.height = item.height + 'vh';
+        document.body.appendChild(el);
+    }
+
+    // Signale au bridge d'édition (scene-editor-bridge.js) que de nouveaux éléments viennent
+    // d'apparaître, pour qu'il les rende déplaçables/éditables — lui seul écoute cet événement,
+    // aucun effet en usage normal (OBS, navigateur direct).
+    window.dispatchEvent(new CustomEvent('scene-custom-texts-rendered'));
+}
+
 function applyBottomBarContentFromConfig() {
     const cfg = getOverlayConfig();
     const content = cfg.panels?.bottom?.content;
@@ -408,6 +525,9 @@ function initWebSocket() {
             applyBottomBarContentFromConfig();
             applyBottomBarVisibilityFromConfig();
             applyChatVisibilityFromConfig();
+            applyLayoutFromConfig();
+            applyTextOverridesFromConfig();
+            renderCustomTextsFromConfig();
             return;
         }
 
@@ -646,6 +766,11 @@ function initCommonOverlay() {
 
     // Boîte de chat (index.html) : possibilité de la masquer via config
     applyChatVisibilityFromConfig();
+
+    // Positions/visibilité/textes custom posés depuis l'éditeur de scène (/scene-editor)
+    applyLayoutFromConfig();
+    applyTextOverridesFromConfig();
+    renderCustomTextsFromConfig();
 
     // Charger les badges
     if (cfg.twitch?.broadcasterId) {
