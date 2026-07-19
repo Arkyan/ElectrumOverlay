@@ -90,6 +90,13 @@ function applyThemeFromConfig() {
     if (cfg.chat && cfg.chat.badgeSize) {
         root.style.setProperty('--chat-badge-size', cfg.chat.badgeSize);
     }
+
+    const timerColor = cfg.panels?.left?.timerColor;
+    if (timerColor) {
+        root.style.setProperty('--timer-color', timerColor);
+        const rgb = hexToRgbTriplet(timerColor);
+        if (rgb) root.style.setProperty('--timer-color-rgb', rgb);
+    }
 }
 
 function applyBottomBarVisibilityFromConfig() {
@@ -207,9 +214,14 @@ function showAlert(type, username, message = '', amount = '') {
         alertUsername.textContent = username || 'Anonymous';
         alertMessage.textContent = message || config.defaultMessage;
 
-        // Une seule couleur d'accent par type (bordure, badge icône, titre, glow) plutôt qu'un
-        // dégradé plein cadre — voir --alert-accent dans overlay-common.css.
+        // Couleur d'accent par type (bordure, badge icône, titre, glow) — voir --alert-accent
+        // dans overlay-common.css. Le fond du cadre reprend en plus un léger dégradé
+        // gradientStart -> gradientEnd (repli sur border si absent des deux côtés).
         alertContainer.style.setProperty('--alert-accent', config.border || 'var(--theme-primary, #a855f7)');
+        const gradientStartRgb = hexToRgbTriplet(config.gradientStart) || hexToRgbTriplet(config.border);
+        const gradientEndRgb = hexToRgbTriplet(config.gradientEnd) || hexToRgbTriplet(config.border);
+        if (gradientStartRgb) alertContainer.style.setProperty('--alert-gradient-start-rgb', gradientStartRgb);
+        if (gradientEndRgb) alertContainer.style.setProperty('--alert-gradient-end-rgb', gradientEndRgb);
 
         if (amount) {
             alertAmount.textContent = amount;

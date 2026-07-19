@@ -206,7 +206,7 @@ p {
     position: absolute;
     top: 20px;
     right: 20px;
-    background: rgba(30, 41, 59, 0.9);
+    background: rgba(var(--theme-panel-bg-rgb, 30, 41, 59), 0.9);
     padding: 10px 20px;
     border-radius: 25px;
     border: 2px solid var(--theme-primary, #a855f7);

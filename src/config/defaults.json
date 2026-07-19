@@ -91,35 +91,40 @@
                 "follow": {
                     "icon": "<i class=\"fas fa-heart\"></i>",
                     "title": "NOUVEAU FOLLOW",
-                    "gradient": "linear-gradient(135deg, #3B83F6A1 0%, #2563eb 100%)",
+                    "gradientStart": "#3b82f6",
+                    "gradientEnd": "#2563eb",
                     "border": "#3b82f6",
                     "defaultMessage": "Merci pour le follow !"
                 },
                 "sub": {
                     "icon": "<i class=\"fas fa-star\"></i>",
                     "title": "NOUVEAU SUB",
-                    "gradient": "linear-gradient(135deg, #10B9819D 0%, #065f46 100%)",
+                    "gradientStart": "#10b981",
+                    "gradientEnd": "#065f46",
                     "border": "#10b981",
                     "defaultMessage": "Merci pour le sub !"
                 },
                 "subs_gift": {
                     "icon": "<i class=\"fas fa-gift\"></i>",
                     "title": "SUBS GIFT",
-                    "gradient": "linear-gradient(135deg, #10B9819D 0%, #065f46 100%)",
+                    "gradientStart": "#10b981",
+                    "gradientEnd": "#065f46",
                     "border": "#10b981",
                     "defaultMessage": "Merci pour les sub gifts !"
                 },
                 "raid": {
                     "icon": "<i class=\"fas fa-users\"></i>",
                     "title": "RAID",
-                    "gradient": "linear-gradient(135deg, #DC262696 0%, #b91c1c 100%)",
+                    "gradientStart": "#dc2626",
+                    "gradientEnd": "#b91c1c",
                     "border": "#dc2626",
                     "defaultMessage": "Merci pour le raid !"
                 },
                 "bits": {
                     "icon": "<i class=\"fas fa-gem\"></i>",
                     "title": "BITS",
-                    "gradient": "linear-gradient(135deg, #9233EA9C 0%, #7e22ce 100%)",
+                    "gradientStart": "#9333ea",
+                    "gradientEnd": "#7e22ce",
                     "border": "#9333ea",
                     "defaultMessage": "Merci pour les bits !"
                 }
@@ -170,7 +175,8 @@
                 "enabled": false,
                 "interval": 300000,
                 "duration": 15000,
-                "firstDelay": 30000
+                "firstDelay": 30000,
+                "timerColor": "#ef4444"
             },
             "bottom": {
                 "enabled": false,

@@ -12,7 +12,7 @@
 
 .pause-subtitle {
     animation: fadeInUp 1s ease-out 0.5s both, subtlePulse 3s ease-in-out infinite;
-    color: #94a3b8;
+    color: var(--theme-muted-text, #94a3b8);
 }
 
 .pause-icon-title {
@@ -189,12 +189,12 @@
     max-width: 600px;
     text-align: center;
     font-size: 1.2em;
-    color: #64748b;
+    color: var(--theme-muted-text, #64748b);
     opacity: 0;
     transform: translateY(20px);
     transition: all 0.8s ease-in-out;
     padding: 15px 25px;
-    background: rgba(15, 23, 42, 0.6);
+    background: rgba(var(--theme-panel-bg-rgb, 15, 23, 42), 0.6);
     border-radius: 15px;
     border: 1px dashed rgba(100, 116, 139, 0.3);
     backdrop-filter: blur(5px);
@@ -232,7 +232,7 @@
 
 .pause-progress-text {
     font-size: 0.9em;
-    color: #94a3b8;
+    color: var(--theme-muted-text, #94a3b8);
     animation: textFade 2s ease-in-out infinite;
 }
 

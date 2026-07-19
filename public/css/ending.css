@@ -180,7 +180,7 @@ p {
 /* Statistiques de stream */
 .stream-stats {
     /* NE PAS mettre position: absolute */
-    background: rgba(30, 41, 59, 0.9);
+    background: rgba(var(--theme-panel-bg-rgb, 30, 41, 59), 0.9);
     padding: 20px 30px;
     border-radius: 20px;
     border: 2px solid var(--theme-primary, #8b45f6);

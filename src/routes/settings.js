@@ -35,6 +35,18 @@ function num(value, fallback) {
     return Number.isFinite(n) ? n : fallback;
 }
 
+// Rend un groupe d'onglets (barre de boutons + panneaux) pour éviter d'empiler verticalement
+// N variantes du même bloc de champs (thèmes par page, types d'alertes) — un seul panneau
+// visible à la fois, cf. le commutateur JS ci-dessous dans le <script> de la page.
+function renderTabGroup(groupName, items, renderPanelContent) {
+    return `
+    <div class="tab-bar" data-tabgroup="${groupName}">
+        ${items.map((item, i) => `<button type="button" class="tab-btn${i === 0 ? ' active' : ''}" data-tab="${esc(item.key)}">${esc(item.label)}</button>`).join('')}
+    </div>
+    ${items.map((item, i) => `<div class="tab-panel${i === 0 ? ' active' : ''}" data-tabgroup="${groupName}" data-tab="${esc(item.key)}">${renderPanelContent(item)}</div>`).join('')}
+    `;
+}
+
 /**
  * Routes du panneau de réglages permanent (profils, couleurs, textes, alertes, sons, animations,
  * panneaux) — séparé de /setup (identifiants Twitch/ngrok/Trucky). Sauvegarde immédiate, sans
@@ -77,6 +89,11 @@ function createSettingsRoutes(broadcastEvent) {
                 primary: t.primary,
                 secondary: t.secondary,
                 accent: t.accent,
+                background: t.background,
+                surface: t.surface,
+                text: t.text,
+                mutedText: t.mutedText,
+                panelBg: t.panelBg,
                 panelBorder: t.panelBorder
             };
         }
@@ -88,7 +105,9 @@ function createSettingsRoutes(broadcastEvent) {
             alertTypes[key] = {
                 title: a.title,
                 defaultMessage: a.defaultMessage,
-                border: a.border
+                border: a.border,
+                gradientStart: a.gradientStart,
+                gradientEnd: a.gradientEnd
             };
         }
 
@@ -138,7 +157,8 @@ function createSettingsRoutes(broadcastEvent) {
                         enabled: Boolean(body.leftPanelEnabled),
                         interval: num(body.leftPanelInterval, 300000),
                         duration: num(body.leftPanelDuration, 15000),
-                        firstDelay: num(body.leftPanelFirstDelay, 30000)
+                        firstDelay: num(body.leftPanelFirstDelay, 30000),
+                        timerColor: body.leftPanelTimerColor
                     },
                     bottom: {
                         enabled: Boolean(body.bottomBarEnabled),
@@ -190,6 +210,7 @@ const SETTINGS_PAGE_HTML = (display, profileCtx) => `
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="/css/app-ui.css">
     <style>
+        .page { max-width: 900px; }
         .save-bar {
             position: sticky; bottom: 0;
             display: flex; align-items: center; gap: var(--space-3);
@@ -209,9 +230,21 @@ const SETTINGS_PAGE_HTML = (display, profileCtx) => `
             ? "Les couleurs et textes s'appliquent immédiatement aux overlays déjà ouverts dans OBS. Les paramètres d'animations/panneaux s'appliquent au prochain rafraîchissement de la source."
             : "Tu consultes/modifies un profil qui n'est pas actif : les changements sont enregistrés mais ne s'appliqueront aux overlays qu'une fois ce profil activé (bouton « Activer » ci-dessous)."}</p>
 
-        <details class="card" open>
-            <summary>Profils</summary>
-            <div class="details-body">
+        <div class="settings-layout">
+            <nav class="settings-nav" id="settingsNav">
+                <button type="button" class="settings-nav-btn active" data-target="section-profiles">Profils</button>
+                <button type="button" class="settings-nav-btn" data-target="section-themes">Thèmes</button>
+                <button type="button" class="settings-nav-btn" data-target="section-alerts">Alertes</button>
+                <button type="button" class="settings-nav-btn" data-target="section-leftpanel">Panneau gauche</button>
+                <button type="button" class="settings-nav-btn" data-target="section-bottombar">Bandeau bas</button>
+                <button type="button" class="settings-nav-btn" data-target="section-animations">Animations</button>
+                <button type="button" class="settings-nav-btn" data-target="section-chat">Chat</button>
+                <button type="button" class="settings-nav-btn" data-target="section-stats">Statistiques</button>
+            </nav>
+            <div class="settings-content">
+
+        <div class="settings-section card active" id="section-profiles">
+            <h2>Profils</h2>
                 <p class="hint">Choisis un profil pour voir/modifier ses réglages ci-dessous. Un seul profil est actif (visible sur les overlays) à la fois.</p>
                 <div class="field-row">
                     <div class="field">
@@ -240,84 +273,80 @@ const SETTINGS_PAGE_HTML = (display, profileCtx) => `
                     <button type="button" class="btn btn-ghost" id="btnProfileNameCancel">Annuler</button>
                 </div>
                 <p class="msg" id="profileMsg" role="status"></p>
-            </div>
-        </details>
+        </div>
 
-        <details class="card" open>
-            <summary>Thèmes par page</summary>
-            <div class="details-body">
-                ${THEME_PAGES.map(({ key, label }) => {
+        <div class="settings-section card" id="section-themes">
+            <h2>Thèmes par page</h2>
+                ${renderTabGroup('theme', THEME_PAGES, ({ key }) => {
                     const t = display.themes?.[key] || {};
                     return `
-                    <div class="sub-block">
-                        <h4>${esc(label)}</h4>
-                        <div class="field-row">
-                            <div class="field"><label for="theme_${key}_primary">Primaire</label><input type="color" id="theme_${key}_primary" value="${esc(t.primary || '#a855f7')}"></div>
-                            <div class="field"><label for="theme_${key}_secondary">Secondaire</label><input type="color" id="theme_${key}_secondary" value="${esc(t.secondary || '#8b45f6')}"></div>
-                            <div class="field"><label for="theme_${key}_accent">Accent</label><input type="color" id="theme_${key}_accent" value="${esc(t.accent || '#7c3aed')}"></div>
-                            <div class="field"><label for="theme_${key}_panelBorder">Bordure panneaux</label><input type="color" id="theme_${key}_panelBorder" value="${esc(t.panelBorder || '#8b45f6')}"></div>
-                        </div>
+                    <div class="color-grid">
+                        <div class="field"><label for="theme_${key}_primary">Primaire</label><input type="color" id="theme_${key}_primary" value="${esc(t.primary || '#a855f7')}"></div>
+                        <div class="field"><label for="theme_${key}_secondary">Secondaire</label><input type="color" id="theme_${key}_secondary" value="${esc(t.secondary || '#8b45f6')}"></div>
+                        <div class="field"><label for="theme_${key}_accent">Accent</label><input type="color" id="theme_${key}_accent" value="${esc(t.accent || '#7c3aed')}"></div>
+                        <div class="field"><label for="theme_${key}_panelBorder">Bordure panneaux</label><input type="color" id="theme_${key}_panelBorder" value="${esc(t.panelBorder || '#8b45f6')}"></div>
+                        <div class="field"><label for="theme_${key}_background">Fond général</label><input type="color" id="theme_${key}_background" value="${esc(t.background || '#0f172a')}"></div>
+                        <div class="field"><label for="theme_${key}_surface">Surface</label><input type="color" id="theme_${key}_surface" value="${esc(t.surface || '#1e293b')}"></div>
+                        <div class="field"><label for="theme_${key}_panelBg">Fond panneaux</label><input type="color" id="theme_${key}_panelBg" value="${esc(t.panelBg || '#0f172a')}"></div>
+                        <div class="field"><label for="theme_${key}_text">Texte</label><input type="color" id="theme_${key}_text" value="${esc(t.text || '#e2e8f0')}"></div>
+                        <div class="field"><label for="theme_${key}_mutedText">Texte atténué</label><input type="color" id="theme_${key}_mutedText" value="${esc(t.mutedText || '#94a3b8')}"></div>
                     </div>`;
-                }).join('')}
-            </div>
-        </details>
+                })}
+        </div>
 
-        <details class="card">
-            <summary>Alertes</summary>
-            <div class="details-body">
+        <div class="settings-section card" id="section-alerts">
+            <h2>Alertes</h2>
                 <div class="sub-block">
                     <h4>Réglages globaux</h4>
                     <div class="field-row">
-                        <label class="checkbox-row"><input type="checkbox" id="alertsEnabled" ${display.alerts?.enabled !== false ? 'checked' : ''}> Activées</label>
+                        <div class="field"><label>&nbsp;</label><label class="checkbox-row"><input type="checkbox" id="alertsEnabled" ${display.alerts?.enabled !== false ? 'checked' : ''}> Activées</label></div>
                         <div class="field"><label for="alertsDuration">Durée affichage (ms)</label><input type="number" id="alertsDuration" value="${esc(display.alerts?.duration ?? 6000)}" min="500" step="500"></div>
                         <div class="field"><label for="alertsQueueDelay">Délai entre alertes (ms)</label><input type="number" id="alertsQueueDelay" value="${esc(display.alerts?.queueDelay ?? 500)}" min="0" step="100"></div>
                         <div class="field"><label for="soundVolume">Volume des sons (%)</label><input type="number" id="soundVolume" value="${esc(Math.round((display.alerts?.soundVolume ?? 0.8) * 100))}" min="0" max="100" step="5"></div>
                     </div>
                     <div class="field-row" style="margin-top:var(--space-3);">
-                        <label class="checkbox-row"><input type="checkbox" id="confettiEnabled" ${display.alerts?.confettiEnabled !== false ? 'checked' : ''}> Confettis</label>
+                        <div class="field"><label>&nbsp;</label><label class="checkbox-row"><input type="checkbox" id="confettiEnabled" ${display.alerts?.confettiEnabled !== false ? 'checked' : ''}> Confettis</label></div>
                         <div class="field"><label for="confettiParticles">Nombre</label><input type="number" id="confettiParticles" value="${esc(display.alerts?.confettiParticles ?? 300)}" min="0"></div>
                         <div class="field"><label for="confettiSpread">Étendue</label><input type="number" id="confettiSpread" value="${esc(display.alerts?.confettiSpread ?? 360)}" min="0" max="360"></div>
                         <div class="field"><label for="confettiVelocity">Vitesse</label><input type="number" id="confettiVelocity" value="${esc(display.alerts?.confettiVelocity ?? 50)}" min="0"></div>
                         <div class="field"><label for="confettiTicks">Durée</label><input type="number" id="confettiTicks" value="${esc(display.alerts?.confettiTicks ?? 250)}" min="0"></div>
                     </div>
                 </div>
-                ${ALERT_TYPES.map(({ key, label }) => {
+                ${renderTabGroup('alert', ALERT_TYPES, ({ key }) => {
                     const a = display.alerts?.types?.[key] || {};
                     const audioMeta = profileCtx.audio[key];
                     return `
-                    <div class="sub-block">
-                        <h4>${esc(label)}</h4>
-                        <div class="field-row">
-                            <div class="field"><label for="alert_${key}_title">Titre</label><input type="text" id="alert_${key}_title" value="${esc(a.title || '')}"></div>
-                            <div class="field"><label for="alert_${key}_message">Message par défaut</label><input type="text" id="alert_${key}_message" value="${esc(a.defaultMessage || '')}"></div>
-                            <div class="field"><label for="alert_${key}_border">Couleur</label><input type="color" id="alert_${key}_border" value="${esc(a.border || '#8b45f6')}"></div>
-                            <div class="field">
-                                <label for="alert_${key}_sound">Son personnalisé</label>
-                                <input type="file" id="alert_${key}_sound" class="alert-sound-input" data-alert-type="${key}" accept="audio/*">
-                            </div>
+                    <div class="field-row">
+                        <div class="field"><label for="alert_${key}_title">Titre</label><input type="text" id="alert_${key}_title" value="${esc(a.title || '')}"></div>
+                        <div class="field"><label for="alert_${key}_message">Message par défaut</label><input type="text" id="alert_${key}_message" value="${esc(a.defaultMessage || '')}"></div>
+                        <div class="field">
+                            <label for="alert_${key}_sound">Son personnalisé</label>
+                            <input type="file" id="alert_${key}_sound" class="alert-sound-input" data-alert-type="${key}" accept="audio/*">
                         </div>
-                        ${audioMeta ? `<p class="hint">🔊 ${esc(audioMeta.filename)} <button type="button" class="btn btn-ghost alert-sound-remove" data-alert-type="${key}">Supprimer le son</button></p>` : ''}
-                    </div>`;
-                }).join('')}
-                <p class="hint">L'icône et le dégradé de fond de chaque alerte restent réservés à l'édition manuelle de config/overlay-config.json (display.alerts.types).</p>
-            </div>
-        </details>
+                    </div>
+                    <div class="color-grid" style="margin-top:var(--space-3);">
+                        <div class="field"><label for="alert_${key}_border">Couleur accent</label><input type="color" id="alert_${key}_border" value="${esc(a.border || '#8b45f6')}"></div>
+                        <div class="field"><label for="alert_${key}_gradientStart">Dégradé début</label><input type="color" id="alert_${key}_gradientStart" value="${esc(a.gradientStart || a.border || '#8b45f6')}"></div>
+                        <div class="field"><label for="alert_${key}_gradientEnd">Dégradé fin</label><input type="color" id="alert_${key}_gradientEnd" value="${esc(a.gradientEnd || a.border || '#8b45f6')}"></div>
+                    </div>
+                    ${audioMeta ? `<p class="hint">🔊 ${esc(audioMeta.filename)} <button type="button" class="btn btn-ghost alert-sound-remove" data-alert-type="${key}">Supprimer le son</button></p>` : ''}`;
+                })}
+                <p class="hint">L'icône de chaque alerte reste réservée à l'édition manuelle de config/overlay-config.json (display.alerts.types).</p>
+        </div>
 
-        <details class="card">
-            <summary>Panneau gauche (index.html)</summary>
-            <div class="details-body">
+        <div class="settings-section card" id="section-leftpanel">
+            <h2>Panneau gauche (index.html)</h2>
                 <label class="checkbox-row" style="margin-bottom:var(--space-4);"><input type="checkbox" id="leftPanelEnabled" ${display.panels?.left?.enabled ? 'checked' : ''}> Activé</label>
                 <div class="field-row">
                     <div class="field"><label for="leftPanelInterval">Intervalle (ms)</label><input type="number" id="leftPanelInterval" value="${esc(display.panels?.left?.interval ?? 300000)}" min="0" step="1000"></div>
                     <div class="field"><label for="leftPanelDuration">Durée affichage (ms)</label><input type="number" id="leftPanelDuration" value="${esc(display.panels?.left?.duration ?? 15000)}" min="0" step="1000"></div>
                     <div class="field"><label for="leftPanelFirstDelay">Premier délai (ms)</label><input type="number" id="leftPanelFirstDelay" value="${esc(display.panels?.left?.firstDelay ?? 30000)}" min="0" step="1000"></div>
+                    <div class="field"><label for="leftPanelTimerColor">Couleur minuteur</label><input type="color" id="leftPanelTimerColor" value="${esc(display.panels?.left?.timerColor || '#ef4444')}"></div>
                 </div>
-            </div>
-        </details>
+        </div>
 
-        <details class="card">
-            <summary>Bandeau bas de page</summary>
-            <div class="details-body">
+        <div class="settings-section card" id="section-bottombar">
+            <h2>Bandeau bas de page</h2>
                 <label class="checkbox-row" style="margin-bottom:var(--space-4);"><input type="checkbox" id="bottomBarEnabled" ${display.panels?.bottom?.enabled ? 'checked' : ''}> Afficher le bandeau</label>
                 <div class="field"><label for="infoLine1">Ligne d'info 1</label><input type="text" id="infoLine1" value="${esc(display.panels?.bottom?.content?.infoTexts?.[0] || '')}"></div>
                 <div class="field"><label for="infoLine2">Ligne d'info 2</label><input type="text" id="infoLine2" value="${esc(display.panels?.bottom?.content?.infoTexts?.[1] || '')}"></div>
@@ -328,12 +357,10 @@ const SETTINGS_PAGE_HTML = (display, profileCtx) => `
                     <div class="field"><label for="bottomBarDuration">Durée affichage (ms)</label><input type="number" id="bottomBarDuration" value="${esc(display.panels?.bottom?.duration ?? 20000)}" min="0" step="1000"></div>
                     <div class="field"><label for="bottomBarFirstDelay">Premier délai (ms)</label><input type="number" id="bottomBarFirstDelay" value="${esc(display.panels?.bottom?.firstDelay ?? 10000)}" min="0" step="1000"></div>
                 </div>
-            </div>
-        </details>
+        </div>
 
-        <details class="card">
-            <summary>Animations</summary>
-            <div class="details-body">
+        <div class="settings-section card" id="section-animations">
+            <h2>Animations</h2>
                 <label class="checkbox-row" style="margin-bottom:var(--space-4);"><input type="checkbox" id="animationsEnabled" ${display.animations?.enabled !== false ? 'checked' : ''}> Activées globalement</label>
 
                 ${PARTICLE_ANIMATIONS.map(({ key, label }) => {
@@ -368,12 +395,10 @@ const SETTINGS_PAGE_HTML = (display, profileCtx) => `
                 </div>
 
                 <p class="hint">S'applique au prochain rafraîchissement de la source navigateur dans OBS (pas instantané, contrairement aux couleurs/textes).</p>
-            </div>
-        </details>
+        </div>
 
-        <details class="card">
-            <summary>Chat</summary>
-            <div class="details-body">
+        <div class="settings-section card" id="section-chat">
+            <h2>Chat</h2>
                 <div class="field-row" style="margin-bottom:var(--space-4);">
                     <label class="checkbox-row"><input type="checkbox" id="chatEnabledStarting" ${display.chat?.enabled?.starting !== false ? 'checked' : ''}> Afficher sur Starting</label>
                     <label class="checkbox-row"><input type="checkbox" id="chatEnabledIndex" ${display.chat?.enabled?.index !== false ? 'checked' : ''}> Afficher sur Index</label>
@@ -383,19 +408,19 @@ const SETTINGS_PAGE_HTML = (display, profileCtx) => `
                     <div class="field"><label for="chatColor">Couleur par défaut</label><input type="color" id="chatColor" value="${esc(display.chat?.defaultColor || '#3b82f6')}"></div>
                     <div class="field"><label for="chatMaxMessages">Messages max affichés</label><input type="number" id="chatMaxMessages" value="${esc(display.chat?.maxMessages ?? 50)}" min="1" max="200"></div>
                 </div>
-            </div>
-        </details>
+        </div>
 
-        <details class="card">
-            <summary>Statistiques (ending.html)</summary>
-            <div class="details-body">
+        <div class="settings-section card" id="section-stats">
+            <h2>Statistiques (ending.html)</h2>
                 <div class="field-row">
                     <div class="field"><label for="statsAnimationDuration">Durée animation compteurs (ms)</label><input type="number" id="statsAnimationDuration" value="${esc(display.stats?.animationDuration ?? 1000)}" min="0" step="100"></div>
                     <div class="field"><label for="statsUpdateInterval">Intervalle de mise à jour (ms)</label><input type="number" id="statsUpdateInterval" value="${esc(display.stats?.updateInterval ?? 30000)}" min="0" step="1000"></div>
                 </div>
                 <label class="checkbox-row" style="margin-top:var(--space-3);"><input type="checkbox" id="statsSimulateData" ${display.stats?.simulateData ? 'checked' : ''}> Simuler des données (tests, sans vrai stream)</label>
+        </div>
+
             </div>
-        </details>
+        </div>
 
         <div class="save-bar">
             <button type="button" class="btn btn-primary" id="btnSave">Enregistrer</button>
@@ -408,6 +433,35 @@ const SETTINGS_PAGE_HTML = (display, profileCtx) => `
         const ALERT_TYPES = ${JSON.stringify(ALERT_TYPES.map(a => a.key))};
         const PARTICLE_ANIMATIONS = ${JSON.stringify(PARTICLE_ANIMATIONS.map(a => a.key))};
         const VIEWED_PROFILE_ID = ${JSON.stringify(profileCtx.viewedId)};
+
+        // ---------- Onglets (thèmes par page, types d'alertes) ----------
+        document.querySelectorAll('[data-tabgroup].tab-bar').forEach((bar) => {
+            const groupName = bar.dataset.tabgroup;
+            bar.querySelectorAll('.tab-btn').forEach((btn) => {
+                btn.addEventListener('click', () => {
+                    bar.querySelectorAll('.tab-btn').forEach((b) => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    document.querySelectorAll('.tab-panel[data-tabgroup="' + groupName + '"]').forEach((panel) => {
+                        panel.classList.toggle('active', panel.dataset.tab === btn.dataset.tab);
+                    });
+                });
+            });
+        });
+
+        // ---------- Navigation entre sections ----------
+        // Une seule section affichée à la fois (pas d'accordéon) : la sidebar bascule
+        // .settings-section.active, le reste reste dans le DOM (le formulaire de sauvegarde
+        // lit tous les champs quelle que soit la section visible).
+        document.querySelectorAll('.settings-nav-btn').forEach((btn) => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.settings-nav-btn').forEach((b) => b.classList.remove('active'));
+                btn.classList.add('active');
+                document.querySelectorAll('.settings-section').forEach((section) => {
+                    section.classList.toggle('active', section.id === btn.dataset.target);
+                });
+                document.querySelector('.settings-content').scrollTop = 0;
+            });
+        });
 
         // ---------- Profils ----------
         const profileSelect = document.getElementById('profileSelect');
@@ -558,7 +612,12 @@ const SETTINGS_PAGE_HTML = (display, profileCtx) => `
                     primary: document.getElementById('theme_' + key + '_primary').value,
                     secondary: document.getElementById('theme_' + key + '_secondary').value,
                     accent: document.getElementById('theme_' + key + '_accent').value,
-                    panelBorder: document.getElementById('theme_' + key + '_panelBorder').value
+                    panelBorder: document.getElementById('theme_' + key + '_panelBorder').value,
+                    background: document.getElementById('theme_' + key + '_background').value,
+                    surface: document.getElementById('theme_' + key + '_surface').value,
+                    panelBg: document.getElementById('theme_' + key + '_panelBg').value,
+                    text: document.getElementById('theme_' + key + '_text').value,
+                    mutedText: document.getElementById('theme_' + key + '_mutedText').value
                 };
             }
 
@@ -567,7 +626,9 @@ const SETTINGS_PAGE_HTML = (display, profileCtx) => `
                 alerts[key] = {
                     title: document.getElementById('alert_' + key + '_title').value,
                     defaultMessage: document.getElementById('alert_' + key + '_message').value,
-                    border: document.getElementById('alert_' + key + '_border').value
+                    border: document.getElementById('alert_' + key + '_border').value,
+                    gradientStart: document.getElementById('alert_' + key + '_gradientStart').value,
+                    gradientEnd: document.getElementById('alert_' + key + '_gradientEnd').value
                 };
             }
 
@@ -589,6 +650,7 @@ const SETTINGS_PAGE_HTML = (display, profileCtx) => `
                 leftPanelInterval: document.getElementById('leftPanelInterval').value,
                 leftPanelDuration: document.getElementById('leftPanelDuration').value,
                 leftPanelFirstDelay: document.getElementById('leftPanelFirstDelay').value,
+                leftPanelTimerColor: document.getElementById('leftPanelTimerColor').value,
 
                 bottomBarEnabled: document.getElementById('bottomBarEnabled').checked,
                 bottomBarInterval: document.getElementById('bottomBarInterval').value,
