@@ -108,6 +108,10 @@ function profileAudioDir(id) {
     return path.join(PROFILES_DIR, 'audio', id);
 }
 
+function profileMediaDir(id) {
+    return path.join(PROFILES_DIR, 'media', id);
+}
+
 function listProfileIds() {
     fs.mkdirSync(PROFILES_DIR, { recursive: true });
     return fs.readdirSync(PROFILES_DIR)
@@ -175,7 +179,8 @@ function loadActiveProfile() {
             createdAt: now,
             updatedAt: now,
             display: JSON.parse(JSON.stringify(config.display)),
-            audio: {}
+            audio: {},
+            media: {}
         };
         writeProfileFile(initial);
         id = initial.id;
@@ -194,6 +199,7 @@ function loadActiveProfile() {
 
     activeProfile = readProfileFile(id);
     if (!activeProfile.audio) activeProfile.audio = {};
+    if (!activeProfile.media) activeProfile.media = {};
     recomputeDisplay();
 }
 
@@ -209,7 +215,8 @@ function createProfile(name, basedOnId) {
         createdAt: now,
         updatedAt: now,
         display: JSON.parse(JSON.stringify((base && base.display) || {})),
-        audio: {}
+        audio: {},
+        media: {}
     };
     writeProfileFile(profile);
     return { id: profile.id, name: profile.name, createdAt: profile.createdAt, updatedAt: profile.updatedAt };
@@ -231,7 +238,8 @@ function createProfileFromThemePreset(presetName) {
         createdAt: now,
         updatedAt: now,
         display: { themes: JSON.parse(JSON.stringify(preset.themes)) },
-        audio: {}
+        audio: {},
+        media: {}
     };
     writeProfileFile(profile);
     return { id: profile.id, name: profile.name, createdAt: profile.createdAt, updatedAt: profile.updatedAt };
@@ -276,6 +284,7 @@ function deleteProfile(id) {
     }
     fs.rmSync(profilePath(id), { force: true });
     fs.rmSync(profileAudioDir(id), { recursive: true, force: true });
+    fs.rmSync(profileMediaDir(id), { recursive: true, force: true });
 }
 
 function setActiveProfile(id) {
@@ -285,6 +294,7 @@ function setActiveProfile(id) {
     writeOverrides({ ...loadOverrides(), activeProfileId: id });
     activeProfile = readProfileFile(id);
     if (!activeProfile.audio) activeProfile.audio = {};
+    if (!activeProfile.media) activeProfile.media = {};
     recomputeDisplay();
 }
 
@@ -325,12 +335,19 @@ const AUDIO_EXT_BY_MIME = {
     'audio/aac': 'aac'
 };
 
-function extFor(originalName, mimeType) {
-    const fromMime = AUDIO_EXT_BY_MIME[mimeType];
+function extFor(originalName, mimeType, mimeMap = AUDIO_EXT_BY_MIME) {
+    const fromMime = mimeMap[mimeType];
     if (fromMime) return fromMime;
     const fromName = path.extname(originalName || '').replace('.', '').toLowerCase();
     return fromName || 'bin';
 }
+
+const MEDIA_EXT_BY_MIME = {
+    'image/png': 'png',
+    'image/jpeg': 'jpg',
+    'image/webp': 'webp',
+    'image/gif': 'gif'
+};
 
 /**
  * Enregistre (ou remplace) le son d'un type d'alerte pour un profil. `id` peut être n'importe
@@ -412,11 +429,85 @@ function readProfileAudioBuffer(id, alertType) {
 }
 
 /**
+ * Média "hero" (image/GIF) affiché en grand dans le cadre d'alerte pour un type donné — même
+ * principe que setProfileAudio, dossier séparé (profileMediaDir) pour ne pas mélanger les deux
+ * types de fichiers binaires par profil.
+ */
+function setProfileMedia(id, alertType, { filename, mimeType, buffer }) {
+    if (!ALERT_TYPES.includes(alertType)) {
+        throw new Error('Type d\'alerte inconnu');
+    }
+    const profile = getProfileFull(id);
+    const dir = profileMediaDir(id);
+    fs.mkdirSync(dir, { recursive: true });
+
+    const previous = profile.media && profile.media[alertType];
+    if (previous && previous.ext) {
+        fs.rmSync(path.join(dir, `${alertType}.${previous.ext}`), { force: true });
+    }
+
+    const ext = extFor(filename, mimeType, MEDIA_EXT_BY_MIME);
+    fs.writeFileSync(path.join(dir, `${alertType}.${ext}`), buffer);
+
+    profile.media = profile.media || {};
+    profile.media[alertType] = {
+        filename: filename || `${alertType}.${ext}`,
+        mimeType: mimeType || 'application/octet-stream',
+        ext,
+        updatedAt: new Date().toISOString()
+    };
+    profile.updatedAt = new Date().toISOString();
+    writeProfileFile(profile);
+    if (id === getActiveProfileId()) {
+        activeProfile = profile;
+        recomputeDisplay();
+    }
+}
+
+function deleteProfileMedia(id, alertType) {
+    const profile = getProfileFull(id);
+    const entry = profile.media && profile.media[alertType];
+    if (!entry) return;
+
+    fs.rmSync(path.join(profileMediaDir(id), `${alertType}.${entry.ext}`), { force: true });
+    delete profile.media[alertType];
+    profile.updatedAt = new Date().toISOString();
+    writeProfileFile(profile);
+    if (id === getActiveProfileId()) {
+        activeProfile = profile;
+        recomputeDisplay();
+    }
+}
+
+function getProfileMediaFilePath(id, alertType) {
+    let profile;
+    try {
+        profile = getProfileFull(id);
+    } catch (error) {
+        return null;
+    }
+    const entry = profile.media && profile.media[alertType];
+    if (!entry) return null;
+    return {
+        path: path.join(profileMediaDir(id), `${alertType}.${entry.ext}`),
+        mimeType: entry.mimeType,
+        filename: entry.filename,
+        updatedAt: entry.updatedAt
+    };
+}
+
+function readProfileMediaBuffer(id, alertType) {
+    const info = getProfileMediaFilePath(id, alertType);
+    if (!info) return null;
+    return { buffer: fs.readFileSync(info.path), mimeType: info.mimeType, filename: info.filename };
+}
+
+/**
  * Crée un nouveau profil à partir d'un export précédent (voir routes/profiles.js). Génère
  * toujours un nouvel id (jamais celui de l'export) pour ne jamais entrer en collision avec un
  * profil existant sur la machine qui importe.
  */
-function importProfile({ name, display, audio }) {
+function importProfile({ name, display, audio, media }) {
     const now = new Date().toISOString();
     const profile = {
         id: crypto.randomUUID(),
@@ -424,13 +515,23 @@ function importProfile({ name, display, audio }) {
         createdAt: now,
         updatedAt: now,
         display: isPlainObject(display) ? display : {},
-        audio: {}
+        audio: {},
+        media: {}
     };
     writeProfileFile(profile);
 
     for (const [type, entry] of Object.entries(audio || {})) {
         if (!ALERT_TYPES.includes(type) || !entry || !entry.dataBase64) continue;
         setProfileAudio(profile.id, type, {
+            filename: entry.filename,
+            mimeType: entry.mimeType,
+            buffer: Buffer.from(entry.dataBase64, 'base64')
+        });
+    }
+
+    for (const [type, entry] of Object.entries(media || {})) {
+        if (!ALERT_TYPES.includes(type) || !entry || !entry.dataBase64) continue;
+        setProfileMedia(profile.id, type, {
             filename: entry.filename,
             mimeType: entry.mimeType,
             buffer: Buffer.from(entry.dataBase64, 'base64')
@@ -451,9 +552,11 @@ function toFrontendConfig() {
     if (display.alerts && display.alerts.types && activeId) {
         for (const type of Object.keys(display.alerts.types)) {
             const audioMeta = activeProfile.audio && activeProfile.audio[type];
+            const mediaMeta = activeProfile.media && activeProfile.media[type];
             display.alerts.types[type] = {
                 ...display.alerts.types[type],
-                sound: audioMeta ? `/api/profiles/${activeId}/audio/${type}?v=${encodeURIComponent(audioMeta.updatedAt)}` : null
+                sound: audioMeta ? `/api/profiles/${activeId}/audio/${type}?v=${encodeURIComponent(audioMeta.updatedAt)}` : null,
+                media: mediaMeta ? `/api/profiles/${activeId}/media/${type}?v=${encodeURIComponent(mediaMeta.updatedAt)}` : null
             };
         }
     }
@@ -496,4 +599,8 @@ module.exports.setProfileAudio = setProfileAudio;
 module.exports.deleteProfileAudio = deleteProfileAudio;
 module.exports.getProfileAudioFilePath = getProfileAudioFilePath;
 module.exports.readProfileAudioBuffer = readProfileAudioBuffer;
+module.exports.setProfileMedia = setProfileMedia;
+module.exports.deleteProfileMedia = deleteProfileMedia;
+module.exports.getProfileMediaFilePath = getProfileMediaFilePath;
+module.exports.readProfileMediaBuffer = readProfileMediaBuffer;
 module.exports.importProfile = importProfile;

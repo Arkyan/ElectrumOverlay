@@ -94,6 +94,7 @@
                     "gradientStart": "#3b82f6",
                     "gradientEnd": "#2563eb",
                     "border": "#3b82f6",
+                    "animationStyle": "fade",
                     "defaultMessage": "Merci pour le follow !"
                 },
                 "sub": {
@@ -102,6 +103,7 @@
                     "gradientStart": "#10b981",
                     "gradientEnd": "#065f46",
                     "border": "#10b981",
+                    "animationStyle": "zoom",
                     "defaultMessage": "Merci pour le sub !"
                 },
                 "subs_gift": {
@@ -110,6 +112,7 @@
                     "gradientStart": "#10b981",
                     "gradientEnd": "#065f46",
                     "border": "#10b981",
+                    "animationStyle": "zoom",
                     "defaultMessage": "Merci pour les sub gifts !"
                 },
                 "raid": {
@@ -118,6 +121,7 @@
                     "gradientStart": "#dc2626",
                     "gradientEnd": "#b91c1c",
                     "border": "#dc2626",
+                    "animationStyle": "slide",
                     "defaultMessage": "Merci pour le raid !"
                 },
                 "bits": {
@@ -126,6 +130,7 @@
                     "gradientStart": "#9333ea",
                     "gradientEnd": "#7e22ce",
                     "border": "#9333ea",
+                    "animationStyle": "bounce",
                     "defaultMessage": "Merci pour les bits !"
                 }
             }

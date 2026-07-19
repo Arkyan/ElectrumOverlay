@@ -16,6 +16,18 @@ const audioUpload = multer({
     }
 });
 
+// Limite plus large que le son : les GIF animés dépassent facilement quelques Mo.
+const mediaUpload = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: 10 * 1024 * 1024 },
+    fileFilter: (req, file, cb) => {
+        if (!file.mimetype.startsWith('image/')) {
+            return cb(new Error('Le fichier doit être une image ou un GIF (image/*)'));
+        }
+        cb(null, true);
+    }
+});
+
 // Limite plus large : un profil exporté peut embarquer jusqu'à 5 sons encodés en base64.
 const importUpload = multer({
     storage: multer.memoryStorage(),
@@ -136,6 +148,54 @@ function createProfilesRoutes(broadcastEvent) {
         });
     });
 
+    router.post('/api/profiles/:id/media/:alertType', (req, res) => {
+        mediaUpload.single('file')(req, res, (err) => {
+            if (err) {
+                return res.status(400).json({ error: multerErrorMessage(err, '10 Mo') });
+            }
+            if (!req.file) {
+                return res.status(400).json({ error: 'Fichier image/GIF manquant' });
+            }
+            try {
+                config.setProfileMedia(req.params.id, req.params.alertType, {
+                    filename: req.file.originalname,
+                    mimeType: req.file.mimetype,
+                    buffer: req.file.buffer
+                });
+                if (req.params.id === config.getActiveProfileId()) {
+                    broadcastEvent({ type: 'config-updated', config: config.toFrontendConfig() });
+                }
+                res.json({ ok: true });
+            } catch (error) {
+                res.status(400).json({ error: error.message });
+            }
+        });
+    });
+
+    router.delete('/api/profiles/:id/media/:alertType', (req, res) => {
+        try {
+            config.deleteProfileMedia(req.params.id, req.params.alertType);
+            if (req.params.id === config.getActiveProfileId()) {
+                broadcastEvent({ type: 'config-updated', config: config.toFrontendConfig() });
+            }
+            res.json({ ok: true });
+        } catch (error) {
+            res.status(400).json({ error: error.message });
+        }
+    });
+
+    // Sert le média "hero" (image/GIF) d'un profil — URL posée dans cfg.alerts.types[type].media.
+    router.get('/api/profiles/:id/media/:alertType', (req, res) => {
+        const info = config.getProfileMediaFilePath(req.params.id, req.params.alertType);
+        if (!info) {
+            return res.sendStatus(404);
+        }
+        res.type(info.mimeType || 'application/octet-stream');
+        res.sendFile(info.path, (error) => {
+            if (error && !res.headersSent) res.sendStatus(404);
+        });
+    });
+
     router.get('/api/profiles/:id/export', (req, res) => {
         let profile;
         try {
@@ -157,12 +217,26 @@ function createProfilesRoutes(broadcastEvent) {
             };
         }
 
+        const media = {};
+        for (const type of config.ALERT_TYPES) {
+            const entry = profile.media && profile.media[type];
+            if (!entry) continue;
+            const data = config.readProfileMediaBuffer(req.params.id, type);
+            if (!data) continue;
+            media[type] = {
+                filename: entry.filename,
+                mimeType: entry.mimeType,
+                dataBase64: data.buffer.toString('base64')
+            };
+        }
+
         const exportPayload = {
             exportedFrom: 'ElectrumOverlay',
             exportVersion: 1,
             name: profile.name,
             display: profile.display,
-            audio
+            audio,
+            media
         };
 
         const safeName = (profile.name || 'profil').replace(/[^a-z0-9_-]+/gi, '_');

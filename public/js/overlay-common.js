@@ -195,6 +195,7 @@ function showAlert(type, username, message = '', amount = '') {
 
         const alertContainer = document.getElementById('alertContainer');
         const alertIcon = document.getElementById('alertIcon');
+        const alertMedia = document.getElementById('alertMedia');
         const alertTitle = document.getElementById('alertTitle');
         const alertUsername = document.getElementById('alertUsername');
         const alertMessage = document.getElementById('alertMessage');
@@ -222,6 +223,24 @@ function showAlert(type, username, message = '', amount = '') {
         const gradientEndRgb = hexToRgbTriplet(config.gradientEnd) || hexToRgbTriplet(config.border);
         if (gradientStartRgb) alertContainer.style.setProperty('--alert-gradient-start-rgb', gradientStartRgb);
         if (gradientEndRgb) alertContainer.style.setProperty('--alert-gradient-end-rgb', gradientEndRgb);
+
+        // Média "hero" (image/GIF uploadé depuis /settings) : bascule la mise en page en grand
+        // format si présent, sinon on garde le style compact avec icône (voir .has-media dans
+        // overlay-common.css).
+        if (alertMedia) {
+            if (config.media) {
+                alertMedia.src = config.media;
+                alertContainer.classList.add('has-media');
+            } else {
+                alertMedia.removeAttribute('src');
+                alertContainer.classList.remove('has-media');
+            }
+        }
+
+        // Animation d'entrée/sortie par type (fade/slide/zoom/bounce, voir .anim-* dans
+        // overlay-common.css) — une seule classe anim-* à la fois sur le conteneur.
+        alertContainer.classList.remove('anim-fade', 'anim-slide', 'anim-zoom', 'anim-bounce');
+        alertContainer.classList.add(`anim-${config.animationStyle || 'fade'}`);
 
         if (amount) {
             alertAmount.textContent = amount;

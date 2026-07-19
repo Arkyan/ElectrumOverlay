@@ -16,6 +16,24 @@ const ALERT_TYPES = [
     { key: 'bits', label: 'Bits' }
 ];
 
+// Mappe chaque type d'alerte vers l'action de simulation correspondante de /api/tests/trigger
+// (routes/testtools.js), pour le bouton "Aperçu" du panneau de réglages.
+const ALERT_PREVIEW_ACTION = {
+    follow: 'follow',
+    sub: 'sub',
+    subs_gift: 'subgift',
+    raid: 'raid',
+    bits: 'bits'
+};
+
+const ANIMATION_STYLES = [
+    { key: 'fade', label: 'Fondu (défaut)' },
+    { key: 'slide', label: 'Glissement' },
+    { key: 'zoom', label: 'Zoom' },
+    { key: 'bounce', label: 'Rebond' }
+];
+const ANIMATION_STYLE_KEYS = ANIMATION_STYLES.map((a) => a.key);
+
 // Animations qui suivent toutes le même schéma { enabled, count, duration: [min, max] }.
 // circuitLines et dvdLogo ont une forme différente, traités à part dans le template.
 const PARTICLE_ANIMATIONS = [
@@ -71,7 +89,8 @@ function createSettingsRoutes(broadcastEvent) {
             activeId,
             viewedId,
             profiles,
-            audio: viewedProfile.audio || {}
+            audio: viewedProfile.audio || {},
+            media: viewedProfile.media || {}
         }));
     });
 
@@ -107,7 +126,8 @@ function createSettingsRoutes(broadcastEvent) {
                 defaultMessage: a.defaultMessage,
                 border: a.border,
                 gradientStart: a.gradientStart,
-                gradientEnd: a.gradientEnd
+                gradientEnd: a.gradientEnd,
+                animationStyle: ANIMATION_STYLE_KEYS.includes(a.animationStyle) ? a.animationStyle : 'fade'
             };
         }
 
@@ -314,16 +334,20 @@ const SETTINGS_PAGE_HTML = (display, profileCtx) => `
                         <div class="field"><label for="confettiTicks">Durée</label><input type="number" id="confettiTicks" value="${esc(display.alerts?.confettiTicks ?? 250)}" min="0"></div>
                     </div>
                 </div>
-                ${renderTabGroup('alert', ALERT_TYPES, ({ key }) => {
+                ${renderTabGroup('alert', ALERT_TYPES, ({ key, label }) => {
                     const a = display.alerts?.types?.[key] || {};
                     const audioMeta = profileCtx.audio[key];
+                    const mediaMeta = profileCtx.media[key];
+                    const currentAnim = ANIMATION_STYLE_KEYS.includes(a.animationStyle) ? a.animationStyle : 'fade';
                     return `
                     <div class="field-row">
                         <div class="field"><label for="alert_${key}_title">Titre</label><input type="text" id="alert_${key}_title" value="${esc(a.title || '')}"></div>
                         <div class="field"><label for="alert_${key}_message">Message par défaut</label><input type="text" id="alert_${key}_message" value="${esc(a.defaultMessage || '')}"></div>
                         <div class="field">
-                            <label for="alert_${key}_sound">Son personnalisé</label>
-                            <input type="file" id="alert_${key}_sound" class="alert-sound-input" data-alert-type="${key}" accept="audio/*">
+                            <label for="alert_${key}_animationStyle">Animation d'entrée</label>
+                            <select id="alert_${key}_animationStyle">
+                                ${ANIMATION_STYLES.map((s) => `<option value="${s.key}" ${s.key === currentAnim ? 'selected' : ''}>${esc(s.label)}</option>`).join('')}
+                            </select>
                         </div>
                     </div>
                     <div class="color-grid" style="margin-top:var(--space-3);">
@@ -331,9 +355,27 @@ const SETTINGS_PAGE_HTML = (display, profileCtx) => `
                         <div class="field"><label for="alert_${key}_gradientStart">Dégradé début</label><input type="color" id="alert_${key}_gradientStart" value="${esc(a.gradientStart || a.border || '#8b45f6')}"></div>
                         <div class="field"><label for="alert_${key}_gradientEnd">Dégradé fin</label><input type="color" id="alert_${key}_gradientEnd" value="${esc(a.gradientEnd || a.border || '#8b45f6')}"></div>
                     </div>
-                    ${audioMeta ? `<p class="hint">🔊 ${esc(audioMeta.filename)} <button type="button" class="btn btn-ghost alert-sound-remove" data-alert-type="${key}">Supprimer le son</button></p>` : ''}`;
+                    <div class="field-row" style="margin-top:var(--space-3);">
+                        <div class="field">
+                            <label for="alert_${key}_sound">Son personnalisé</label>
+                            <input type="file" id="alert_${key}_sound" class="alert-sound-input" data-alert-type="${key}" accept="audio/*">
+                        </div>
+                        <div class="field">
+                            <label for="alert_${key}_media">Image / GIF personnalisé</label>
+                            <input type="file" id="alert_${key}_media" class="alert-media-input" data-alert-type="${key}" accept="image/*">
+                        </div>
+                    </div>
+                    <div class="field-row" style="margin-top:var(--space-2);">
+                        ${audioMeta ? `<p class="hint">🔊 ${esc(audioMeta.filename)} <button type="button" class="btn btn-ghost alert-sound-remove" data-alert-type="${key}">Supprimer le son</button></p>` : ''}
+                        ${mediaMeta ? `<p class="hint">🖼️ ${esc(mediaMeta.filename)} <button type="button" class="btn btn-ghost alert-media-remove" data-alert-type="${key}">Supprimer le média</button></p>` : ''}
+                    </div>
+                    ${mediaMeta ? `<img src="/api/profiles/${esc(profileCtx.viewedId)}/media/${key}?v=${esc(mediaMeta.updatedAt)}" alt="" style="max-height:80px; border-radius:var(--radius-sm); margin-top:var(--space-2);">` : ''}
+                    <div class="field-row" style="margin-top:var(--space-3);">
+                        <button type="button" class="btn alert-preview-btn" data-alert-type="${key}">Aperçu de "${esc(label)}"</button>
+                    </div>`;
                 })}
-                <p class="hint">L'icône de chaque alerte reste réservée à l'édition manuelle de config/overlay-config.json (display.alerts.types).</p>
+                <p class="hint">Sans média personnalisé, l'alerte garde son style compact avec icône. Avec une image/GIF, elle passe en grand format ("hero") au-dessus du texte. L'icône par défaut de chaque alerte reste réservée à l'édition manuelle de config/overlay-config.json.</p>
+                <p class="hint">Le bouton "Aperçu" déclenche l'alerte en vrai sur les overlays déjà ouverts (OBS ou un onglet sur <code>/</code>) — ouvre-en un pour voir le résultat.</p>
         </div>
 
         <div class="settings-section card" id="section-leftpanel">
@@ -433,20 +475,29 @@ const SETTINGS_PAGE_HTML = (display, profileCtx) => `
     <script>
         const THEME_PAGES = ${JSON.stringify(THEME_PAGES.map(p => p.key))};
         const ALERT_TYPES = ${JSON.stringify(ALERT_TYPES.map(a => a.key))};
+        const ALERT_PREVIEW_ACTION = ${JSON.stringify(ALERT_PREVIEW_ACTION)};
         const PARTICLE_ANIMATIONS = ${JSON.stringify(PARTICLE_ANIMATIONS.map(a => a.key))};
         const VIEWED_PROFILE_ID = ${JSON.stringify(profileCtx.viewedId)};
 
         // ---------- Onglets (thèmes par page, types d'alertes) ----------
+        // La section/l'onglet actifs sont mémorisés en sessionStorage et réappliqués au chargement
+        // (voir plus bas) : sans ça, le moindre location.reload() (upload de son/média, activation
+        // de profil...) ramène l'utilisateur sur la première section/onglet par défaut au lieu de
+        // le laisser là où il travaillait.
+        function selectTab(groupName, tabKey) {
+            document.querySelectorAll('.tab-bar[data-tabgroup="' + groupName + '"] .tab-btn').forEach((b) => {
+                b.classList.toggle('active', b.dataset.tab === tabKey);
+            });
+            document.querySelectorAll('.tab-panel[data-tabgroup="' + groupName + '"]').forEach((panel) => {
+                panel.classList.toggle('active', panel.dataset.tab === tabKey);
+            });
+            sessionStorage.setItem('settingsActiveTab:' + groupName, tabKey);
+        }
+
         document.querySelectorAll('[data-tabgroup].tab-bar').forEach((bar) => {
             const groupName = bar.dataset.tabgroup;
             bar.querySelectorAll('.tab-btn').forEach((btn) => {
-                btn.addEventListener('click', () => {
-                    bar.querySelectorAll('.tab-btn').forEach((b) => b.classList.remove('active'));
-                    btn.classList.add('active');
-                    document.querySelectorAll('.tab-panel[data-tabgroup="' + groupName + '"]').forEach((panel) => {
-                        panel.classList.toggle('active', panel.dataset.tab === btn.dataset.tab);
-                    });
-                });
+                btn.addEventListener('click', () => selectTab(groupName, btn.dataset.tab));
             });
         });
 
@@ -454,15 +505,35 @@ const SETTINGS_PAGE_HTML = (display, profileCtx) => `
         // Une seule section affichée à la fois (pas d'accordéon) : la sidebar bascule
         // .settings-section.active, le reste reste dans le DOM (le formulaire de sauvegarde
         // lit tous les champs quelle que soit la section visible).
+        function selectSection(sectionId) {
+            document.querySelectorAll('.settings-nav-btn').forEach((b) => {
+                b.classList.toggle('active', b.dataset.target === sectionId);
+            });
+            document.querySelectorAll('.settings-section').forEach((section) => {
+                section.classList.toggle('active', section.id === sectionId);
+            });
+            sessionStorage.setItem('settingsActiveSection', sectionId);
+        }
+
         document.querySelectorAll('.settings-nav-btn').forEach((btn) => {
             btn.addEventListener('click', () => {
-                document.querySelectorAll('.settings-nav-btn').forEach((b) => b.classList.remove('active'));
-                btn.classList.add('active');
-                document.querySelectorAll('.settings-section').forEach((section) => {
-                    section.classList.toggle('active', section.id === btn.dataset.target);
-                });
+                selectSection(btn.dataset.target);
                 document.querySelector('.settings-content').scrollTop = 0;
             });
+        });
+
+        // Restaure la section/les onglets actifs d'avant le dernier rechargement, s'il y en a un
+        // (sinon on garde l'état par défaut déjà posé côté serveur : Profils + premier onglet).
+        const savedSection = sessionStorage.getItem('settingsActiveSection');
+        if (savedSection && document.getElementById(savedSection)) {
+            selectSection(savedSection);
+        }
+        document.querySelectorAll('[data-tabgroup].tab-bar').forEach((bar) => {
+            const groupName = bar.dataset.tabgroup;
+            const savedTab = sessionStorage.getItem('settingsActiveTab:' + groupName);
+            if (savedTab && bar.querySelector('.tab-btn[data-tab="' + savedTab + '"]')) {
+                selectTab(groupName, savedTab);
+            }
         });
 
         // ---------- Profils ----------
@@ -606,6 +677,61 @@ const SETTINGS_PAGE_HTML = (display, profileCtx) => `
             });
         });
 
+        // ---------- Média (image/GIF) d'alerte — même principe que les sons ----------
+        document.querySelectorAll('.alert-media-input').forEach((input) => {
+            input.addEventListener('change', (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                const formData = new FormData();
+                formData.append('file', file);
+                callProfileApi('/api/profiles/' + VIEWED_PROFILE_ID + '/media/' + input.dataset.alertType, {
+                    method: 'POST',
+                    body: formData
+                });
+            });
+        });
+
+        document.querySelectorAll('.alert-media-remove').forEach((btn) => {
+            btn.addEventListener('click', () => {
+                callProfileApi('/api/profiles/' + VIEWED_PROFILE_ID + '/media/' + btn.dataset.alertType, { method: 'DELETE' });
+            });
+        });
+
+        // ---------- Aperçu d'alerte ----------
+        // Déclenche une vraie simulation d'événement (même chemin que /tests) pour voir le
+        // résultat sur les overlays déjà ouverts, sans quitter /settings.
+        document.querySelectorAll('.alert-preview-btn').forEach((btn) => {
+            btn.addEventListener('click', async () => {
+                const action = ALERT_PREVIEW_ACTION[btn.dataset.alertType];
+                if (!action) return;
+                btn.disabled = true;
+                try {
+                    const res = await fetch('/api/tests/trigger', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ action })
+                    });
+                    const data = await res.json();
+                    msgAlertPreview(btn, data.ok ? 'Aperçu envoyé.' : (data.error || 'Erreur'), data.ok);
+                } catch (e) {
+                    msgAlertPreview(btn, 'Impossible de contacter le serveur.', false);
+                }
+                btn.disabled = false;
+            });
+        });
+
+        function msgAlertPreview(btn, text, ok) {
+            let el = btn.nextElementSibling;
+            if (!el || !el.classList.contains('alert-preview-msg')) {
+                el = document.createElement('span');
+                el.className = 'alert-preview-msg hint';
+                el.style.marginLeft = 'var(--space-2)';
+                btn.after(el);
+            }
+            el.textContent = text;
+            el.style.color = ok ? 'var(--success)' : 'var(--error)';
+        }
+
         // ---------- Réglages d'affichage ----------
         document.getElementById('btnSave').addEventListener('click', async () => {
             const themes = {};
@@ -630,7 +756,8 @@ const SETTINGS_PAGE_HTML = (display, profileCtx) => `
                     defaultMessage: document.getElementById('alert_' + key + '_message').value,
                     border: document.getElementById('alert_' + key + '_border').value,
                     gradientStart: document.getElementById('alert_' + key + '_gradientStart').value,
-                    gradientEnd: document.getElementById('alert_' + key + '_gradientEnd').value
+                    gradientEnd: document.getElementById('alert_' + key + '_gradientEnd').value,
+                    animationStyle: document.getElementById('alert_' + key + '_animationStyle').value
                 };
             }
 
