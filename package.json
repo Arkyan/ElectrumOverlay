@@ -40,7 +40,8 @@
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true
-    }
+    },
+    "artifactName": "${productName}-Setup-${version}.${ext}"
   },
   "keywords": [
     "twitch",
