@@ -27,6 +27,11 @@
     maximizeBtn.addEventListener('click', () => window.electronAPI.maximize());
     closeBtn.addEventListener('click', () => window.electronAPI.close());
 
+    const titleEl = bar.querySelector('.app-titlebar-title');
+    window.electronAPI.getAppVersion().then((version) => {
+        if (version) titleEl.textContent = `ElectrumOverlay | v${version}`;
+    });
+
     function setMaximized(isMaximized) {
         maximizeBtn.setAttribute('aria-label', isMaximized ? 'Restaurer' : 'Agrandir');
         maximizeBtn.title = isMaximized ? 'Restaurer' : 'Agrandir';

@@ -4,6 +4,8 @@ const { contextBridge, ipcRenderer } = require('electron');
 // principal — nécessaire pour que la barre de titre custom (public/js/app-titlebar.js) puisse
 // piloter la fenêtre (réduire/agrandir/fermer) sans exposer Node/Electron en entier à la page.
 contextBridge.exposeInMainWorld('electronAPI', {
+    getAppVersion: () => ipcRenderer.invoke('app-version'),
+
     minimize: () => ipcRenderer.send('window-minimize'),
     maximize: () => ipcRenderer.send('window-maximize'),
     close: () => ipcRenderer.send('window-close'),

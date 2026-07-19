@@ -42,7 +42,7 @@ if (!gotLock) {
             height: 720,
             minWidth: 720,
             minHeight: 480,
-            title: 'ElectrumOverlay',
+            title: `ElectrumOverlay v${app.getVersion()}`,
             icon: getIconPath(),
             frame: false,
             backgroundColor: '#0b0d12',
@@ -238,6 +238,9 @@ if (!gotLock) {
     ipcMain.handle('server-status', () => server?.isRunning ?? false);
     ipcMain.handle('server-start', () => startServer());
     ipcMain.handle('server-stop', () => stopServer());
+
+    // Version affichée dans la barre de titre custom (public/js/app-titlebar.js).
+    ipcMain.handle('app-version', () => app.getVersion());
 
     // Auto-updater : idem, IPC plutôt qu'HTTP.
     ipcMain.handle('updater-status', () => updaterState);
