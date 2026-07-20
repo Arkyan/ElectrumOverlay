@@ -34,7 +34,7 @@
     </div>
 
     <!-- Indicateur de pause avec animation -->
-    <div class="pause-indicator neon-border" data-scene-el="pauseIndicator">
+    <div class="pause-indicator neon-border" data-scene-el="pauseIndicator" data-scene-scale-text>
         <div class="pause-icon">
             <i class="fas fa-pause"></i>
         </div>
@@ -56,18 +56,10 @@
                 Le stream reprendra dans un instant...
             </p>
 
-            <!-- Messages de pause rotatifs -->
-            <div class="pause-messages">
-                <div class="pause-message active">🎮 Pause technique - On revient tout de suite !</div>
-                <div class="pause-message">☕ Petite pause café - Restez connectés !</div>
-                <div class="pause-message">💬 N'hésitez pas à discuter en attendant !</div>
-                <div class="pause-message">🔧 Quelques ajustements - Merci de patienter !</div>
-                <div class="pause-message">⏱️ Pause rapide - On est de retour bientôt !</div>
-                <div class="pause-message">🎵 Pause musicale - Profitez du son !</div>
-                <div class="pause-message">🍕 Pause déjeuner - À tout de suite !</div>
-                <div class="pause-message">🛠️ Mise à jour en cours - Patience !</div>
-                <div class="pause-message">🎯 Préparation du prochain segment !</div>
-            </div>
+            <!-- Messages de pause rotatifs : générés dynamiquement par pause.js depuis
+                 cfg.pause.messages (paramétrable dans /settings) plutôt qu'en dur ici, pour
+                 supporter un nombre de messages variable. -->
+            <div class="pause-messages" id="pauseMessages"></div>
 
             <!-- Barre de progression animée -->
             <div class="pause-progress-container">
@@ -80,13 +72,13 @@
     </div>
 
     <!-- Horloge en temps réel -->
-    <div class="real-time-clock" data-scene-el="realTimeClock">
+    <div class="real-time-clock" data-scene-el="realTimeClock" data-scene-scale-text>
         <i class="fas fa-clock"></i>
         <span id="currentTime"></span>
     </div>
 
     <!-- Message de retour bientôt -->
-    <div class="back-soon-banner" data-scene-el="backSoonBanner">
+    <div class="back-soon-banner" data-scene-el="backSoonBanner" data-scene-scale-text>
         <div class="banner-content">
             <i class="fas fa-arrow-right"></i>
             <span data-scene-text="backSoonText">De retour bientôt</span>
@@ -95,7 +87,7 @@
     </div>
 
     <!-- Compteur de spectateurs en pause -->
-    <div class="viewers-waiting" data-scene-el="viewersWaiting">
+    <div class="viewers-waiting" data-scene-el="viewersWaiting" data-scene-scale-text>
         <i class="fas fa-users"></i>
         <span id="viewersCount">---</span>
         <span data-scene-text="viewersWaitingLabel">en attente</span>

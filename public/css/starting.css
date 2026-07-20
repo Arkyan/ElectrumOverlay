@@ -151,6 +151,12 @@ p {
     border-radius: 50px;
     border: 2px solid var(--theme-primary, #a855f7);
     z-index: 10;
+    /* flex plutôt que le flux bloc par défaut : sans ça, agrandir la hauteur depuis l'éditeur de
+       scène laissait le libellé/les points collés en haut au lieu de se recentrer. */
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
 }
 
 .waiting-label {

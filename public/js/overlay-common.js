@@ -161,16 +161,82 @@ function applyLayoutFromConfig() {
         // Taille : de vraies dimensions CSS (pas transform:scale, qui déformerait le texte/les
         // icônes) — l'élément dispose juste de plus/moins d'espace. Pour .alert-container, sa
         // propre transform: translate(-50%,-50%) est relative à sa taille courante, donc le
-        // centrage reste correct automatiquement sans rien de spécial ici. Axes indépendants :
-        // redimensionner horizontalement ne doit pas affecter la hauteur, et inversement. On lève
-        // aussi max-width/max-height (ex: .alert-container a max-width:600px) : sans ça, un
-        // override plus grand que le plafond CSS serait silencieusement ignoré.
+        // centrage reste correct automatiquement sans rien de spécial ici. Axes indépendants pour
+        // les panneaux à contenu variable (chat...) : redimensionner horizontalement ne doit pas
+        // affecter la hauteur, et inversement. On lève aussi max-width/max-height (ex:
+        // .alert-container a max-width:600px) : sans ça, un override plus grand que le plafond CSS
+        // serait silencieusement ignoré. Les badges à contenu fixe (data-scene-scale-text) suivent
+        // une logique différente, voir plus bas : leurs axes ne sont PAS indépendants, un seul
+        // facteur d'échelle s'applique aux deux pour garder leurs proportions.
         const hasWidth = pos && typeof pos.width === 'number' && pos.width > 0;
         const hasHeight = pos && typeof pos.height === 'number' && pos.height > 0;
-        el.style.width = hasWidth ? pos.width + 'vw' : '';
-        el.style.maxWidth = hasWidth ? 'none' : '';
-        el.style.height = hasHeight ? pos.height + 'vh' : '';
-        el.style.maxHeight = hasHeight ? 'none' : '';
+        const scaleText = el.dataset.sceneScaleText !== undefined;
+
+        // Badges à contenu court et fixe (horloge, indicateur de pause, bannières, compteur de
+        // viewers, stats de fin...) marqués data-scene-scale-text : contrairement au chat (une
+        // LISTE, où agrandir révèle plus de lignes à taille inchangée), il n'y a ici aucun contenu
+        // supplémentaire à révéler — agrandir la boîte sans faire grossir le texte ne fait
+        // qu'ajouter du vide autour, ce qui ne correspond pas à l'intention du redimensionnement. On
+        // mesure donc sa taille/police NATURELLES juste avant de poser un éventuel override — PAS une
+        // capture mise en cache une seule fois au chargement : ces badges contiennent une icône
+        // FontAwesome chargée depuis un CDN externe, et si elle finit de charger APRÈS le tout
+        // premier rendu, sa largeur réelle grandit après coup ; une capture figée trop tôt aurait
+        // capturé une largeur par défaut trop petite, faussant durablement le ratio (constaté : un
+        // ratio ~2x trop grand, police démesurée). Mesurer à chaque passage (init, config-updated) au
+        // lieu d'une seule fois élimine ce problème de timing.
+        let naturalWidth, naturalHeight, naturalFontSize;
+        if (scaleText) {
+            const had = { w: el.style.width, h: el.style.height, mw: el.style.maxWidth, mh: el.style.maxHeight, fs: el.style.fontSize };
+            el.style.width = el.style.height = el.style.maxWidth = el.style.maxHeight = el.style.fontSize = '';
+            const naturalRect = el.getBoundingClientRect();
+            naturalWidth = naturalRect.width;
+            naturalHeight = naturalRect.height;
+            naturalFontSize = parseFloat(getComputedStyle(el).fontSize);
+            el.style.width = had.w; el.style.height = had.h; el.style.maxWidth = had.mw; el.style.maxHeight = had.mh; el.style.fontSize = had.fs;
+        }
+
+        if (scaleText) {
+            // Contenu fixe et court (pas une liste comme le chat) : la forme de la boîte reste
+            // librement redimensionnable (largeur/hauteur indépendantes, un seul axe touché laisse
+            // l'autre en auto — comme pour les panneaux), mais son CONTENU (icône, texte) doit
+            // suivre en taille pour remplir l'espace, et rester bien centré quelle que soit la
+            // forme obtenue (voir le display:flex + align-items/justify-content ajoutés sur ces
+            // badges en CSS — la boîte n'étant pas flex à l'origine, agrandir sa hauteur laissait
+            // sinon le contenu collé en haut au lieu de se recentrer). Le facteur d'échelle de
+            // police prend le PLUS PETIT des deux ratios connus (seulement l'axe réellement
+            // redimensionné si un seul l'est) pour ne jamais déborder de la dimension la plus
+            // contraignante.
+            if ((hasWidth || hasHeight) && naturalWidth > 0 && naturalHeight > 0 && naturalFontSize > 0) {
+                const widthRatio = hasWidth ? (pos.width / 100 * window.innerWidth) / naturalWidth : null;
+                const heightRatio = hasHeight ? (pos.height / 100 * window.innerHeight) / naturalHeight : null;
+                const scale = (widthRatio !== null && heightRatio !== null)
+                    ? Math.min(widthRatio, heightRatio)
+                    : (widthRatio ?? heightRatio);
+                // naturalWidth/Height viennent de getBoundingClientRect() (boîte de bordure,
+                // padding inclus), mais ces badges n'ont pas box-sizing:border-box — sans le
+                // forcer ici, `width`/`height` ne fixeraient que la boîte de CONTENU, et le
+                // padding fixe en px s'ajouterait par-dessus, faussant le calcul de ratio dès que
+                // padding/bordure ne sont pas négligeables face à la taille cible.
+                el.style.boxSizing = 'border-box';
+                el.style.width = hasWidth ? pos.width + 'vw' : '';
+                el.style.maxWidth = hasWidth ? 'none' : '';
+                el.style.height = hasHeight ? pos.height + 'vh' : '';
+                el.style.maxHeight = hasHeight ? 'none' : '';
+                el.style.fontSize = Math.max(8, naturalFontSize * scale) + 'px';
+            } else {
+                el.style.boxSizing = '';
+                el.style.width = '';
+                el.style.height = '';
+                el.style.maxWidth = '';
+                el.style.maxHeight = '';
+                el.style.fontSize = '';
+            }
+        } else {
+            el.style.width = hasWidth ? pos.width + 'vw' : '';
+            el.style.maxWidth = hasWidth ? 'none' : '';
+            el.style.height = hasHeight ? pos.height + 'vh' : '';
+            el.style.maxHeight = hasHeight ? 'none' : '';
+        }
     });
 }
 
@@ -789,6 +855,16 @@ function initCommonOverlay() {
     captureDefaultTexts(); // avant le premier appel, sinon un texte déjà remplacé serait pris pour le défaut
     applyTextOverridesFromConfig();
     renderCustomTextsFromConfig();
+
+    // Un badge marqué data-scene-scale-text (horloge, indicateur de pause...) contient une icône
+    // FontAwesome chargée depuis un CDN externe : si applyLayoutFromConfig() tourne AVANT que cette
+    // police ne finisse de charger, sa mesure de largeur "naturelle" (utilisée pour calculer le
+    // facteur d'échelle du texte, voir plus haut) est capturée trop petite (icône en glyphe de
+    // repli), faussant durablement le ratio pour toute la session. On relance donc une passe une
+    // fois les polices confirmées chargées.
+    if (typeof document !== 'undefined' && document.fonts && document.fonts.ready) {
+        document.fonts.ready.then(() => applyLayoutFromConfig());
+    }
 
     // Charger les badges
     if (cfg.twitch?.broadcasterId) {

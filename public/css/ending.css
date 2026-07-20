@@ -188,6 +188,12 @@ p {
     margin: 0 auto auto auto; /* met une marge négative ici pour remonter */
     max-width: 400px; /* ajuste comme tu veux */
     animation: fadeInUp 1s ease-out 2s both;
+    /* flex plutôt que le flux bloc par défaut : sans ça, agrandir la hauteur depuis l'éditeur de
+       scène laissait les lignes de stats collées en haut au lieu de se recentrer. */
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
 }
 
 .stat-item {

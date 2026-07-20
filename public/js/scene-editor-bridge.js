@@ -167,6 +167,7 @@
         let startY = 0;
         let initialWidth = 0;
         let initialHeight = 0;
+        let initialFontSize = 0;
 
         handle.addEventListener('pointerdown', (e) => {
             if (e.button !== 0) return;
@@ -185,12 +186,46 @@
             startY = e.clientY;
             initialWidth = rect.width;
             initialHeight = rect.height;
+            initialFontSize = parseFloat(getComputedStyle(el).fontSize);
         });
 
         handle.addEventListener('pointermove', (e) => {
             if (!resizing) return;
             // Lève max-width/max-height (ex: .alert-container a max-width:600px) pour que le
             // retour visuel pendant le drag ne soit pas silencieusement plafonné par le CSS.
+            if (el.dataset.sceneScaleText !== undefined) {
+                // Badge à contenu fixe : la boîte se redimensionne librement (axes indépendants,
+                // comme les autres éléments) mais la police suit en direct pour ne pas "sauter" une
+                // fois le drag terminé (quand applyLayoutFromConfig() applique le rendu final, voir
+                // overlay-common.js) — même calcul reproduit ici : le plus petit des deux ratios
+                // connus (uniquement l'axe glissé si un seul l'est), pour ne jamais déborder de la
+                // dimension la plus contraignante. Le placement (centrage) est géré par le CSS
+                // flex de ces badges, pas par ce script.
+                let newWidth = initialWidth, newHeight = initialHeight;
+                let widthRatio = null, heightRatio = null;
+                // initialWidth/Height viennent de getBoundingClientRect() (boîte de bordure) —
+                // sans box-sizing:border-box, `width`/`height` ne fixeraient que le contenu et le
+                // padding fixe s'ajouterait par-dessus, faussant le calcul de ratio (voir la même
+                // note dans applyLayoutFromConfig(), overlay-common.js, pour le rendu final).
+                el.style.boxSizing = 'border-box';
+                if (axis === 'x' || axis === 'both') {
+                    el.style.maxWidth = 'none';
+                    newWidth = Math.max(MIN_SIZE_PX, initialWidth + (e.clientX - startX));
+                    el.style.width = newWidth + 'px';
+                    widthRatio = newWidth / initialWidth;
+                }
+                if (axis === 'y' || axis === 'both') {
+                    el.style.maxHeight = 'none';
+                    newHeight = Math.max(MIN_SIZE_PX, initialHeight + (e.clientY - startY));
+                    el.style.height = newHeight + 'px';
+                    heightRatio = newHeight / initialHeight;
+                }
+                const scale = (widthRatio !== null && heightRatio !== null)
+                    ? Math.min(widthRatio, heightRatio)
+                    : (widthRatio ?? heightRatio);
+                el.style.fontSize = Math.max(8, initialFontSize * scale) + 'px';
+                return;
+            }
             if (axis === 'x' || axis === 'both') {
                 el.style.maxWidth = 'none';
                 el.style.width = Math.max(MIN_SIZE_PX, initialWidth + (e.clientX - startX)) + 'px';

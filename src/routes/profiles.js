@@ -327,6 +327,30 @@ function createProfilesRoutes(broadcastEvent) {
         }
     });
 
+    // Listes de messages rotatifs de la page pause (défilement + barre de progression), éditées
+    // depuis l'éditeur de scène — chaque tableau remplace entièrement le précédent (pas de fusion
+    // par index, sinon impossible de raccourcir la liste). Un tableau vide est légitime : pause.js
+    // retombe alors sur ses messages par défaut plutôt que d'afficher une page sans texte.
+    router.patch('/api/profiles/:id/pause-messages', (req, res) => {
+        try {
+            const body = req.body || {};
+            const patch = {};
+            if (Array.isArray(body.messages)) {
+                patch.messages = body.messages.filter(v => typeof v === 'string').map(v => v.trim()).filter(Boolean);
+            }
+            if (Array.isArray(body.progressMessages)) {
+                patch.progressMessages = body.progressMessages.filter(v => typeof v === 'string').map(v => v.trim()).filter(Boolean);
+            }
+            config.saveProfileDisplay(req.params.id, { pause: patch });
+            if (req.params.id === config.getActiveProfileId()) {
+                broadcastEvent({ type: 'config-updated', config: config.toFrontendConfig() });
+            }
+            res.json({ ok: true });
+        } catch (error) {
+            res.status(400).json({ error: error.message });
+        }
+    });
+
     router.get('/api/profiles/:id/export', (req, res) => {
         let profile;
         try {

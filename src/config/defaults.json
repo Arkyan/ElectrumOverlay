@@ -203,6 +203,26 @@
             "updateInterval": 30000,
             "simulateData": true
         },
+        "pause": {
+            "messages": [
+                "🎮 Pause technique - On revient tout de suite !",
+                "☕ Petite pause café - Restez connectés !",
+                "💬 N'hésitez pas à discuter en attendant !",
+                "🔧 Quelques ajustements - Merci de patienter !",
+                "⏱️ Pause rapide - On est de retour bientôt !",
+                "🎵 Pause musicale - Profitez du son !",
+                "🍕 Pause déjeuner - À tout de suite !",
+                "🛠️ Mise à jour en cours - Patience !",
+                "🎯 Préparation du prochain segment !"
+            ],
+            "progressMessages": [
+                "Reprise imminente...",
+                "Préparation en cours...",
+                "Presque prêt...",
+                "Derniers réglages...",
+                "De retour dans un instant..."
+            ]
+        },
         "layout": {},
         "texts": {},
         "customTexts": {},

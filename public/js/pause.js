@@ -9,8 +9,9 @@ let clockInterval = null;
 let messageRotationInterval = null;
 let progressInterval = null;
 
-// Messages de pause rotatifs
-const pauseMessages = [
+// Repli si le profil actif n'a jamais été sauvegardé (config vide/vieux fichier) : mêmes valeurs
+// que defaults.json, gardées ici pour que la page fonctionne même si la config n'a pas chargé.
+const FALLBACK_PAUSE_MESSAGES = [
     "🎮 Pause technique - On revient tout de suite !",
     "☕ Petite pause café - Restez connectés !",
     "💬 N'hésitez pas à discuter en attendant !",
@@ -20,6 +21,13 @@ const pauseMessages = [
     "🍕 Pause déjeuner - À tout de suite !",
     "🛠️ Mise à jour en cours - Patience !",
     "🎯 Préparation du prochain segment !"
+];
+const FALLBACK_PROGRESS_MESSAGES = [
+    "Reprise imminente...",
+    "Préparation en cours...",
+    "Presque prêt...",
+    "Derniers réglages...",
+    "De retour dans un instant..."
 ];
 
 // Initialisation au chargement de la page
@@ -72,18 +80,30 @@ function startRealTimeClock() {
     clockInterval = setInterval(updateClock, 1000);
 }
 
-// Rotation des messages de pause
+// Rotation des messages de pause — construits dynamiquement depuis cfg.pause.messages
+// (paramétrable dans /settings) plutôt que sur des éléments HTML fixes, pour supporter un nombre
+// de messages variable (l'ancien code indexait sur des .pause-message déjà présents dans le HTML,
+// ce qui plafonnait silencieusement à leur nombre figé).
 function startMessageRotation() {
-    const messageElements = document.querySelectorAll('.pause-message');
+    const container = document.getElementById('pauseMessages');
+    if (!container) return;
+
+    const cfg = getOverlayConfig();
+    const configured = Array.isArray(cfg.pause?.messages) ? cfg.pause.messages.filter(m => typeof m === 'string' && m.trim()) : [];
+    const messages = configured.length > 0 ? configured : FALLBACK_PAUSE_MESSAGES;
+
+    container.innerHTML = '';
+    const messageElements = messages.map((text, index) => {
+        const el = document.createElement('div');
+        el.className = 'pause-message' + (index === 0 ? ' active' : '');
+        el.textContent = text;
+        container.appendChild(el);
+        return el;
+    });
 
     if (messageElements.length === 0) return;
 
-    // Mettre à jour les textes avec notre tableau
-    messageElements.forEach((element, index) => {
-        if (pauseMessages[index]) {
-            element.textContent = pauseMessages[index];
-        }
-    });
+    pauseMessageIndex = 0;
 
     function rotateMessage() {
         // Cacher le message actuel
@@ -98,8 +118,10 @@ function startMessageRotation() {
         }, 400);
     }
 
-    // Rotation toutes les 4 secondes
-    messageRotationInterval = setInterval(rotateMessage, 4000);
+    // Rotation toutes les 4 secondes (uniquement si plus d'un message à faire tourner)
+    if (messageElements.length > 1) {
+        messageRotationInterval = setInterval(rotateMessage, 4000);
+    }
 }
 
 // Animation de la barre de progression
@@ -110,13 +132,9 @@ function startProgressAnimation() {
     if (!progressFill || !progressText) return;
 
     let progress = 0;
-    const messages = [
-        "Reprise imminente...",
-        "Préparation en cours...",
-        "Presque prêt...",
-        "Derniers réglages...",
-        "De retour dans un instant..."
-    ];
+    const cfg = getOverlayConfig();
+    const configured = Array.isArray(cfg.pause?.progressMessages) ? cfg.pause.progressMessages.filter(m => typeof m === 'string' && m.trim()) : [];
+    const messages = configured.length > 0 ? configured : FALLBACK_PROGRESS_MESSAGES;
 
     function updateProgress() {
         // Changer le texte aléatoirement

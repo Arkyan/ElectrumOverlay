@@ -141,7 +141,8 @@ p { margin: 0 0 var(--space-3); color: var(--text-muted); }
 
 input[type="text"],
 input[type="password"],
-input[type="number"] {
+input[type="number"],
+textarea {
     background: var(--surface-elevated);
     border: 1px solid var(--border);
     color: var(--text);
@@ -152,9 +153,16 @@ input[type="number"] {
     min-width: 0;
 }
 
+textarea {
+    width: 100%;
+    resize: vertical;
+    line-height: 1.5;
+}
+
 input[type="text"]:hover,
 input[type="password"]:hover,
-input[type="number"]:hover {
+input[type="number"]:hover,
+textarea:hover {
     border-color: var(--border-strong);
 }
 

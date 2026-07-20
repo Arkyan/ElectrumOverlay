@@ -35,6 +35,18 @@ function esc(value) {
     }[c]));
 }
 
+// Une ligne = un champ texte + une petite croix pour le supprimer (voir "+ Ajouter un message"
+// et le gestionnaire scene-pause-remove dans le <script> plus bas) — remplace l'ancien textarea
+// "un message par ligne" pour une édition plus visuelle, cohérente avec le reste de l'éditeur
+// (ajout/suppression d'éléments individuels plutôt qu'un gros bloc de texte à éditer soi-même).
+function renderPauseMessageRows(field, items) {
+    return items.map((msg) => `
+        <div class="scene-pause-row field-row" data-field="${field}">
+            <input type="text" class="scene-pause-input" value="${esc(msg)}">
+            <button type="button" class="btn btn-ghost btn-sm scene-pause-remove" data-field="${field}" title="Supprimer">✕</button>
+        </div>`).join('');
+}
+
 /**
  * Éditeur de scène : positionne à la souris les éléments d'overlay (chat, panneaux, alertes,
  * titres...), édite leur texte au double-clic, permet de les masquer/réafficher, et d'ajouter/
@@ -51,14 +63,16 @@ function createSceneEditorRoutes() {
 
     router.get('/scene-editor', (req, res) => {
         const activeId = config.getActiveProfileId();
-        const themes = config.getEffectiveDisplay(activeId).themes || {};
-        res.send(SCENE_EDITOR_HTML({ activeId, themes }));
+        const effectiveDisplay = config.getEffectiveDisplay(activeId);
+        const themes = effectiveDisplay.themes || {};
+        const pause = effectiveDisplay.pause || {};
+        res.send(SCENE_EDITOR_HTML({ activeId, themes, pause }));
     });
 
     return router;
 }
 
-const SCENE_EDITOR_HTML = ({ activeId, themes }) => `
+const SCENE_EDITOR_HTML = ({ activeId, themes, pause }) => `
 <html>
 <head>
     <title>Éditeur de scène - ElectrumOverlay</title>
@@ -106,6 +120,9 @@ const SCENE_EDITOR_HTML = ({ activeId, themes }) => `
         .scene-color-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--space-2); }
         .scene-color-grid .field { margin-bottom: 0; }
         .scene-color-grid label { font-size: 11px; }
+        .scene-pause-row { gap: var(--space-2); align-items: center; margin-bottom: var(--space-2); }
+        .scene-pause-row input[type="text"] { flex: 1; min-width: 0; }
+        .scene-pause-remove { padding: 4px 9px; line-height: 1; flex-shrink: 0; }
     </style>
 </head>
 <body>
@@ -148,6 +165,21 @@ const SCENE_EDITOR_HTML = ({ activeId, themes }) => `
                     <div id="texts_${p.key}">
                         <p class="hint">Chargement de l'aperçu...</p>
                     </div>
+
+                    ${p.key === 'pause' ? `
+                    <h3 style="margin-top:var(--space-4);">Messages qui défilent</h3>
+                    <div class="scene-pause-list" id="pauseList_messages">
+                        ${renderPauseMessageRows('messages', pause.messages || [])}
+                    </div>
+                    <button type="button" class="btn btn-sm scene-pause-add" data-field="messages">+ Ajouter un message</button>
+
+                    <h3 style="margin-top:var(--space-4);">Messages de la barre de progression</h3>
+                    <div class="scene-pause-list" id="pauseList_progressMessages">
+                        ${renderPauseMessageRows('progressMessages', pause.progressMessages || [])}
+                    </div>
+                    <button type="button" class="btn btn-sm scene-pause-add" data-field="progressMessages">+ Ajouter un message</button>
+                    <p class="hint" style="margin-top:var(--space-3);">Une liste vidée revient aux messages par défaut.</p>
+                    ` : ''}
                 </div>
             </div>
         </div>`).join('')}
@@ -295,6 +327,49 @@ const SCENE_EDITOR_HTML = ({ activeId, themes }) => `
                 body: JSON.stringify({ value: input.value })
             });
             if (res) toast('Texte enregistré.');
+        });
+
+        // ---------- Listes de messages rotatifs (pause) ----------
+        // Un champ = un message ; sauvegarde toujours le tableau ENTIER (remplacement, pas fusion
+        // par index côté API — voir profiles.js) reconstitué depuis l'ordre actuel des lignes du
+        // DOM, pour rester cohérent après un ajout/suppression.
+        async function savePauseField(field) {
+            const container = document.getElementById('pauseList_' + field);
+            const messages = Array.from(container.querySelectorAll('.scene-pause-input')).map((el) => el.value);
+            const res = await callApi('/api/profiles/' + ACTIVE_PROFILE_ID + '/pause-messages', {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ [field]: messages })
+            });
+            if (res) toast('Messages enregistrés.');
+        }
+
+        document.addEventListener('focusout', async (e) => {
+            const input = e.target.closest('.scene-pause-input');
+            if (!input) return;
+            await savePauseField(input.closest('.scene-pause-row').dataset.field);
+        });
+
+        document.addEventListener('click', async (e) => {
+            const removeBtn = e.target.closest('.scene-pause-remove');
+            if (removeBtn) {
+                const field = removeBtn.dataset.field;
+                removeBtn.closest('.scene-pause-row').remove();
+                await savePauseField(field);
+                return;
+            }
+            const addBtn = e.target.closest('.scene-pause-add');
+            if (addBtn) {
+                const field = addBtn.dataset.field;
+                const container = document.getElementById('pauseList_' + field);
+                const row = document.createElement('div');
+                row.className = 'scene-pause-row field-row';
+                row.dataset.field = field;
+                row.innerHTML = '<input type="text" class="scene-pause-input" value="">' +
+                    '<button type="button" class="btn btn-ghost btn-sm scene-pause-remove" data-field="' + field + '" title="Supprimer">✕</button>';
+                container.appendChild(row);
+                row.querySelector('.scene-pause-input').focus();
+            }
         });
 
         document.addEventListener('keydown', (e) => {

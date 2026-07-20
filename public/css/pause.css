@@ -64,6 +64,12 @@
     text-align: center;
     box-shadow: 0 0 20px rgba(var(--theme-secondary-rgb, 139, 69, 246), 0.3);
     animation: pauseIndicatorPulse 2s ease-in-out infinite;
+    /* flex plutôt que le flux bloc par défaut : sans ça, agrandir la hauteur depuis l'éditeur de
+       scène laissait le contenu collé en haut au lieu de se recentrer dans le nouvel espace. */
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
 }
 
 .pause-indicator-label {
@@ -274,6 +280,11 @@
     font-weight: 600;
     box-shadow: 0 0 20px rgba(var(--theme-secondary-rgb, 139, 69, 246), 0.3);
     animation: clockGlow 3s ease-in-out infinite;
+    /* flex plutôt que le flux en ligne par défaut : sans ça, agrandir la boîte depuis l'éditeur
+       de scène laissait l'icône/le texte collés en haut à gauche au lieu de se recentrer. */
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .real-time-clock i {
@@ -307,6 +318,12 @@
     box-shadow: 0 0 24px rgba(var(--theme-secondary-rgb, 139, 69, 246), 0.25);
     max-width: min(80vw, 720px);
     text-align: center;
+    /* flex plutôt que le flux bloc par défaut : sans ça, agrandir la hauteur depuis l'éditeur de
+       scène laissait .banner-content (largeur 100% mais hauteur au contenu) collé en haut au lieu
+       de se recentrer verticalement dans le nouvel espace. */
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .banner-content {
@@ -368,6 +385,10 @@
     font-weight: 600;
     display: flex;
     align-items: center;
+    /* centre horizontalement le groupe icône/compteur/libellé quand la boîte est élargie depuis
+       l'éditeur de scène — sans ça (justify-content par défaut = flex-start) il restait collé
+       à gauche au lieu de se recentrer dans le nouvel espace. */
+    justify-content: center;
     gap: 8px;
     animation: viewersGlow 2.5s ease-in-out infinite;
 }
