@@ -175,19 +175,36 @@ function applyLayoutFromConfig() {
 }
 
 /**
+ * Capture, une seule fois par élément et avant toute application d'override, le texte "par
+ * défaut" tel qu'écrit dans le HTML — sert de repli déclaratif dans applyTextOverridesFromConfig()
+ * quand aucun override n'est (ou plus) défini pour cet id. Doit être appelée avant le tout premier
+ * appel à applyTextOverridesFromConfig(), sinon un texte déjà remplacé serait capturé comme si
+ * c'était le défaut.
+ */
+function captureDefaultTexts() {
+    document.querySelectorAll('[data-scene-text]:not([data-scene-custom-text])').forEach((el) => {
+        if (el.dataset.sceneDefaultText === undefined) {
+            el.dataset.sceneDefaultText = el.textContent;
+        }
+    });
+}
+
+/**
  * Overrides de texte posés depuis l'éditeur de scène pour les éléments statiques marqués
  * data-scene-text dans le HTML (titre, sous-titre, en-tête de chat...) — cfg.texts[page] =
- * { textId: "valeur" }.
+ * { textId: "valeur" }. Entièrement déclaratif : une chaîne vide est une valeur légitime (texte
+ * volontairement vidé) et s'applique donc bien, et un id sans override revient au texte par
+ * défaut capturé — nécessaire pour qu'un texte vidé OU réinitialisé se répercute directement sur
+ * tous les overlays déjà ouverts (pas seulement l'aperçu de l'éditeur, qui se recharge lui-même).
  */
 function applyTextOverridesFromConfig() {
     const cfg = getOverlayConfig();
     const pageKey = getThemeKeyFromLocation();
-    const texts = cfg.texts?.[pageKey];
-    if (!texts) return;
-    for (const [textId, value] of Object.entries(texts)) {
-        const el = document.querySelector('[data-scene-text="' + textId + '"]');
-        if (el && value) el.textContent = value;
-    }
+    const texts = cfg.texts?.[pageKey] || {};
+    document.querySelectorAll('[data-scene-text]:not([data-scene-custom-text])').forEach((el) => {
+        const value = texts[el.dataset.sceneText];
+        el.textContent = (typeof value === 'string') ? value : (el.dataset.sceneDefaultText ?? '');
+    });
 }
 
 /**
@@ -769,6 +786,7 @@ function initCommonOverlay() {
 
     // Positions/visibilité/textes custom posés depuis l'éditeur de scène (/scene-editor)
     applyLayoutFromConfig();
+    captureDefaultTexts(); // avant le premier appel, sinon un texte déjà remplacé serait pris pour le défaut
     applyTextOverridesFromConfig();
     renderCustomTextsFromConfig();
 

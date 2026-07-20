@@ -359,20 +359,30 @@ function resetProfileElementLayout(id, page, elementId) {
 
 /**
  * Override de texte pour un élément statique marqué data-scene-text dans le HTML (titre,
- * sous-titre, en-tête de chat...) — `value` vide retire l'override et revient au texte par défaut.
+ * sous-titre, en-tête de chat...). `value` est toujours stockée telle quelle, y compris vide :
+ * une chaîne vide est une valeur légitime (l'utilisateur a volontairement vidé le texte), pas un
+ * signal pour revenir au texte par défaut — voir resetProfileText() pour ça.
  */
 function setProfileText(id, page, textId, value) {
     const profile = getProfileFull(id);
     profile.display = profile.display || {};
     profile.display.texts = profile.display.texts || {};
     profile.display.texts[page] = profile.display.texts[page] || {};
+    profile.display.texts[page][textId] = value;
 
-    if (value) {
-        profile.display.texts[page][textId] = value;
-    } else {
+    profile.updatedAt = new Date().toISOString();
+    writeProfileFile(profile);
+    if (id === getActiveProfileId()) {
+        recomputeDisplay();
+    }
+}
+
+/** Retire l'override de texte — revient au texte par défaut présent dans le HTML de la page. */
+function resetProfileText(id, page, textId) {
+    const profile = getProfileFull(id);
+    if (profile.display && profile.display.texts && profile.display.texts[page]) {
         delete profile.display.texts[page][textId];
     }
-
     profile.updatedAt = new Date().toISOString();
     writeProfileFile(profile);
     if (id === getActiveProfileId()) {
@@ -708,6 +718,7 @@ module.exports.saveProfileDisplay = saveProfileDisplay;
 module.exports.updateProfileElementLayout = updateProfileElementLayout;
 module.exports.resetProfileElementLayout = resetProfileElementLayout;
 module.exports.setProfileText = setProfileText;
+module.exports.resetProfileText = resetProfileText;
 module.exports.addProfileCustomText = addProfileCustomText;
 module.exports.updateProfileCustomText = updateProfileCustomText;
 module.exports.removeProfileCustomText = removeProfileCustomText;

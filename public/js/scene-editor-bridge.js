@@ -62,6 +62,23 @@
         style.textContent = `
             [data-scene-el] { outline: 2px dashed rgba(34, 211, 238, 0.7); cursor: move; touch-action: none; }
             [data-scene-el].scene-dragging { outline-color: #22d3ee; outline-style: solid; }
+            /* Certains éléments (.alert-container) ont overflow:hidden pour l'usage normal (crop
+               du média héro) — en mode édition uniquement, on force overflow:visible pour que les
+               poignées de redimensionnement (qui dépassent volontairement de la boîte, voir
+               .scene-resize-handle plus bas) ne soient jamais clippées/non cliquables. */
+            [data-scene-el] { overflow: visible !important; }
+            /* .overlay (starting/pause/ending) est une boîte plein écran (width/height:100%,
+               z-index:1) qui centre le titre — ses frères (horloge, indicateur de pause,
+               bannières...) ont un z-index:auto, donc plus bas dans l'empilement : .overlay
+               intercepte alors TOUS les clics sur l'écran, même là où il n'affiche rien à cet
+               endroit (le hit-testing suit l'ordre d'empilement de la boîte, pas le contenu visible
+               en dessous). Sans ce pointer-events:none, l'horloge/les bannières etc. ne reçoivent
+               jamais leur pointerdown — d'où l'impossibilité de les déplacer/redimensionner alors
+               que la même logique fonctionne pour les éléments qui ne sont pas sous .overlay
+               (chat, panneau gauche, bandeau bas...). [data-scene-el] réactive explicitement les
+               clics pour celui de ses descendants qui doit rester déplaçable (titleBlock). */
+            .overlay { pointer-events: none; }
+            [data-scene-el] { pointer-events: auto; }
             .scene-el-label {
                 position: absolute; top: -22px; left: 0;
                 background: #111827; color: #fff; font: 600 11px/1.4 -apple-system, sans-serif;
@@ -69,33 +86,57 @@
                 z-index: 999999;
             }
             .scene-resize-handle {
-                /* En positif (pas en négatif) : certains éléments (.alert-container) ont
-                   overflow:hidden, qui clipperait/rendrait la poignée non cliquable si elle
-                   dépassait de la boîte. */
+                /* À cheval sur le bord (centrée dessus via l'offset négatif = -moitié de sa
+                   propre taille totale 18px), jamais posée entièrement à l'intérieur : sur un
+                   petit élément (ex: l'horloge, ~130x44px), une poignée "inside" à quelques px du
+                   bord se retrouvait à moins de sa propre hauteur du centre vertical de la boîte,
+                   donc superposée à la poignée d'axe (both vs x/y qui se chevauchaient de ~50%,
+                   rendant impossible de cliquer la bonne poignée, voire bloquant le drag du corps
+                   de l'élément lui-même). Centrer sur le bord donne un écartement qui ne dépend
+                   plus de la taille de la boîte. */
                 position: absolute;
                 width: 14px; height: 14px; border-radius: 3px;
                 background: #22d3ee; border: 2px solid #0b0d12;
                 z-index: 1000000;
             }
             .scene-resize-handle:hover, .scene-resize-handle.scene-resizing { background: #67e8f9; }
-            .scene-resize-both { right: 2px; bottom: 2px; cursor: nwse-resize; }
-            .scene-resize-x { right: 2px; top: 50%; transform: translateY(-50%); cursor: ew-resize; }
-            .scene-resize-y { bottom: 2px; left: 50%; transform: translateX(-50%); cursor: ns-resize; }
+            .scene-resize-both { right: -9px; bottom: -9px; cursor: nwse-resize; }
+            .scene-resize-x { right: -9px; top: 50%; transform: translateY(-50%); cursor: ew-resize; }
+            .scene-resize-y { bottom: -9px; left: 50%; transform: translateX(-50%); cursor: ns-resize; }
         `;
         document.head.appendChild(style);
     }
 
-    // .alert-container se centre via transform: translate(-50%, -50%) (voir overlay-common.css) —
-    // top/left y désignent donc le CENTRE de l'élément, pas son coin haut-gauche comme pour les
-    // autres. On ne touche jamais `transform` (l'animation d'entrée/sortie des alertes en dépend),
-    // donc on compense ici pour que le point déplacé corresponde à ce que applyLayoutFromConfig()
-    // réappliquera ensuite (voir overlay-common.js).
-    function referencePoint(el, id) {
-        const rect = el.getBoundingClientRect();
-        if (id === 'alertContainer') {
-            return { left: rect.left + rect.width / 2, top: rect.top + rect.height / 2 };
+    // Plusieurs éléments se centrent via une transform self-référentielle (ex: .alert-container
+    // en translate(-50%,-50%), .back-soon-banner/.waiting-indicator en left:50%;
+    // transform:translateX(-50%)) : leur `left`/`top` CSS ne désigne donc pas leur coin haut-gauche
+    // visuel réel, contrairement aux autres éléments. On ne touche jamais `transform` (les
+    // animations d'entrée/sortie ou de pulsation en dépendent), donc on compense génériquement en
+    // lisant le décalage (tx,ty) déjà appliqué par la transform courante (peu importe laquelle) :
+    // le vrai coin haut-gauche "si la transform était neutre" = rect - (tx,ty). Sans ça, réappliquer
+    // ce même rect.left en `left` en gardant la transform active provoque un DOUBLE décalage (ex:
+    // -50% une fois pour le centrage CSS, une deuxième fois car on repart de la position déjà
+    // décalée) — visible comme un saut d'un cran dès le clic initial.
+    function getTransformOffset(el) {
+        const transform = getComputedStyle(el).transform;
+        if (!transform || transform === 'none') return { tx: 0, ty: 0 };
+        const m3d = transform.match(/^matrix3d\(([^)]+)\)$/);
+        if (m3d) {
+            const p = m3d[1].split(',').map(Number);
+            return { tx: p[12] || 0, ty: p[13] || 0 };
         }
-        return { left: rect.left, top: rect.top };
+        const m2d = transform.match(/^matrix\(([^)]+)\)$/);
+        if (m2d) {
+            const p = m2d[1].split(',').map(Number);
+            return { tx: p[4] || 0, ty: p[5] || 0 };
+        }
+        return { tx: 0, ty: 0 };
+    }
+
+    function referencePoint(el) {
+        const rect = el.getBoundingClientRect();
+        const { tx, ty } = getTransformOffset(el);
+        return { left: rect.left - tx, top: rect.top - ty };
     }
 
     function addLabel(el, text) {
@@ -134,6 +175,10 @@
             resizing = true;
             handle.classList.add('scene-resizing');
             handle.setPointerCapture(e.pointerId);
+            // Fige une éventuelle animation CSS infinie sur l'élément (ex: .back-soon-banner
+            // pulse aussi en scale) le temps du drag — sinon son transform continue d'osciller
+            // par-dessus le width/height qu'on fixe ici, provoquant un tremblement visuel.
+            el.style.animationPlayState = 'paused';
 
             const rect = el.getBoundingClientRect();
             startX = e.clientX;
@@ -161,6 +206,7 @@
             resizing = false;
             handle.classList.remove('scene-resizing');
             try { handle.releasePointerCapture(e.pointerId); } catch (err) { /* déjà relâché */ }
+            el.style.animationPlayState = '';
 
             const rect = el.getBoundingClientRect();
             const payload = { type: 'scene-element-resized', elementId: id };
@@ -186,7 +232,11 @@
             dragging = true;
             el.setPointerCapture(e.pointerId);
             el.classList.add('scene-dragging');
-            const ref = referencePoint(el, id);
+            // Fige une éventuelle animation CSS infinie (ex: .back-soon-banner/.waiting-indicator
+            // pulsent aussi en scale) le temps du drag — sinon son transform continue d'osciller
+            // par-dessus le left/top qu'on fixe ici, provoquant un tremblement visuel.
+            el.style.animationPlayState = 'paused';
+            const ref = referencePoint(el);
             startX = e.clientX;
             startY = e.clientY;
             originLeft = ref.left;
@@ -212,7 +262,8 @@
             dragging = false;
             el.classList.remove('scene-dragging');
             try { el.releasePointerCapture(e.pointerId); } catch (err) { /* déjà relâché */ }
-            const ref = referencePoint(el, id);
+            el.style.animationPlayState = '';
+            const ref = referencePoint(el);
             const top = (ref.top / window.innerHeight) * 100;
             const left = (ref.left / window.innerWidth) * 100;
             el.style.top = top + 'vh';

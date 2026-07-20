@@ -372,6 +372,8 @@ body {
 
 /* ========== PANNEAU DE CHAT ========== */
 .chat-panel {
+    display: flex;
+    flex-direction: column;
     position: absolute;
     top: 25vh;
     right: 2vw;
@@ -386,6 +388,7 @@ body {
 }
 
 .chat-header {
+    flex-shrink: 0;
     color: var(--theme-primary, #a855f7);
     font-size: 1.4vh;
     font-weight: 700;
@@ -400,7 +403,13 @@ body {
 }
 
 .chat-container {
-    height: 30vh;
+    /* flex:1 (plutôt qu'une hauteur fixe en vh) : la zone de messages occupe tout l'espace
+       restant dans .chat-panel, donc grossit/rétrécit avec lui — sans ça, agrandir le panneau
+       depuis l'éditeur de scène ne changeait que son cadre, jamais la place réellement
+       disponible pour les messages. min-height:0 est nécessaire pour qu'un enfant flex avec
+       overflow puisse réellement se contraindre à cette hauteur au lieu de déborder. */
+    flex: 1;
+    min-height: 0;
     overflow-y: auto;
     scrollbar-width: thin;
     scrollbar-color: var(--theme-secondary, #8b45f6) transparent;

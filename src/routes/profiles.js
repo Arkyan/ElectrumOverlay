@@ -250,7 +250,7 @@ function createProfilesRoutes(broadcastEvent) {
 
     router.delete('/api/profiles/:id/text/:page/:textId', (req, res) => {
         try {
-            config.setProfileText(req.params.id, req.params.page, req.params.textId, '');
+            config.resetProfileText(req.params.id, req.params.page, req.params.textId);
             if (req.params.id === config.getActiveProfileId()) {
                 broadcastEvent({ type: 'config-updated', config: config.toFrontendConfig() });
             }
