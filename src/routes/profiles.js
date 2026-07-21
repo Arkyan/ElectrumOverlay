@@ -202,15 +202,28 @@ function createProfilesRoutes(broadcastEvent) {
     // pas, il dispose juste de plus/moins d'espace — séparés pour permettre un redimensionnement
     // horizontal, vertical, ou libre selon la poignée utilisée. Ne recrée jamais l'entrée de zéro :
     // déplacer un élément masqué le laisse masqué, et inversement.
+    // Couleurs de thème surchargées PAR ÉLÉMENT (variables CSS --theme-* posées localement sur
+    // l'élément, voir applyLayoutFromConfig) + échelle visuelle (zoom, en %).
+    const ELEMENT_STYLE_COLOR_KEYS = ['primary', 'secondary', 'text', 'panelBg', 'panelBorder'];
+
+    // Positions bornées à [0,100] (% de la hauteur/largeur d'écran) : une position hors écran ne
+    // peut être qu'une erreur (drag interrompu, ancien bug de compensation) et rend l'élément
+    // introuvable — le rendu borne aussi de son côté pour réparer les données déjà enregistrées.
+    const clampPercent = (v) => Math.min(100, Math.max(0, v));
+
     router.post('/api/profiles/:id/layout/:page/:elementId', (req, res) => {
         try {
-            const { top, left, hidden, width, height } = req.body || {};
+            const { top, left, hidden, width, height, scale } = req.body || {};
             const patch = {};
-            if (typeof top === 'number') patch.top = top;
-            if (typeof left === 'number') patch.left = left;
+            if (typeof top === 'number') patch.top = clampPercent(top);
+            if (typeof left === 'number') patch.left = clampPercent(left);
             if (typeof hidden === 'boolean') patch.hidden = hidden;
             if (typeof width === 'number' && width > 0) patch.width = width;
             if (typeof height === 'number' && height > 0) patch.height = height;
+            if (typeof scale === 'number') patch.scale = Math.max(25, Math.min(400, scale));
+            for (const key of ELEMENT_STYLE_COLOR_KEYS) {
+                if (typeof (req.body || {})[key] === 'string') patch[key] = req.body[key];
+            }
             config.updateProfileElementLayout(req.params.id, req.params.page, req.params.elementId, patch);
             if (req.params.id === config.getActiveProfileId()) {
                 broadcastEvent({ type: 'config-updated', config: config.toFrontendConfig() });
@@ -260,11 +273,12 @@ function createProfilesRoutes(broadcastEvent) {
         }
     });
 
-    // Éléments texte ajoutés librement depuis l'éditeur de scène.
+    // Éléments ajoutés librement depuis l'éditeur de scène (texte, image, boîte, horloge —
+    // voir CUSTOM_ELEMENT_TYPES dans store.js ; type absent/inconnu = texte, pour compat).
     router.post('/api/profiles/:id/custom-text/:page', (req, res) => {
         try {
-            const { text, top, left } = req.body || {};
-            const elementId = config.addProfileCustomText(req.params.id, req.params.page, { text, top, left });
+            const { type, text, url, color, top, left } = req.body || {};
+            const elementId = config.addProfileCustomText(req.params.id, req.params.page, { type, text, url, color, top, left });
             if (req.params.id === config.getActiveProfileId()) {
                 broadcastEvent({ type: 'config-updated', config: config.toFrontendConfig() });
             }
@@ -276,13 +290,23 @@ function createProfilesRoutes(broadcastEvent) {
 
     router.patch('/api/profiles/:id/custom-text/:page/:elementId', (req, res) => {
         try {
-            const { text, top, left, width, height } = req.body || {};
+            const { text, url, color, top, left, width, height, size, font, glow, opacity, radius, scale } = req.body || {};
             const patch = {};
             if (typeof text === 'string') patch.text = text;
-            if (typeof top === 'number') patch.top = top;
-            if (typeof left === 'number') patch.left = left;
+            if (typeof url === 'string') patch.url = url;
+            if (typeof color === 'string') patch.color = color;
+            if (typeof top === 'number') patch.top = clampPercent(top);
+            if (typeof left === 'number') patch.left = clampPercent(left);
             if (typeof width === 'number' && width > 0) patch.width = width;
             if (typeof height === 'number' && height > 0) patch.height = height;
+            // Style (texte/horloge : taille en vh, police, effet néon — image/boîte : opacité %,
+            // arrondi px). Bornés ici plutôt que côté rendu, pour que la config stockée reste saine.
+            if (typeof size === 'number' && size > 0) patch.size = Math.min(30, size);
+            if (font === 'baron' || font === 'inter') patch.font = font;
+            if (typeof glow === 'boolean') patch.glow = glow;
+            if (typeof opacity === 'number') patch.opacity = Math.max(0, Math.min(100, opacity));
+            if (typeof radius === 'number') patch.radius = Math.max(0, Math.min(200, radius));
+            if (typeof scale === 'number') patch.scale = Math.max(25, Math.min(400, scale));
             config.updateProfileCustomText(req.params.id, req.params.page, req.params.elementId, patch);
             if (req.params.id === config.getActiveProfileId()) {
                 broadcastEvent({ type: 'config-updated', config: config.toFrontendConfig() });
@@ -296,6 +320,63 @@ function createProfilesRoutes(broadcastEvent) {
     router.delete('/api/profiles/:id/custom-text/:page/:elementId', (req, res) => {
         try {
             config.removeProfileCustomText(req.params.id, req.params.page, req.params.elementId);
+            if (req.params.id === config.getActiveProfileId()) {
+                broadcastEvent({ type: 'config-updated', config: config.toFrontendConfig() });
+            }
+            res.json({ ok: true });
+        } catch (error) {
+            res.status(400).json({ error: error.message });
+        }
+    });
+
+    // Scènes personnalisées (pages d'overlay supplémentaires servies sur /scene/<sceneId>).
+    router.post('/api/profiles/:id/scenes', (req, res) => {
+        try {
+            const sceneId = config.addProfileScene(req.params.id, (req.body || {}).name);
+            if (req.params.id === config.getActiveProfileId()) {
+                broadcastEvent({ type: 'config-updated', config: config.toFrontendConfig() });
+            }
+            res.json({ ok: true, sceneId });
+        } catch (error) {
+            res.status(400).json({ error: error.message });
+        }
+    });
+
+    // 'theme' : fond par défaut de la page (pages intégrées uniquement — pour une scène
+    // personnalisée il équivaut à 'transparent' côté rendu).
+    const SCENE_BG_MODES = ['theme', 'transparent', 'color', 'gradient'];
+    const SCENE_EFFECTS = ['particles', 'stars', 'meteors', 'circuitLines', 'dvdLogo'];
+
+    router.patch('/api/profiles/:id/scenes/:sceneId', (req, res) => {
+        try {
+            const body = req.body || {};
+            const patch = {};
+            if (typeof body.name === 'string') patch.name = body.name;
+            if (body.background && typeof body.background === 'object') {
+                patch.background = {};
+                if (SCENE_BG_MODES.includes(body.background.mode)) patch.background.mode = body.background.mode;
+                if (typeof body.background.color === 'string') patch.background.color = body.background.color;
+                if (typeof body.background.color2 === 'string') patch.background.color2 = body.background.color2;
+            }
+            if (body.effects && typeof body.effects === 'object') {
+                patch.effects = {};
+                for (const key of SCENE_EFFECTS) {
+                    if (typeof body.effects[key] === 'boolean') patch.effects[key] = body.effects[key];
+                }
+            }
+            config.updateProfileScene(req.params.id, req.params.sceneId, patch);
+            if (req.params.id === config.getActiveProfileId()) {
+                broadcastEvent({ type: 'config-updated', config: config.toFrontendConfig() });
+            }
+            res.json({ ok: true });
+        } catch (error) {
+            res.status(400).json({ error: error.message });
+        }
+    });
+
+    router.delete('/api/profiles/:id/scenes/:sceneId', (req, res) => {
+        try {
+            config.removeProfileScene(req.params.id, req.params.sceneId);
             if (req.params.id === config.getActiveProfileId()) {
                 broadcastEvent({ type: 'config-updated', config: config.toFrontendConfig() });
             }

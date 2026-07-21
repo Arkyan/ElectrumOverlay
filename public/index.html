@@ -83,17 +83,21 @@
         </div>
     </div>
 
-    <!-- Alertes Twitch -->
-    <div class="alert-container" id="alertContainer" data-scene-el="alertContainer">
-        <img class="alert-media" id="alertMedia" alt="">
-        <div class="alert-icon" id="alertIcon">
-            <i class="fas fa-heart"></i>
-        </div>
-        <div class="alert-body">
-            <div class="alert-title" id="alertTitle">NOUVEAU FOLLOWER</div>
-            <div class="alert-username" id="alertUsername">Username</div>
-            <div class="alert-message" id="alertMessage">Merci pour le follow !</div>
-            <div class="alert-amount" id="alertAmount" style="display: none;">€5.00</div>
+    <!-- Alertes Twitch : .alert-container est la ZONE (cadre positionné depuis l'éditeur de
+         scène, matérialisé en pointillés en mode édition), .alert-box l'alerte elle-même,
+         mise à l'échelle au plus grand format qui tient dans la zone (fitAlertBox). -->
+    <div class="alert-container" id="alertContainer" data-scene-el="alertContainer" data-scene-alert-zone>
+        <div class="alert-box" id="alertBox">
+            <img class="alert-media" id="alertMedia" alt="">
+            <div class="alert-icon" id="alertIcon">
+                <i class="fas fa-heart"></i>
+            </div>
+            <div class="alert-body">
+                <div class="alert-title" id="alertTitle">NOUVEAU FOLLOWER</div>
+                <div class="alert-username" id="alertUsername">Username</div>
+                <div class="alert-message" id="alertMessage">Merci pour le follow !</div>
+                <div class="alert-amount" id="alertAmount" style="display: none;">€5.00</div>
+            </div>
         </div>
     </div>
 

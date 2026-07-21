@@ -1,11 +1,13 @@
 const express = require('express');
 const config = require('../config/store');
 
-const SCENE_PAGES = [
-    { key: 'starting', label: 'Starting', url: '/starting.html' },
-    { key: 'index', label: 'Index', url: '/' },
+// Les 4 pages d'overlay intégrées — les scènes personnalisées (display.scenes du profil actif)
+// s'ajoutent à cette liste côté client, servies sur /scene/<id>.
+const BUILTIN_SCENES = [
+    { key: 'starting', label: 'Démarrage', url: '/starting.html' },
+    { key: 'index', label: 'En direct', url: '/' },
     { key: 'pause', label: 'Pause', url: '/pause.html' },
-    { key: 'ending', label: 'Ending', url: '/ending.html' }
+    { key: 'ending', label: 'Fin', url: '/ending.html' }
 ];
 
 const THEME_FIELDS = [
@@ -20,14 +22,11 @@ const THEME_FIELDS = [
     { key: 'mutedText', label: 'Texte atténué', fallback: '#94a3b8' }
 ];
 
-// Résolution de référence pour l'aperçu — correspond à ce que la plupart des sources navigateur
-// OBS utilisent (1920x1080). L'iframe reste à sa taille réelle (les vw/vh à l'intérieur
-// correspondent donc à de vrais % d'écran) et n'est que visuellement réduite via transform:scale.
+// Résolution de référence de l'aperçu — celle des sources navigateur OBS (1920x1080). L'iframe
+// reste à sa taille réelle (les vw/vh à l'intérieur correspondent donc à de vrais % d'écran) et
+// n'est que visuellement réduite via transform:scale, recalculé côté client selon la place dispo.
 const CANVAS_W = 1920;
 const CANVAS_H = 1080;
-const PREVIEW_W = 1100;
-const PREVIEW_SCALE = PREVIEW_W / CANVAS_W;
-const PREVIEW_H = Math.round(CANVAS_H * PREVIEW_SCALE);
 
 function esc(value) {
     return String(value ?? '').replace(/[&<>"']/g, (c) => ({
@@ -35,28 +34,23 @@ function esc(value) {
     }[c]));
 }
 
-// Une ligne = un champ texte + une petite croix pour le supprimer (voir "+ Ajouter un message"
-// et le gestionnaire scene-pause-remove dans le <script> plus bas) — remplace l'ancien textarea
-// "un message par ligne" pour une édition plus visuelle, cohérente avec le reste de l'éditeur
-// (ajout/suppression d'éléments individuels plutôt qu'un gros bloc de texte à éditer soi-même).
-function renderPauseMessageRows(field, items) {
-    return items.map((msg) => `
-        <div class="scene-pause-row field-row" data-field="${field}">
-            <input type="text" class="scene-pause-input" value="${esc(msg)}">
-            <button type="button" class="btn btn-ghost btn-sm scene-pause-remove" data-field="${field}" title="Supprimer">✕</button>
-        </div>`).join('');
+// Sérialisation JSON sûre pour un bloc <script> inline : les noms de scène / messages de pause
+// sont saisis par l'utilisateur — un « </script> » dedans fermerait le bloc et injecterait du
+// HTML arbitraire dans la page. < est parfaitement valide en JSON, aucune perte.
+function js(value) {
+    return JSON.stringify(value).replace(/</g, '\\u003c');
 }
 
 /**
- * Éditeur de scène : positionne à la souris les éléments d'overlay (chat, panneaux, alertes,
- * titres...), édite leur texte au double-clic, permet de les masquer/réafficher, et d'ajouter/
- * supprimer des textes libres — directement sur un aperçu de la vraie page (chargée dans une
- * iframe avec ?sceneEditor=1, voir public/js/scene-editor-bridge.js). Toute action s'enregistre
- * immédiatement (comme le reste des sous-fonctionnalités de profil : sons, média...), pas de
- * bouton "Enregistrer" global — et se répercute en direct sur l'aperçu ET les overlays déjà
- * ouverts via la diffusion WebSocket 'config-updated' déjà en place pour le reste de la config.
- * Édite toujours le profil ACTIF pour l'instant — contrairement à /settings, pas de sélecteur de
- * profil ici, pour garder ce premier jet simple.
+ * Éditeur de scène façon OBS : liste des scènes à gauche (les 4 pages intégrées + les scènes
+ * personnalisées, créables/renommables/supprimables), grand aperçu au centre (la vraie page dans
+ * une iframe avec ?sceneEditor=1, voir public/js/scene-editor-bridge.js), et à droite un panneau
+ * Sources / Textes / Scène. Les éléments se déplacent/redimensionnent à la souris sur l'aperçu ;
+ * leurs propriétés (texte, URL d'image, couleur...) s'éditent dans le panneau après sélection.
+ * Toute action s'enregistre immédiatement (pas de bouton "Enregistrer" global) et se répercute en
+ * direct sur l'aperçu ET les overlays déjà ouverts via la diffusion WebSocket 'config-updated'
+ * déjà en place pour le reste de la config. Édite toujours le profil ACTIF — contrairement à
+ * /settings, pas de sélecteur de profil ici, pour garder l'interface simple.
  */
 function createSceneEditorRoutes() {
     const router = express.Router();
@@ -64,15 +58,92 @@ function createSceneEditorRoutes() {
     router.get('/scene-editor', (req, res) => {
         const activeId = config.getActiveProfileId();
         const effectiveDisplay = config.getEffectiveDisplay(activeId);
-        const themes = effectiveDisplay.themes || {};
-        const pause = effectiveDisplay.pause || {};
-        res.send(SCENE_EDITOR_HTML({ activeId, themes, pause }));
+        const anims = effectiveDisplay.animations || {};
+        const animsOn = anims.enabled !== false;
+        res.send(SCENE_EDITOR_HTML({
+            activeId,
+            themes: effectiveDisplay.themes || {},
+            pause: effectiveDisplay.pause || {},
+            scenes: effectiveDisplay.scenes || {},
+            // État effectif des réglages d'animations globaux — les cases à cocher "Effets" d'une
+            // page intégrée affichent ces défauts tant que la scène ne les surcharge pas.
+            animDefaults: {
+                particles: animsOn && anims.particles?.enabled !== false,
+                stars: animsOn && anims.stars?.enabled !== false,
+                meteors: animsOn && anims.meteors?.enabled !== false,
+                circuitLines: animsOn && anims.circuitLines?.enabled !== false,
+                dvdLogo: animsOn && anims.dvdLogo?.enabled !== false
+            }
+        }));
+    });
+
+    // Page d'une scène personnalisée — l'URL à mettre dans une source navigateur OBS. Fond
+    // transparent (comme toute source d'overlay) : le contenu vient exclusivement des éléments
+    // ajoutés dans l'éditeur, rendus par renderCustomTextsFromConfig() (overlay-common.js) qui
+    // indexe layout/customTexts sur l'id de scène extrait de l'URL. Ne connaît que les scènes du
+    // profil ACTIF : une scène d'un profil inactif n'est volontairement pas servie (ses éléments
+    // ne seraient de toute façon pas dans la config diffusée aux overlays).
+    router.get('/scene/:sceneId', (req, res) => {
+        const scenes = (config.display && config.display.scenes) || {};
+        const scene = scenes[req.params.sceneId];
+        // Les pages intégrées peuvent avoir une entrée display.scenes (fond/effets) : ce ne sont
+        // pas pour autant des scènes servies ici — elles ont leurs propres pages HTML.
+        if (!scene || config.BUILTIN_PAGE_KEYS.includes(req.params.sceneId)) {
+            return res.status(404).send('<html><body style="background:#0b0d12;color:#e9eaee;font-family:sans-serif;padding:40px;"><h1>Scène introuvable</h1><p>Cette scène n\'existe pas (ou appartient à un profil qui n\'est pas actif).</p></body></html>');
+        }
+        res.send(CUSTOM_SCENE_HTML(scene.name));
     });
 
     return router;
 }
 
-const SCENE_EDITOR_HTML = ({ activeId, themes, pause }) => `
+const CUSTOM_SCENE_HTML = (name) => `
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>${esc(name)} - ElectrumOverlay</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link rel="stylesheet" href="/css/overlay-common.css">
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1"></script>
+    <style>
+        /* Fond transparent par défaut (source navigateur OBS par-dessus le jeu) — PAS de
+           !important : applySceneSettingsFromConfig() (overlay-common.js) pose le fond choisi
+           dans l'éditeur (couleur/dégradé) en style inline, qui doit pouvoir gagner.
+           color-scheme:dark aligné sur l'éditeur (/scene-editor, app-ui.css) : quand les
+           color-scheme de l'iframe et de la page hôte diffèrent, Chrome peint un fond opaque
+           blanc à la place de la transparence — l'aperçu perdait son fond noir. */
+        :root { color-scheme: dark; }
+        html, body { margin: 0; width: 100vw; height: 100vh; overflow: hidden; background: transparent; }
+    </style>
+</head>
+<body>
+    <!-- Même attirail que les pages intégrées : halos d'ambiance (visibles seulement sur fond
+         opaque, voir applySceneSettingsFromConfig), conteneurs d'animations (peuplés par
+         initCommonOverlay selon les effets activés sur la scène) et logo DVD rebondissant.
+         Tout reste vide/masqué tant que la scène n'active rien. -->
+    <div class="background-animation" style="display: none;"></div>
+    <div class="breathing-effect" style="display: none;"></div>
+    <div class="stars" id="stars"></div>
+    <div class="meteors" id="meteors"></div>
+    <div class="circuit-lines" id="circuitLines"></div>
+    <div class="particles" id="particles"></div>
+    <div style="position: absolute; display: none;" id="logoContainer">
+        <img id="dvdLogo" src="/logo.png" alt="DVD Logo">
+    </div>
+
+    <!-- overlay-common.js s'auto-initialise au DOMContentLoaded : rendu des éléments custom
+         (textes, images, chat, alertes...), WebSocket temps réel et animations de la scène. -->
+    <script src="/js/config.js"></script>
+    <script src="/js/overlay-common.js"></script>
+    <script src="/js/scene-editor-bridge.js"></script>
+</body>
+</html>
+`;
+
+const SCENE_EDITOR_HTML = ({ activeId, themes, pause, scenes, animDefaults }) => `
 <html>
 <head>
     <title>Éditeur de scène - ElectrumOverlay</title>
@@ -80,117 +151,280 @@ const SCENE_EDITOR_HTML = ({ activeId, themes, pause }) => `
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="/css/app-ui.css">
     <style>
-        .page { max-width: 1460px; }
-        .scene-editor-layout { display: flex; gap: var(--space-4); align-items: flex-start; }
-        .scene-editor-canvas-wrap {
-            width: ${PREVIEW_W}px; height: ${PREVIEW_H}px;
-            overflow: hidden; position: relative;
-            background: #000; border-radius: var(--radius-sm); border: 1px solid var(--border);
-            flex: 0 0 auto;
+        html, body { height: 100%; overflow: hidden; }
+        .se-app {
+            display: flex; flex-direction: column;
+            height: 100vh; padding-top: var(--titlebar-height);
         }
-        .scene-editor-iframe {
-            width: ${CANVAS_W}px; height: ${CANVAS_H}px;
-            transform: scale(${PREVIEW_SCALE}); transform-origin: 0 0;
-            border: 0;
+        .se-header {
+            display: flex; align-items: baseline; gap: var(--space-4);
+            padding: var(--space-3) var(--space-4);
+            border-bottom: 1px solid var(--border); flex: 0 0 auto;
         }
-        .scene-editor-sidebar { flex: 1 1 auto; min-width: 220px; }
-        .scene-el-row {
-            display: flex; align-items: center; justify-content: space-between; gap: var(--space-2);
+        .se-header h1 { font-size: 16px; margin: 0; }
+        .se-header .back-link { margin: 0; }
+        .se-header .se-header-hint { font-size: 12px; color: var(--text-faint); margin-left: auto; }
+        .se-main { display: flex; flex: 1 1 auto; min-height: 0; }
+
+        /* ---- Panneaux latéraux ---- */
+        .se-panel { display: flex; flex-direction: column; min-height: 0; background: var(--surface); }
+        .se-scenes { flex: 0 0 200px; border-right: 1px solid var(--border); }
+        .se-right { flex: 0 0 320px; border-left: 1px solid var(--border); }
+        .se-panel-title {
+            font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+            color: var(--text-faint); padding: var(--space-3) var(--space-4) var(--space-2);
+        }
+        .se-list { flex: 1 1 auto; overflow-y: auto; padding: 0 var(--space-2) var(--space-2); }
+        .se-panel-footer {
+            flex: 0 0 auto; display: flex; gap: var(--space-2); align-items: center;
+            padding: var(--space-2) var(--space-3); border-top: 1px solid var(--border);
+            position: relative;
+        }
+        .se-icon-btn {
+            width: 30px; height: 28px; display: inline-flex; align-items: center; justify-content: center;
             background: var(--surface-elevated); border: 1px solid var(--border); border-radius: var(--radius-sm);
-            padding: var(--space-2) var(--space-3); margin-bottom: var(--space-2); font-size: 13px;
+            color: var(--text); font-size: 15px; cursor: pointer; padding: 0;
         }
-        .scene-el-row .scene-el-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .scene-el-row .scene-el-actions { display: flex; gap: var(--space-2); flex-shrink: 0; }
-        .scene-el-row.scene-el-row-wrap { flex-direction: column; align-items: stretch; gap: var(--space-2); }
-        .scene-text-row { margin-bottom: var(--space-2); }
-        .scene-text-row label { font-size: 11px; color: var(--text-muted); display: block; margin-bottom: var(--space-1); }
-        .scene-text-row .field-row { gap: var(--space-2); align-items: center; }
-        .scene-text-row input[type="text"] { flex: 1; min-width: 0; }
-        .btn-sm { padding: 4px 10px; font-size: 12px; }
-        .scene-toast {
+        .se-icon-btn:hover { border-color: var(--border-strong); }
+        .se-icon-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+        .se-icon-btn.armed { border-color: var(--danger); color: var(--danger); }
+
+        .se-row {
+            display: flex; align-items: center; gap: var(--space-2);
+            padding: 7px 10px; border-radius: var(--radius-sm); cursor: pointer;
+            font-size: 13px; color: var(--text-muted); user-select: none;
+        }
+        .se-row:hover { background: var(--surface-elevated); color: var(--text); }
+        .se-row.active { background: var(--accent); color: var(--accent-text); }
+        .se-row .se-row-icon { flex: 0 0 16px; text-align: center; font-size: 12px; opacity: 0.8; }
+        .se-row .se-row-name { flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .se-row .se-row-eye {
+            flex: 0 0 auto; background: none; border: none; cursor: pointer; padding: 2px 4px;
+            font-size: 13px; color: inherit; opacity: 0.85; border-radius: 4px;
+        }
+        .se-row .se-row-eye:hover { background: rgba(255, 255, 255, 0.12); }
+        .se-row .se-row-eye.off { opacity: 0.35; }
+        .se-list-sep {
+            font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+            color: var(--text-faint); padding: var(--space-3) 10px var(--space-1);
+        }
+        .se-empty { font-size: 12px; color: var(--text-faint); padding: var(--space-2) 10px; }
+
+        /* ---- Aperçu central ---- */
+        .se-center { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; }
+        .se-toolbar {
+            flex: 0 0 auto; display: flex; align-items: center; gap: var(--space-2);
+            padding: var(--space-2) var(--space-4); border-bottom: 1px solid var(--border);
+            background: var(--surface);
+        }
+        .se-toolbar-label {
+            font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+            color: var(--text-faint); margin-right: var(--space-2);
+        }
+        .se-toolbar-btn {
+            background: var(--surface-elevated); border: 1px solid var(--border); color: var(--text);
+            border-radius: 999px; padding: 5px 14px; font-size: 12px; font-weight: 600;
+            font-family: inherit; cursor: pointer;
+        }
+        .se-toolbar-btn:hover { border-color: var(--accent); }
+        .se-toolbar-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+        .se-toolbar-btn:disabled:hover { border-color: var(--border); }
+        .se-toolbar-sep { width: 1px; align-self: stretch; background: var(--border); margin: 0 var(--space-2); }
+        .se-toolbar-hint { margin-left: auto; font-size: 11px; color: var(--text-faint); }
+        .se-canvas {
+            flex: 1 1 auto; min-height: 0; display: flex; align-items: center; justify-content: center;
+            background: var(--bg); padding: var(--space-4); overflow: hidden;
+        }
+        .se-stage {
+            position: relative; overflow: hidden; background: #000;
+            border: 1px solid var(--border-strong); border-radius: 4px;
+            box-shadow: 0 8px 40px rgba(0, 0, 0, 0.5);
+        }
+        .se-stage iframe {
+            width: ${CANVAS_W}px; height: ${CANVAS_H}px;
+            transform-origin: 0 0; border: 0; display: block;
+        }
+
+        /* ---- Onglets du panneau droit ---- */
+        .se-tabs { display: flex; gap: 2px; padding: var(--space-2) var(--space-2) 0; flex: 0 0 auto; }
+        .se-tab {
+            flex: 1; background: none; border: none; border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+            color: var(--text-muted); font: 600 12px/1 inherit; font-family: inherit;
+            padding: 9px 4px; cursor: pointer; border-bottom: 2px solid transparent;
+        }
+        .se-tab:hover { color: var(--text); }
+        .se-tab.active { color: var(--text); border-bottom-color: var(--accent); }
+        .se-tab-panel { display: none; flex: 1 1 auto; min-height: 0; flex-direction: column; }
+        .se-tab-panel.active { display: flex; }
+        .se-tab-scroll { flex: 1 1 auto; overflow-y: auto; padding: var(--space-3); }
+
+        /* ---- Propriétés ---- */
+        .se-props {
+            flex: 0 0 auto; border-top: 1px solid var(--border);
+            padding: var(--space-3); max-height: 45%; overflow-y: auto;
+        }
+        .se-props h4 { margin: 0 0 var(--space-3); font-size: 12px; color: var(--text-muted); }
+        .se-props .field { margin-bottom: var(--space-3); }
+        .se-props input[type="text"], .se-props input[type="number"] { width: 100%; }
+        select {
+            background: var(--surface-elevated); border: 1px solid var(--border); color: var(--text);
+            border-radius: var(--radius-sm); padding: 8px 10px; font-size: 13px; font-family: inherit;
+            width: 100%;
+        }
+        .se-menu button:disabled { opacity: 0.4; cursor: not-allowed; }
+        .se-menu button:disabled:hover { background: none; color: var(--text); }
+        .se-fx-row { display: flex; flex-direction: column; gap: var(--space-2); margin-bottom: var(--space-3); }
+        .se-btn-row { display: flex; gap: var(--space-2); flex-wrap: wrap; }
+        .btn-sm { padding: 5px 12px; font-size: 12px; }
+
+        .se-text-row { margin-bottom: var(--space-3); }
+        .se-text-row label { font-size: 11px; color: var(--text-muted); display: block; margin-bottom: var(--space-1); }
+        .se-text-row .field-row { gap: var(--space-2); align-items: center; flex-wrap: nowrap; }
+        .se-text-row input[type="text"] { flex: 1; min-width: 0; }
+
+        .se-color-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--space-2); }
+        .se-color-grid .field { margin-bottom: 0; }
+        .se-color-grid label { font-size: 11px; }
+
+        .se-msg-row { display: flex; gap: var(--space-2); align-items: center; margin-bottom: var(--space-2); }
+        .se-msg-row input[type="text"] { flex: 1; min-width: 0; }
+
+        .se-url-row { display: flex; gap: var(--space-2); align-items: center; }
+        .se-url-row input { flex: 1; min-width: 0; font-size: 12px; }
+
+        /* ---- Menu "+ Ajouter" ---- */
+        .se-menu {
+            position: absolute; bottom: calc(100% + 4px); left: var(--space-2);
+            background: var(--surface-elevated); border: 1px solid var(--border-strong);
+            border-radius: var(--radius-sm); padding: 4px; z-index: 50; min-width: 150px;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45); display: none;
+        }
+        .se-menu.open { display: block; }
+        .se-menu button {
+            display: flex; align-items: center; gap: var(--space-2); width: 100%;
+            background: none; border: none; color: var(--text); font-size: 13px; font-family: inherit;
+            padding: 8px 10px; border-radius: 4px; cursor: pointer; text-align: left;
+        }
+        .se-menu button:hover { background: var(--accent); color: var(--accent-text); }
+
+        .se-toast {
             position: fixed; top: calc(var(--titlebar-height) + var(--space-3)); right: var(--space-4);
             background: var(--surface-elevated); border: 1px solid var(--border); color: var(--text);
             padding: var(--space-2) var(--space-4); border-radius: var(--radius-sm); font-size: 13px;
             opacity: 0; transform: translateY(-8px); transition: opacity 0.2s ease, transform 0.2s ease;
             pointer-events: none; z-index: 999;
         }
-        .scene-toast.show { opacity: 1; transform: translateY(0); }
-        .scene-toast.error { border-color: var(--danger); color: var(--error); }
-        .scene-hint-row { margin-bottom: var(--space-3); }
-        .scene-color-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--space-2); }
-        .scene-color-grid .field { margin-bottom: 0; }
-        .scene-color-grid label { font-size: 11px; }
-        .scene-pause-row { gap: var(--space-2); align-items: center; margin-bottom: var(--space-2); }
-        .scene-pause-row input[type="text"] { flex: 1; min-width: 0; }
-        .scene-pause-remove { padding: 4px 9px; line-height: 1; flex-shrink: 0; }
+        .se-toast.show { opacity: 1; transform: translateY(0); }
+        .se-toast.error { border-color: var(--danger); color: var(--error); }
+        .hint { margin: 0 0 var(--space-2); }
     </style>
 </head>
 <body>
     <script src="/js/app-titlebar.js"></script>
-    <div class="scene-toast" id="toast"></div>
-    <div class="page in-app">
-        <a class="back-link" href="/app">← Retour</a>
-        <h1>Éditeur de scène</h1>
-        <p>Glisse un élément sur l'aperçu pour le déplacer ; les textes se modifient dans la liste à droite (les animations rendent l'édition directe sur l'aperçu peu pratique). Chaque action s'enregistre immédiatement sur le profil actif et se répercute en direct sur les overlays déjà ouverts.</p>
-
-        <div class="tab-bar" data-tabgroup="scenepage">
-            ${SCENE_PAGES.map((p, i) => `<button type="button" class="tab-btn${i === 0 ? ' active' : ''}" data-tab="${p.key}">${esc(p.label)}</button>`).join('')}
+    <div class="se-toast" id="toast"></div>
+    <div class="se-app">
+        <div class="se-header">
+            <a class="back-link" href="/app">← Retour</a>
+            <h1>Éditeur de scène</h1>
+            <span class="se-header-hint">Glisse les éléments sur l'aperçu — tout s'enregistre automatiquement sur le profil actif</span>
         </div>
-
-        ${SCENE_PAGES.map((p, i) => `
-        <div class="tab-panel${i === 0 ? ' active' : ''}" data-tabgroup="scenepage" data-tab="${p.key}">
-            <div class="scene-editor-layout">
-                <div class="scene-editor-canvas-wrap">
-                    <iframe class="scene-editor-iframe" data-page="${p.key}" data-src="${p.url}${p.url.includes('?') ? '&' : '?'}sceneEditor=1"></iframe>
-                </div>
-                <div class="scene-editor-sidebar">
-                    <h3>Couleurs</h3>
-                    <div class="scene-color-grid" data-page="${p.key}">
-                        ${THEME_FIELDS.map(({ key, label, fallback }) => `
-                        <div class="field">
-                            <label for="theme_${p.key}_${key}">${esc(label)}</label>
-                            <input type="color" id="theme_${p.key}_${key}" class="scene-theme-color" data-page="${p.key}" data-field="${key}" value="${esc((themes[p.key] && themes[p.key][key]) || fallback)}">
-                        </div>`).join('')}
-                    </div>
-
-                    <h3 style="margin-top:var(--space-4);">Éléments</h3>
-                    <div class="scene-hint-row field-row">
-                        <button type="button" class="btn btn-sm scene-add-text" data-page="${p.key}">+ Ajouter un texte</button>
-                    </div>
-                    <div id="sidebar_${p.key}">
-                        <p class="hint">Chargement de l'aperçu...</p>
-                    </div>
-
-                    <h3 style="margin-top:var(--space-4);">Textes</h3>
-                    <div id="texts_${p.key}">
-                        <p class="hint">Chargement de l'aperçu...</p>
-                    </div>
-
-                    ${p.key === 'pause' ? `
-                    <h3 style="margin-top:var(--space-4);">Messages qui défilent</h3>
-                    <div class="scene-pause-list" id="pauseList_messages">
-                        ${renderPauseMessageRows('messages', pause.messages || [])}
-                    </div>
-                    <button type="button" class="btn btn-sm scene-pause-add" data-field="messages">+ Ajouter un message</button>
-
-                    <h3 style="margin-top:var(--space-4);">Messages de la barre de progression</h3>
-                    <div class="scene-pause-list" id="pauseList_progressMessages">
-                        ${renderPauseMessageRows('progressMessages', pause.progressMessages || [])}
-                    </div>
-                    <button type="button" class="btn btn-sm scene-pause-add" data-field="progressMessages">+ Ajouter un message</button>
-                    <p class="hint" style="margin-top:var(--space-3);">Une liste vidée revient aux messages par défaut.</p>
-                    ` : ''}
+        <div class="se-main">
+            <div class="se-panel se-scenes">
+                <div class="se-panel-title">Scènes</div>
+                <div class="se-list" id="sceneList"></div>
+                <div class="se-panel-footer">
+                    <button type="button" class="se-icon-btn" id="btnAddScene" title="Nouvelle scène">+</button>
+                    <button type="button" class="se-icon-btn" id="btnDeleteScene" title="Supprimer la scène">−</button>
                 </div>
             </div>
-        </div>`).join('')}
+
+            <div class="se-center">
+                <div class="se-toolbar">
+                    <span class="se-toolbar-label">Aligner :</span>
+                    <button type="button" class="se-toolbar-btn" id="btnCenterH" title="Centrer horizontalement la source sélectionnée" disabled>↔ Centrer horiz.</button>
+                    <button type="button" class="se-toolbar-btn" id="btnCenterV" title="Centrer verticalement la source sélectionnée" disabled>↕ Centrer vert.</button>
+                    <span class="se-toolbar-sep"></span>
+                    <span class="se-toolbar-label">Aperçu :</span>
+                    <button type="button" class="se-toolbar-btn" data-test="follow">Follow</button>
+                    <button type="button" class="se-toolbar-btn" data-test="sub">Sub</button>
+                    <button type="button" class="se-toolbar-btn" data-test="subs_gift">Gift de subs</button>
+                    <button type="button" class="se-toolbar-btn" data-test="raid">Raid</button>
+                    <button type="button" class="se-toolbar-btn" data-test="bits">Bits</button>
+                    <button type="button" class="se-toolbar-btn" data-test="chat">Message chat</button>
+                    <span class="se-toolbar-hint">Aperçu visible uniquement ici — pas dans OBS</span>
+                </div>
+                <div class="se-canvas" id="canvasWrap">
+                    <div class="se-stage" id="stage">
+                        <iframe id="sceneFrame"></iframe>
+                    </div>
+                </div>
+            </div>
+
+            <div class="se-panel se-right">
+                <div class="se-tabs">
+                    <button type="button" class="se-tab active" data-tab="sources">Sources</button>
+                    <button type="button" class="se-tab" data-tab="texts">Textes</button>
+                    <button type="button" class="se-tab" data-tab="scene">Scène</button>
+                </div>
+                <div class="se-tab-panel active" data-tab="sources">
+                    <div class="se-list" id="sourcesList"><p class="se-empty">Chargement de l'aperçu...</p></div>
+                    <div class="se-panel-footer">
+                        <div class="se-menu" id="addMenu">
+                            <button type="button" data-type="text">T&nbsp;&nbsp;Texte</button>
+                            <button type="button" data-type="image">▨&nbsp;&nbsp;Image</button>
+                            <button type="button" data-type="box">■&nbsp;&nbsp;Boîte de couleur</button>
+                            <button type="button" data-type="clock">◷&nbsp;&nbsp;Horloge</button>
+                            <button type="button" data-type="chat">💬&nbsp;&nbsp;Chat Twitch</button>
+                            <button type="button" data-type="alerts">🔔&nbsp;&nbsp;Alertes</button>
+                        </div>
+                        <button type="button" class="se-icon-btn" id="btnAddElement" title="Ajouter un élément">+</button>
+                        <button type="button" class="se-icon-btn" id="btnDeleteElement" title="Supprimer l'élément sélectionné">−</button>
+                    </div>
+                    <div class="se-props" id="elProps"><p class="se-empty">Sélectionne une source pour voir ses propriétés.</p></div>
+                </div>
+                <div class="se-tab-panel" data-tab="texts">
+                    <div class="se-tab-scroll" id="textsList"><p class="se-empty">Chargement de l'aperçu...</p></div>
+                </div>
+                <div class="se-tab-panel" data-tab="scene">
+                    <div class="se-tab-scroll" id="sceneProps"></div>
+                </div>
+            </div>
+        </div>
     </div>
 
     <script>
-        const ACTIVE_PROFILE_ID = ${JSON.stringify(activeId)};
-        // État local par page/élément : { hidden } pour les éléments intégrés, alimenté par le
-        // premier postMessage 'scene-editor-ready' puis mis à jour de façon optimiste au clic
-        // (l'appel API tourne en parallèle, pas besoin d'attendre une confirmation de l'iframe).
-        const elementState = {};
+        const ACTIVE_PROFILE_ID = ${js(activeId)};
+        const THEME_FIELDS = ${js(THEME_FIELDS)};
+        const CANVAS_W = ${CANVAS_W};
+        const CANVAS_H = ${CANVAS_H};
+
+        // État global. SCENES/THEMES/PAUSE sont maintenus côté client après chaque action (les
+        // réponses API ne renvoient pas l'état complet) ; elements/texts sont toujours resynchronisés
+        // depuis l'iframe via 'scene-editor-ready', re-émis à chaque 'config-updated' — la liste des
+        // sources reflète donc en permanence ce que l'aperçu affiche réellement.
+        const ANIM_DEFAULTS = ${js(animDefaults)};
+        let SCENES = ${js(BUILTIN_SCENES.map(s => ({
+            ...s,
+            builtin: true,
+            background: (scenes[s.key] && scenes[s.key].background) || { mode: 'theme', color: '#0f172a', color2: '#1e293b' },
+            effects: (scenes[s.key] && scenes[s.key].effects) || {}
+        })))}
+            .concat(Object.entries(${js(scenes)})
+                .filter(([id]) => !${js(BUILTIN_SCENES.map(s => s.key))}.includes(id))
+                .map(([id, s]) => ({
+                    key: id, label: s.name, url: '/scene/' + id, builtin: false,
+                    background: s.background || { mode: 'transparent', color: '#0f172a', color2: '#1e293b' },
+                    effects: s.effects || {}
+                })));
+        let THEMES = ${js(themes)};
+        let PAUSE = ${js({ messages: pause.messages || [], progressMessages: pause.progressMessages || [] })};
+
+        let currentKey = 'starting';
+        let elements = [];
+        let texts = [];
+        let selectedId = null;
+
+        const frame = document.getElementById('sceneFrame');
 
         function esc(value) {
             return String(value ?? '').replace(/[&<>"']/g, (c) => ({
@@ -202,7 +436,7 @@ const SCENE_EDITOR_HTML = ({ activeId, themes, pause }) => `
         function toast(text, ok = true) {
             const el = document.getElementById('toast');
             el.textContent = text;
-            el.className = 'scene-toast show' + (ok ? '' : ' error');
+            el.className = 'se-toast show' + (ok ? '' : ' error');
             clearTimeout(toastTimer);
             toastTimer = setTimeout(() => el.classList.remove('show'), 2200);
         }
@@ -219,297 +453,704 @@ const SCENE_EDITOR_HTML = ({ activeId, themes, pause }) => `
             }
         }
 
-        function renderSidebar(page, elements) {
-            elementState[page] = elementState[page] || {};
-            elements.forEach((item) => {
-                if (!(item.id in elementState[page])) elementState[page][item.id] = { hidden: item.hidden };
-            });
-
-            const el = document.getElementById('sidebar_' + page);
-            if (elements.length === 0) {
-                el.innerHTML = '<p class="hint">Aucun élément sur cette page pour l\\'instant.</p>';
-                return;
-            }
-            el.innerHTML = elements.map((item) => {
-                const hidden = elementState[page][item.id].hidden;
-                const rawId = item.isCustom ? item.id.replace(/^custom:/, '') : item.id;
-                return \`
-                <div class="scene-el-row\${item.isCustom ? ' scene-el-row-wrap' : ''}" data-page="\${page}" data-el="\${item.id}">
-                    <span class="scene-el-name">\${esc(item.label)}</span>
-                    \${item.isCustom ? \`<input type="text" class="scene-custom-text-input" data-page="\${page}" data-el="\${rawId}" value="\${esc(item.text || '')}">\` : ''}
-                    <span class="scene-el-actions">
-                        <button type="button" class="btn btn-ghost btn-sm scene-el-toggle-hidden" data-page="\${page}" data-el="\${rawId}" data-custom="\${item.isCustom ? '1' : ''}">\${hidden ? 'Afficher' : 'Masquer'}</button>
-                        \${item.isCustom
-                            ? \`<button type="button" class="btn btn-ghost btn-sm scene-el-delete" data-page="\${page}" data-el="\${rawId}">Supprimer</button>\`
-                            : \`<button type="button" class="btn btn-ghost btn-sm scene-el-reset" data-page="\${page}" data-el="\${rawId}">Réinitialiser</button>\`}
-                    </span>
-                </div>\`;
-            }).join('');
+        function jsonBody(method, body) {
+            return { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) };
         }
 
-        function renderTexts(page, texts) {
-            const el = document.getElementById('texts_' + page);
+        function sceneByKey(key) { return SCENES.find((s) => s.key === key); }
+
+        // ---------- Aperçu : échelle adaptée à la place disponible ----------
+        function fitCanvas() {
+            const wrap = document.getElementById('canvasWrap');
+            const scale = Math.min(
+                (wrap.clientWidth - 32) / CANVAS_W,
+                (wrap.clientHeight - 32) / CANVAS_H
+            );
+            const stage = document.getElementById('stage');
+            stage.style.width = Math.round(CANVAS_W * scale) + 'px';
+            stage.style.height = Math.round(CANVAS_H * scale) + 'px';
+            frame.style.transform = 'scale(' + scale + ')';
+        }
+        window.addEventListener('resize', fitCanvas);
+
+        // ---------- Scènes ----------
+        function loadScene(key) {
+            currentKey = key;
+            selectedId = null;
+            elements = [];
+            texts = [];
+            renderSceneList();
+            renderSources();
+            renderProps();
+            renderTexts();
+            renderSceneTab();
+            const scene = sceneByKey(key);
+            frame.src = scene.url + (scene.url.includes('?') ? '&' : '?') + 'sceneEditor=1';
+        }
+
+        function reloadScene() {
+            const scene = sceneByKey(currentKey);
+            frame.src = scene.url + (scene.url.includes('?') ? '&' : '?') + 'sceneEditor=1';
+        }
+
+        function renderSceneList() {
+            const builtin = SCENES.filter((s) => s.builtin);
+            const custom = SCENES.filter((s) => !s.builtin);
+            const row = (s) => \`
+                <div class="se-row\${s.key === currentKey ? ' active' : ''}" data-scene="\${s.key}">
+                    <span class="se-row-icon">\${s.builtin ? '◇' : '◆'}</span>
+                    <span class="se-row-name">\${esc(s.label)}</span>
+                </div>\`;
+            document.getElementById('sceneList').innerHTML =
+                builtin.map(row).join('') +
+                '<div class="se-list-sep">Mes scènes</div>' +
+                (custom.length ? custom.map(row).join('') : '<p class="se-empty">Aucune — crée ta première scène avec +</p>');
+            document.getElementById('btnDeleteScene').disabled = !!(sceneByKey(currentKey) || {}).builtin;
+        }
+
+        document.getElementById('sceneList').addEventListener('click', (e) => {
+            const row = e.target.closest('.se-row');
+            if (row && row.dataset.scene !== currentKey) loadScene(row.dataset.scene);
+        });
+
+        document.getElementById('btnAddScene').addEventListener('click', async () => {
+            const count = SCENES.filter((s) => !s.builtin).length;
+            const res = await callApi('/api/profiles/' + ACTIVE_PROFILE_ID + '/scenes',
+                jsonBody('POST', { name: 'Nouvelle scène' + (count ? ' ' + (count + 1) : '') }));
+            if (!res) return;
+            SCENES.push({
+                key: res.sceneId,
+                label: 'Nouvelle scène' + (count ? ' ' + (count + 1) : ''),
+                url: '/scene/' + res.sceneId,
+                builtin: false,
+                background: { mode: 'transparent', color: '#0f172a', color2: '#1e293b' },
+                effects: {}
+            });
+            toast('Scène créée — renomme-la dans l\\'onglet "Scène".');
+            loadScene(res.sceneId);
+        });
+
+        // Suppression en deux clics (pas de window.confirm, peu fiable sous Electron) : le premier
+        // arme le bouton, le second confirme. Se désarme en cliquant ailleurs.
+        function armButton(btn, onConfirm) {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                if (btn.classList.contains('armed')) {
+                    btn.classList.remove('armed');
+                    onConfirm();
+                } else {
+                    btn.classList.add('armed');
+                    toast('Clique à nouveau pour confirmer la suppression.');
+                }
+            });
+            document.addEventListener('click', (e) => {
+                if (e.target !== btn) btn.classList.remove('armed');
+            });
+        }
+
+        armButton(document.getElementById('btnDeleteScene'), async () => {
+            const scene = sceneByKey(currentKey);
+            if (!scene || scene.builtin) return;
+            const res = await callApi('/api/profiles/' + ACTIVE_PROFILE_ID + '/scenes/' + scene.key, { method: 'DELETE' });
+            if (!res) return;
+            SCENES = SCENES.filter((s) => s.key !== scene.key);
+            toast('Scène supprimée.');
+            loadScene('starting');
+        });
+
+        // ---------- Communication avec l'iframe ----------
+        function apiUrlFor(fullId) {
+            const isCustom = fullId.startsWith('custom:');
+            const rawId = isCustom ? fullId.replace(/^custom:/, '') : fullId;
+            return {
+                isCustom,
+                url: isCustom
+                    ? '/api/profiles/' + ACTIVE_PROFILE_ID + '/custom-text/' + currentKey + '/' + rawId
+                    : '/api/profiles/' + ACTIVE_PROFILE_ID + '/layout/' + currentKey + '/' + rawId
+            };
+        }
+
+        window.addEventListener('message', async (event) => {
+            // Une seule iframe : ignorer tout message qui ne vient pas d'elle (ex: reliquat d'une
+            // scène précédente pendant un changement de src).
+            if (event.source !== frame.contentWindow) return;
+            const data = event.data;
+            if (!data || !data.type) return;
+
+            if (data.type === 'scene-editor-ready') {
+                elements = data.elements;
+                texts = data.texts;
+                // Si la sélection a disparu (élément supprimé), on la retire ; sinon on la garde
+                // à travers les resynchronisations (drag, édition, config-updated...).
+                if (selectedId && !elements.some((el) => el.id === selectedId)) selectedId = null;
+                renderSources();
+                renderProps();
+                renderTexts();
+            } else if (data.type === 'scene-element-selected') {
+                selectedId = data.elementId;
+                renderSources();
+                renderProps();
+            } else if (data.type === 'scene-element-moved') {
+                const { isCustom, url } = apiUrlFor(data.elementId);
+                await callApi(url, jsonBody(isCustom ? 'PATCH' : 'POST', { top: data.top, left: data.left }));
+            } else if (data.type === 'scene-element-resized') {
+                // data.width/height ne sont présents que pour l'axe concerné (JSON.stringify omet
+                // les clés undefined) — un resize horizontal seul ne touche jamais la hauteur.
+                const { isCustom, url } = apiUrlFor(data.elementId);
+                await callApi(url, jsonBody(isCustom ? 'PATCH' : 'POST', { width: data.width, height: data.height }));
+            }
+        });
+
+        // ---------- Sources ----------
+        const TYPE_ICONS = { text: 'T', image: '▨', box: '■', clock: '◷', chat: '💬', alerts: '🔔' };
+
+        function renderSources() {
+            const el = document.getElementById('sourcesList');
+            if (elements.length === 0) {
+                el.innerHTML = '<p class="se-empty">Aucune source sur cette scène — ajoute un élément avec +</p>';
+            } else {
+                el.innerHTML = elements.map((item) => \`
+                    <div class="se-row\${item.id === selectedId ? ' active' : ''}" data-el="\${item.id}">
+                        <span class="se-row-icon">\${item.isCustom ? (TYPE_ICONS[item.customType] || 'T') : '◇'}</span>
+                        <span class="se-row-name">\${esc(item.label)}</span>
+                        <button type="button" class="se-row-eye\${item.hidden ? ' off' : ''}" data-el="\${item.id}" title="\${item.hidden ? 'Afficher' : 'Masquer'}">\${item.hidden ? '⊘' : '👁'}</button>
+                    </div>\`).join('');
+            }
+            const selected = elements.find((it) => it.id === selectedId);
+            document.getElementById('btnDeleteElement').disabled = !(selected && selected.isCustom);
+            // Centrage : n'a de sens que sur un élément réellement sélectionné.
+            document.getElementById('btnCenterH').disabled = !selected;
+            document.getElementById('btnCenterV').disabled = !selected;
+        }
+
+        document.getElementById('sourcesList').addEventListener('click', async (e) => {
+            const eye = e.target.closest('.se-row-eye');
+            if (eye) {
+                e.stopPropagation();
+                const item = elements.find((it) => it.id === eye.dataset.el);
+                if (!item) return;
+                const nextHidden = !item.hidden;
+                // L'état masqué passe TOUJOURS par layout/<id complet> (y compris pour les éléments
+                // custom) — même mécanisme que l'ancienne version de l'éditeur, lu par
+                // applyLayoutFromConfig()/renderCustomTextsFromConfig() côté overlay.
+                const res = await callApi('/api/profiles/' + ACTIVE_PROFILE_ID + '/layout/' + currentKey + '/' + item.id,
+                    jsonBody('POST', { hidden: nextHidden }));
+                if (res) {
+                    item.hidden = nextHidden; // optimiste — la resynchro 'ready' confirmera
+                    renderSources();
+                    renderProps();
+                }
+                return;
+            }
+            const row = e.target.closest('.se-row');
+            if (row) {
+                selectedId = row.dataset.el;
+                renderSources();
+                renderProps();
+            }
+        });
+
+        // ---------- Ajout / suppression d'éléments ----------
+        const addMenu = document.getElementById('addMenu');
+        document.getElementById('btnAddElement').addEventListener('click', (e) => {
+            e.stopPropagation();
+            // Chat et alertes : ids DOM uniques (#chatContainer, #alertContainer) — une seule
+            // instance par scène, et la page "En direct" a déjà les siens en dur.
+            ['chat', 'alerts'].forEach((type) => {
+                const btn = addMenu.querySelector('button[data-type="' + type + '"]');
+                const already = elements.some((it) => it.customType === type);
+                btn.disabled = already || currentKey === 'index';
+                btn.title = btn.disabled
+                    ? (currentKey === 'index' ? 'Déjà présent sur la page En direct' : 'Un seul par scène')
+                    : '';
+            });
+            addMenu.classList.toggle('open');
+        });
+        document.addEventListener('click', () => addMenu.classList.remove('open'));
+
+        addMenu.addEventListener('click', async (e) => {
+            const btn = e.target.closest('button[data-type]');
+            if (!btn) return;
+            addMenu.classList.remove('open');
+            const res = await callApi('/api/profiles/' + ACTIVE_PROFILE_ID + '/custom-text/' + currentKey,
+                jsonBody('POST', {
+                    type: btn.dataset.type,
+                    top: 30 + Math.random() * 25,
+                    left: 30 + Math.random() * 25
+                }));
+            if (res) {
+                selectedId = 'custom:' + res.elementId;
+                toast('Élément ajouté.');
+                // La liste se resynchronise via le 'scene-editor-ready' déclenché par config-updated.
+            }
+        });
+
+        armButton(document.getElementById('btnDeleteElement'), async () => {
+            const item = elements.find((it) => it.id === selectedId);
+            if (!item || !item.isCustom) return;
+            const rawId = item.id.replace(/^custom:/, '');
+            const res = await callApi('/api/profiles/' + ACTIVE_PROFILE_ID + '/custom-text/' + currentKey + '/' + rawId, { method: 'DELETE' });
+            if (res) toast('Élément supprimé.');
+        });
+
+        // ---------- Propriétés de l'élément sélectionné ----------
+        // Un descripteur par type d'élément — kind détermine l'input rendu et la coercion à la
+        // sauvegarde (l'API n'accepte que des types stricts : nombre pour size/opacity/radius,
+        // booléen pour glow...). def = valeur affichée quand aucun override n'est enregistré,
+        // alignée sur les défauts du rendu (renderCustomTextsFromConfig, overlay-common.js).
+        const PROP_SPECS = {
+            text: [
+                { prop: 'text', label: 'Texte', kind: 'text' },
+                { prop: 'size', label: 'Taille (vh)', kind: 'number', def: 2.4, step: 0.1, min: 0.5, max: 30 },
+                { prop: 'color', label: 'Couleur', kind: 'color', def: '#ffffff' },
+                { prop: 'font', label: 'Police', kind: 'font' },
+                { prop: 'glow', label: 'Effet néon', kind: 'check' }
+            ],
+            clock: [
+                { prop: 'size', label: 'Taille (vh)', kind: 'number', def: 4, step: 0.1, min: 0.5, max: 30 },
+                { prop: 'color', label: 'Couleur', kind: 'color', def: '#ffffff' },
+                { prop: 'font', label: 'Police', kind: 'font' },
+                { prop: 'glow', label: 'Effet néon', kind: 'check' }
+            ],
+            image: [
+                { prop: 'url', label: "URL de l'image (https://... ou /chemin local)", kind: 'text', placeholder: 'https://exemple.com/image.png' },
+                { prop: 'radius', label: 'Arrondi (px)', kind: 'number', def: 0, step: 1, min: 0, max: 200 },
+                { prop: 'opacity', label: 'Opacité (%)', kind: 'number', def: 100, step: 1, min: 0, max: 100 }
+            ],
+            box: [
+                { prop: 'color', label: 'Couleur', kind: 'color', def: '#a855f7' },
+                { prop: 'opacity', label: 'Opacité (%)', kind: 'number', def: 100, step: 1, min: 0, max: 100 },
+                { prop: 'radius', label: 'Arrondi (px)', kind: 'number', def: 8, step: 1, min: 0, max: 200 }
+            ],
+            chat: [
+                { prop: 'text', label: 'Titre du panneau', kind: 'text' },
+                { prop: 'scale', label: 'Échelle (%)', kind: 'number', def: 100, step: 5, min: 25, max: 400 }
+            ],
+            // Zone d'alertes : pas d'échelle — sa taille EST le réglage (l'alerte s'ajuste au
+            // plus grand format qui tient dans le cadre).
+            alerts: []
+        };
+
+        // Style par élément INTÉGRÉ : couleurs de thème locales (variables --theme-* posées sur
+        // l'élément seul) + échelle visuelle. 'text' est envoyé tel quel à l'API mais lu depuis
+        // item.themeText (le champ 'text' du rapport iframe désigne déjà le contenu textuel).
+        const BUILTIN_STYLE_COLORS = [
+            { prop: 'primary', label: 'Primaire' },
+            { prop: 'secondary', label: 'Secondaire' },
+            { prop: 'text', label: 'Texte' },
+            { prop: 'panelBg', label: 'Fond' },
+            { prop: 'panelBorder', label: 'Bordure' }
+        ];
+
+        function propFieldHtml(spec, item) {
+            const raw = item[spec.prop];
+            if (spec.kind === 'color') {
+                return \`<div class="field"><label>\${esc(spec.label)}</label>
+                    <input type="color" class="se-prop" data-prop="\${spec.prop}" data-kind="color" value="\${esc(raw || spec.def)}"></div>\`;
+            }
+            if (spec.kind === 'number') {
+                const val = (typeof raw === 'number') ? raw : spec.def;
+                return \`<div class="field"><label>\${esc(spec.label)}</label>
+                    <input type="number" class="se-prop" data-prop="\${spec.prop}" data-kind="number" value="\${val}" step="\${spec.step}" min="\${spec.min}" max="\${spec.max}"></div>\`;
+            }
+            if (spec.kind === 'font') {
+                const val = raw || 'baron';
+                return \`<div class="field"><label>\${esc(spec.label)}</label>
+                    <select class="se-prop" data-prop="font" data-kind="text">
+                        <option value="baron"\${val === 'baron' ? ' selected' : ''}>Baron Neue (titres)</option>
+                        <option value="inter"\${val === 'inter' ? ' selected' : ''}>Inter (lisible)</option>
+                    </select></div>\`;
+            }
+            if (spec.kind === 'check') {
+                return \`<div class="field"><label class="checkbox-row"><input type="checkbox" class="se-prop" data-prop="\${spec.prop}" data-kind="check"\${raw ? ' checked' : ''}> \${esc(spec.label)}</label></div>\`;
+            }
+            return \`<div class="field"><label>\${esc(spec.label)}</label>
+                <input type="text" class="se-prop se-prop-text" data-prop="\${spec.prop}" data-kind="text" value="\${esc(raw || '')}" placeholder="\${esc(spec.placeholder || '')}"></div>\`;
+        }
+
+        function renderProps() {
+            const box = document.getElementById('elProps');
+            const item = elements.find((it) => it.id === selectedId);
+            if (!item) {
+                box.innerHTML = '<p class="se-empty">Sélectionne une source pour voir ses propriétés.</p>';
+                return;
+            }
+            let fields = '';
+            let note = '';
+            if (item.isCustom) {
+                fields = (PROP_SPECS[item.customType] || []).map((spec) => propFieldHtml(spec, item)).join('');
+                if (item.customType === 'chat' || item.customType === 'alerts') {
+                    note = '<p class="hint">Reprend les couleurs du thème de la scène (onglet Scène).</p>';
+                }
+                if (item.customType === 'alerts') {
+                    note += '<p class="hint">Le cadre définit où les alertes peuvent apparaître : chaque alerte s\\'affiche au plus grand format qui y tient, média (image/GIF) en entier. Teste le rendu avec la barre "Aperçu" en haut.</p>';
+                }
+            } else {
+                const theme = THEMES[currentKey] || {};
+                const fallbackFor = (key) => {
+                    const f = THEME_FIELDS.find((t) => t.key === key);
+                    return theme[key] || (f ? f.fallback : '#ffffff');
+                };
+                fields = '<div class="se-color-grid">' + BUILTIN_STYLE_COLORS.map((c) => {
+                    const current = (c.prop === 'text' ? item.themeText : item[c.prop]) || fallbackFor(c.prop);
+                    return \`<div class="field"><label>\${esc(c.label)}</label>
+                        <input type="color" class="se-bprop" data-prop="\${c.prop}" data-kind="color" value="\${esc(current)}"></div>\`;
+                }).join('') + '</div>';
+                // Pas d'échelle pour les badges à texte adaptatif (leur police suit déjà le
+                // redimensionnement) ni pour la zone d'alertes (sa taille EST le réglage :
+                // l'alerte s'ajuste au plus grand format qui tient dans le cadre).
+                if (!item.scaleText && item.id !== 'alertContainer') {
+                    fields += \`<div class="field" style="margin-top:var(--space-3);"><label>Échelle (%)</label>
+                        <input type="number" class="se-bprop" data-prop="scale" data-kind="number" value="\${typeof item.scale === 'number' ? item.scale : 100}" step="5" min="25" max="400"></div>\`;
+                }
+                fields += \`<div class="se-btn-row"><button type="button" class="btn btn-ghost btn-sm" id="btnResetEl">Réinitialiser</button></div>\`;
+                note = '<p class="hint">Couleurs et échelle appliquées à cet élément uniquement (selon l\\'élément, certaines couleurs peuvent être sans effet). Réinitialiser efface position, taille et style. Les éléments intégrés ne se suppriment pas — masque-les avec l\\'œil.</p>';
+                if (item.id === 'alertContainer') {
+                    note = '<p class="hint">Le cadre définit où les alertes peuvent apparaître : chaque alerte s\\'affiche au plus grand format qui y tient, média (image/GIF) en entier. Teste le rendu avec la barre "Aperçu" en haut.</p>' + note;
+                }
+            }
+            box.innerHTML = \`<h4>\${esc(item.label)}\${item.hidden ? ' (masqué)' : ''}</h4>\` + fields + note;
+
+            const resetBtn = document.getElementById('btnResetEl');
+            if (resetBtn) {
+                resetBtn.addEventListener('click', async () => {
+                    const res = await callApi('/api/profiles/' + ACTIVE_PROFILE_ID + '/layout/' + currentKey + '/' + item.id, { method: 'DELETE' });
+                    if (res) toast('Élément réinitialisé.');
+                });
+            }
+        }
+
+        // Champs texte : sauvegarde au blur (éviter un PATCH par frappe) ; le reste au change.
+        document.getElementById('elProps').addEventListener('focusout', (e) => {
+            const input = e.target.closest('.se-prop-text');
+            if (input) savePropChange(input);
+        });
+        document.getElementById('elProps').addEventListener('change', (e) => {
+            const builtinInput = e.target.closest('.se-bprop');
+            if (builtinInput) { saveBuiltinProp(builtinInput); return; }
+            const input = e.target.closest('.se-prop:not(.se-prop-text)');
+            if (input) savePropChange(input);
+        });
+
+        // Style d'un élément intégré : enregistré dans son entrée layout (même endpoint que
+        // position/visibilité), appliqué en direct par applyLayoutFromConfig via config-updated.
+        async function saveBuiltinProp(input) {
+            const item = elements.find((it) => it.id === selectedId);
+            if (!item || item.isCustom) return;
+            let value;
+            if (input.dataset.kind === 'number') {
+                value = Number(input.value);
+                if (!Number.isFinite(value)) return;
+            } else {
+                value = input.value;
+            }
+            const res = await callApi('/api/profiles/' + ACTIVE_PROFILE_ID + '/layout/' + currentKey + '/' + item.id,
+                jsonBody('POST', { [input.dataset.prop]: value }));
+            if (res) {
+                item[input.dataset.prop === 'text' ? 'themeText' : input.dataset.prop] = value;
+                toast('Enregistré.');
+            }
+        }
+
+        async function savePropChange(input) {
+            const item = elements.find((it) => it.id === selectedId);
+            if (!item || !item.isCustom) return;
+            let value;
+            if (input.dataset.kind === 'number') {
+                value = Number(input.value);
+                if (!Number.isFinite(value)) return;
+            } else if (input.dataset.kind === 'check') {
+                value = input.checked;
+            } else {
+                value = input.value;
+            }
+            const rawId = item.id.replace(/^custom:/, '');
+            const res = await callApi('/api/profiles/' + ACTIVE_PROFILE_ID + '/custom-text/' + currentKey + '/' + rawId,
+                jsonBody('PATCH', { [input.dataset.prop]: value }));
+            if (res) {
+                item[input.dataset.prop] = value; // évite un flash de l'ancienne valeur avant la resynchro
+                toast('Enregistré.');
+            }
+        }
+
+        // ---------- Textes intégrés (titres, sous-titres, en-têtes...) ----------
+        function renderTexts() {
+            const el = document.getElementById('textsList');
+            const scene = sceneByKey(currentKey);
             if (!texts || texts.length === 0) {
-                el.innerHTML = '<p class="hint">Aucun texte sur cette page.</p>';
+                el.innerHTML = '<p class="se-empty">' + (scene && !scene.builtin
+                    ? 'Les scènes personnalisées n\\'ont pas de textes intégrés — ajoute des éléments Texte depuis l\\'onglet Sources.'
+                    : 'Aucun texte intégré sur cette scène.') + '</p>';
                 return;
             }
             el.innerHTML = texts.map((item) => \`
-                <div class="scene-text-row" data-page="\${page}" data-text="\${item.textId}">
+                <div class="se-text-row" data-text="\${item.textId}">
                     <label>\${esc(item.label)}</label>
                     <div class="field-row">
-                        <input type="text" class="scene-text-input" data-page="\${page}" data-text="\${item.textId}" value="\${esc(item.value)}">
-                        <button type="button" class="btn btn-ghost btn-sm scene-text-reset" data-page="\${page}" data-text="\${item.textId}">Réinitialiser</button>
+                        <input type="text" class="se-static-text" data-text="\${item.textId}" value="\${esc(item.value)}">
+                        <button type="button" class="btn btn-ghost btn-sm se-static-text-reset" data-text="\${item.textId}" title="Revenir au texte par défaut">↺</button>
                     </div>
                 </div>\`).join('');
         }
 
-        function iframeForWindow(win) {
-            return Array.from(document.querySelectorAll('.scene-editor-iframe')).find((f) => f.contentWindow === win);
-        }
-
-        window.addEventListener('message', async (event) => {
-            const data = event.data;
-            if (!data || !data.type) return;
-            const iframe = iframeForWindow(event.source);
-            if (!iframe) return;
-            const page = iframe.dataset.page;
-
-            // Les éléments custom stockent position/taille dans customTexts, pas layout — router
-            // vers le bon endpoint sous peine que le changement soit ignoré et que l'élément
-            // revienne à son état d'origine au prochain config-updated.
-            function elementApiUrl(elementId) {
-                const isCustom = elementId.startsWith('custom:');
-                const rawId = isCustom ? elementId.replace(/^custom:/, '') : elementId;
-                return {
-                    isCustom,
-                    url: isCustom
-                        ? '/api/profiles/' + ACTIVE_PROFILE_ID + '/custom-text/' + page + '/' + rawId
-                        : '/api/profiles/' + ACTIVE_PROFILE_ID + '/layout/' + page + '/' + rawId
-                };
-            }
-
-            if (data.type === 'scene-editor-ready') {
-                renderSidebar(page, data.elements);
-                renderTexts(page, data.texts);
-            } else if (data.type === 'scene-element-moved') {
-                const { isCustom, url } = elementApiUrl(data.elementId);
-                await callApi(url, {
-                    method: isCustom ? 'PATCH' : 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ top: data.top, left: data.left })
-                });
-            } else if (data.type === 'scene-element-resized') {
-                // data.width/height ne sont présents que pour l'axe concerné (JSON.stringify
-                // omet naturellement les clés undefined) — un resize horizontal seul ne touche
-                // donc jamais la hauteur enregistrée, et inversement.
-                const { isCustom, url } = elementApiUrl(data.elementId);
-                await callApi(url, {
-                    method: isCustom ? 'PATCH' : 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ width: data.width, height: data.height })
-                });
-            }
-        });
-
-        function reloadIframe(page) {
-            const iframe = document.querySelector('.scene-editor-iframe[data-page="' + page + '"]');
-            iframe.src = iframe.dataset.src;
-        }
-
-        // ---------- Textes intégrés (titres, sous-titres, en-têtes...) ----------
-        document.addEventListener('focusout', async (e) => {
-            const input = e.target.closest('.scene-text-input');
+        document.getElementById('textsList').addEventListener('focusout', async (e) => {
+            const input = e.target.closest('.se-static-text');
             if (!input) return;
-            const { page, text: textId } = input.dataset;
-            const res = await callApi('/api/profiles/' + ACTIVE_PROFILE_ID + '/text/' + page + '/' + textId, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ value: input.value })
-            });
+            const res = await callApi('/api/profiles/' + ACTIVE_PROFILE_ID + '/text/' + currentKey + '/' + input.dataset.text,
+                jsonBody('POST', { value: input.value }));
             if (res) toast('Texte enregistré.');
         });
 
-        // ---------- Listes de messages rotatifs (pause) ----------
-        // Un champ = un message ; sauvegarde toujours le tableau ENTIER (remplacement, pas fusion
-        // par index côté API — voir profiles.js) reconstitué depuis l'ordre actuel des lignes du
-        // DOM, pour rester cohérent après un ajout/suppression.
-        async function savePauseField(field) {
-            const container = document.getElementById('pauseList_' + field);
-            const messages = Array.from(container.querySelectorAll('.scene-pause-input')).map((el) => el.value);
-            const res = await callApi('/api/profiles/' + ACTIVE_PROFILE_ID + '/pause-messages', {
-                method: 'PATCH',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ [field]: messages })
-            });
-            if (res) toast('Messages enregistrés.');
+        document.getElementById('textsList').addEventListener('click', async (e) => {
+            const btn = e.target.closest('.se-static-text-reset');
+            if (!btn) return;
+            btn.disabled = true;
+            const res = await callApi('/api/profiles/' + ACTIVE_PROFILE_ID + '/text/' + currentKey + '/' + btn.dataset.text, { method: 'DELETE' });
+            if (res) {
+                toast('Texte réinitialisé.');
+                // Le texte par défaut vit dans le HTML de la page, pas dans la config — recharger
+                // l'aperçu le retrouve et re-déclenche un 'scene-editor-ready' à jour.
+                reloadScene();
+            }
+            btn.disabled = false;
+        });
+
+        // ---------- Onglet Scène (nom, URL OBS, fond, effets, couleurs, messages de pause) ----------
+        const SCENE_EFFECTS = [
+            { key: 'particles', label: 'Particules flottantes' },
+            { key: 'stars', label: 'Étoiles scintillantes' },
+            { key: 'meteors', label: 'Météores' },
+            { key: 'circuitLines', label: 'Lignes de circuit' },
+            { key: 'dvdLogo', label: 'Logo rebondissant' }
+        ];
+
+        function sectionTitle(text) {
+            return '<h4 style="margin:var(--space-4) 0 var(--space-2); font-size:12px; color:var(--text-muted);">' + text + '</h4>';
         }
 
-        document.addEventListener('focusout', async (e) => {
-            const input = e.target.closest('.scene-pause-input');
-            if (!input) return;
-            await savePauseField(input.closest('.scene-pause-row').dataset.field);
-        });
+        function renderSceneTab() {
+            const scene = sceneByKey(currentKey);
+            const box = document.getElementById('sceneProps');
+            const obsUrl = window.location.origin + scene.url;
 
-        document.addEventListener('click', async (e) => {
-            const removeBtn = e.target.closest('.scene-pause-remove');
+            let html = '';
+            if (scene.builtin) {
+                html += \`<div class="field"><label>Nom</label><div>\${esc(scene.label)}</div></div>\`;
+            } else {
+                html += \`<div class="field"><label>Nom de la scène</label>
+                    <div class="se-url-row">
+                        <input type="text" id="sceneNameInput" value="\${esc(scene.label)}">
+                        <button type="button" class="btn btn-sm" id="btnRenameScene">OK</button>
+                    </div></div>\`;
+            }
+
+            html += \`<div class="field"><label>URL pour OBS (source navigateur, 1920×1080)</label>
+                <div class="se-url-row">
+                    <input type="text" readonly value="\${esc(obsUrl)}" id="obsUrlInput">
+                    <button type="button" class="btn btn-sm" id="btnCopyUrl">Copier</button>
+                </div></div>\`;
+
+            {
+                const bg = scene.background || {};
+                const mode = bg.mode || (scene.builtin ? 'theme' : 'transparent');
+                html += sectionTitle('Fond');
+                html += \`<div class="field">
+                    <select id="bgMode">
+                        \${scene.builtin ? \`<option value="theme"\${mode === 'theme' ? ' selected' : ''}>Thème de la page (par défaut)</option>\` : ''}
+                        <option value="transparent"\${mode === 'transparent' ? ' selected' : ''}>Transparent (par-dessus le jeu)</option>
+                        <option value="color"\${mode === 'color' ? ' selected' : ''}>Couleur unie + halos animés</option>
+                        <option value="gradient"\${mode === 'gradient' ? ' selected' : ''}>Dégradé + halos animés</option>
+                    </select></div>
+                    <div class="se-color-grid" id="bgColors" style="\${(mode !== 'color' && mode !== 'gradient') ? 'display:none;' : ''}">
+                        <div class="field"><label>Couleur</label><input type="color" class="se-bg-color" data-field="color" value="\${esc(bg.color || '#0f172a')}"></div>
+                        <div class="field" style="\${mode !== 'gradient' ? 'display:none;' : ''}"><label>Couleur 2</label><input type="color" class="se-bg-color" data-field="color2" value="\${esc(bg.color2 || '#1e293b')}"></div>
+                    </div>\`;
+
+                // Case cochée = état EFFECTIF : la surcharge de la scène si posée, sinon les
+                // réglages d'animations globaux (pages intégrées) ou rien (scène personnalisée).
+                const fx = scene.effects || {};
+                const fxState = (key) => fx[key] !== undefined ? fx[key] : (scene.builtin ? ANIM_DEFAULTS[key] : false);
+                html += sectionTitle('Effets d\\'ambiance');
+                html += '<div class="se-fx-row">' + SCENE_EFFECTS.map((f) => \`
+                    <label class="checkbox-row"><input type="checkbox" class="se-fx-check" data-field="\${f.key}"\${fxState(f.key) ? ' checked' : ''}> \${esc(f.label)}</label>\`).join('') + '</div>';
+                html += '<p class="hint">Densité et vitesse des effets : réglages globaux d\\'animations dans Paramètres. L\\'aperçu se recharge à chaque changement.</p>';
+            }
+
+            // Couleurs du thème : pour toutes les scènes — sur une scène personnalisée elles
+            // pilotent les widgets (chat, alertes) et les halos de fond.
+            const theme = THEMES[scene.key] || {};
+            html += sectionTitle('Couleurs');
+            html += '<div class="se-color-grid">' + THEME_FIELDS.map((f) => \`
+                <div class="field"><label>\${esc(f.label)}</label>
+                    <input type="color" class="se-theme-color" data-field="\${f.key}" value="\${esc(theme[f.key] || f.fallback)}"></div>\`).join('') + '</div>';
+
+            if (scene.key === 'pause') {
+                html += msgListHtml('messages', 'Messages qui défilent', PAUSE.messages);
+                html += msgListHtml('progressMessages', 'Messages de la barre de progression', PAUSE.progressMessages);
+                html += '<p class="hint">Une liste vidée revient aux messages par défaut.</p>';
+            }
+            box.innerHTML = html;
+
+            document.getElementById('btnCopyUrl').addEventListener('click', () => {
+                navigator.clipboard.writeText(obsUrl).then(
+                    () => toast('URL copiée.'),
+                    () => toast('Impossible de copier l\\'URL.', false)
+                );
+            });
+
+            const renameBtn = document.getElementById('btnRenameScene');
+            if (renameBtn) {
+                renameBtn.addEventListener('click', async () => {
+                    const name = document.getElementById('sceneNameInput').value.trim();
+                    if (!name) return;
+                    const res = await callApi('/api/profiles/' + ACTIVE_PROFILE_ID + '/scenes/' + scene.key,
+                        jsonBody('PATCH', { name }));
+                    if (res) {
+                        scene.label = name;
+                        toast('Scène renommée.');
+                        renderSceneList();
+                    }
+                });
+            }
+        }
+
+        // Fond de la scène : appliqué en direct par l'aperçu via config-updated (pas de
+        // rechargement) — contrairement aux effets, créés une seule fois au chargement de la page.
+        async function saveSceneBackground() {
+            const scene = sceneByKey(currentKey);
+            const background = {
+                mode: document.getElementById('bgMode').value,
+                color: document.querySelector('.se-bg-color[data-field="color"]').value,
+                color2: document.querySelector('.se-bg-color[data-field="color2"]').value
+            };
+            const res = await callApi('/api/profiles/' + ACTIVE_PROFILE_ID + '/scenes/' + scene.key,
+                jsonBody('PATCH', { background }));
+            if (res) {
+                scene.background = background;
+                toast('Fond enregistré.');
+                renderSceneTab();
+            }
+        }
+
+        function msgListHtml(field, title, items) {
+            return \`<h4 style="margin:var(--space-4) 0 var(--space-2); font-size:12px; color:var(--text-muted);">\${title}</h4>
+                <div id="msgList_\${field}">\${items.map((m) => msgRowHtml(field, m)).join('')}</div>
+                <button type="button" class="btn btn-sm se-msg-add" data-field="\${field}">+ Ajouter un message</button>\`;
+        }
+
+        function msgRowHtml(field, value) {
+            return \`<div class="se-msg-row" data-field="\${field}">
+                <input type="text" class="se-msg-input" value="\${esc(value)}">
+                <button type="button" class="btn btn-ghost btn-sm se-msg-remove" title="Supprimer">✕</button>
+            </div>\`;
+        }
+
+        // Sauvegarde toujours le tableau ENTIER, reconstitué depuis l'ordre actuel des lignes du
+        // DOM (remplacement côté API, pas de fusion par index — voir profiles.js).
+        async function saveMsgList(field) {
+            const container = document.getElementById('msgList_' + field);
+            const values = Array.from(container.querySelectorAll('.se-msg-input')).map((el) => el.value);
+            const res = await callApi('/api/profiles/' + ACTIVE_PROFILE_ID + '/pause-messages',
+                jsonBody('PATCH', { [field]: values }));
+            if (res) {
+                PAUSE[field] = values.map((v) => v.trim()).filter(Boolean);
+                toast('Messages enregistrés.');
+            }
+        }
+
+        const scenePropsEl = document.getElementById('sceneProps');
+        scenePropsEl.addEventListener('focusout', (e) => {
+            if (e.target.closest('.se-msg-input')) saveMsgList(e.target.closest('.se-msg-row').dataset.field);
+        });
+        scenePropsEl.addEventListener('click', (e) => {
+            const removeBtn = e.target.closest('.se-msg-remove');
             if (removeBtn) {
-                const field = removeBtn.dataset.field;
-                removeBtn.closest('.scene-pause-row').remove();
-                await savePauseField(field);
+                const field = removeBtn.closest('.se-msg-row').dataset.field;
+                removeBtn.closest('.se-msg-row').remove();
+                saveMsgList(field);
                 return;
             }
-            const addBtn = e.target.closest('.scene-pause-add');
+            const addBtn = e.target.closest('.se-msg-add');
             if (addBtn) {
                 const field = addBtn.dataset.field;
-                const container = document.getElementById('pauseList_' + field);
-                const row = document.createElement('div');
-                row.className = 'scene-pause-row field-row';
-                row.dataset.field = field;
-                row.innerHTML = '<input type="text" class="scene-pause-input" value="">' +
-                    '<button type="button" class="btn btn-ghost btn-sm scene-pause-remove" data-field="' + field + '" title="Supprimer">✕</button>';
-                container.appendChild(row);
-                row.querySelector('.scene-pause-input').focus();
+                const container = document.getElementById('msgList_' + field);
+                container.insertAdjacentHTML('beforeend', msgRowHtml(field, ''));
+                container.lastElementChild.querySelector('.se-msg-input').focus();
+            }
+        });
+        scenePropsEl.addEventListener('change', async (e) => {
+            const themeInput = e.target.closest('.se-theme-color');
+            if (themeInput) {
+                const res = await callApi('/api/profiles/' + ACTIVE_PROFILE_ID + '/theme/' + currentKey,
+                    jsonBody('PATCH', { [themeInput.dataset.field]: themeInput.value }));
+                if (res) {
+                    THEMES[currentKey] = { ...(THEMES[currentKey] || {}), [themeInput.dataset.field]: themeInput.value };
+                    toast('Couleur enregistrée.');
+                }
+                return;
+            }
+            if (e.target.closest('#bgMode') || e.target.closest('.se-bg-color')) {
+                await saveSceneBackground();
+                return;
+            }
+            const fxInput = e.target.closest('.se-fx-check');
+            if (fxInput) {
+                const scene = sceneByKey(currentKey);
+                const res = await callApi('/api/profiles/' + ACTIVE_PROFILE_ID + '/scenes/' + scene.key,
+                    jsonBody('PATCH', { effects: { [fxInput.dataset.field]: fxInput.checked } }));
+                if (res) {
+                    scene.effects = { ...(scene.effects || {}), [fxInput.dataset.field]: fxInput.checked };
+                    toast('Effet ' + (fxInput.checked ? 'activé' : 'désactivé') + '.');
+                    // Les effets sont créés une seule fois au chargement de la page (comme les
+                    // réglages d'animations globaux) — recharger l'aperçu pour les voir.
+                    reloadScene();
+                }
             }
         });
 
+        // ---------- Onglets du panneau droit ----------
+        document.querySelectorAll('.se-tab').forEach((btn) => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.se-tab').forEach((b) => b.classList.toggle('active', b === btn));
+                document.querySelectorAll('.se-tab-panel').forEach((p) => p.classList.toggle('active', p.dataset.tab === btn.dataset.tab));
+            });
+        });
+
+        // Entrée = valider (défocaliser) dans tous les champs texte de l'éditeur.
         document.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter' && e.target.matches('.scene-text-input, .scene-custom-text-input')) {
+            if (e.key === 'Enter' && e.target.matches('.se-prop-text, .se-static-text, .se-msg-input, #sceneNameInput')) {
                 e.preventDefault();
                 e.target.blur();
             }
         });
 
-        document.addEventListener('click', async (e) => {
-            const btn = e.target.closest('.scene-text-reset');
-            if (!btn) return;
-            const { page, text: textId } = btn.dataset;
-            btn.disabled = true;
-            const res = await callApi('/api/profiles/' + ACTIVE_PROFILE_ID + '/text/' + page + '/' + textId, { method: 'DELETE' });
-            if (res) {
-                toast('Texte réinitialisé.');
-                // Le texte "par défaut" vit dans le HTML de la page, pas dans la config — on
-                // recharge l'aperçu pour le retrouver, ce qui redemande aussi un 'scene-editor-ready'
-                // à jour (met la sidebar à jour automatiquement).
-                reloadIframe(page);
-            }
-            btn.disabled = false;
-        });
-
-        // ---------- Texte des éléments custom ----------
-        document.addEventListener('focusout', async (e) => {
-            const input = e.target.closest('.scene-custom-text-input');
-            if (!input) return;
-            const { page, el: elementId } = input.dataset;
-            const res = await callApi('/api/profiles/' + ACTIVE_PROFILE_ID + '/custom-text/' + page + '/' + elementId, {
-                method: 'PATCH',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ text: input.value })
-            });
-            if (res) toast('Texte enregistré.');
-        });
-
-        // ---------- Onglets (charge l'iframe seulement au premier affichage) ----------
-        function ensureIframeLoaded(page) {
-            const iframe = document.querySelector('.scene-editor-iframe[data-page="' + page + '"]');
-            if (!iframe.src) iframe.src = iframe.dataset.src;
-        }
-
-        document.querySelectorAll('[data-tabgroup="scenepage"].tab-bar .tab-btn').forEach((btn) => {
+        // ---------- Barre d'outils : aperçus d'alertes/chat dans l'iframe ----------
+        // postMessage direct vers l'aperçu (géré par scene-editor-bridge.js) — contrairement à la
+        // page /tests, rien n'est diffusé par WebSocket : les overlays ouverts dans OBS ne
+        // voient pas ces événements de démonstration.
+        document.querySelectorAll('.se-toolbar-btn[data-test]').forEach((btn) => {
             btn.addEventListener('click', () => {
-                document.querySelectorAll('[data-tabgroup="scenepage"].tab-bar .tab-btn').forEach((b) => b.classList.remove('active'));
-                btn.classList.add('active');
-                document.querySelectorAll('.tab-panel[data-tabgroup="scenepage"]').forEach((panel) => {
-                    panel.classList.toggle('active', panel.dataset.tab === btn.dataset.tab);
-                });
-                ensureIframeLoaded(btn.dataset.tab);
+                if (frame.contentWindow) {
+                    frame.contentWindow.postMessage({ type: 'scene-preview-event', kind: btn.dataset.test }, '*');
+                }
             });
         });
 
-        ensureIframeLoaded('starting');
+        // ---------- Barre d'outils : centrage rapide de la source sélectionnée ----------
+        // Le calcul (largeur/hauteur réelles de l'élément, zoom éventuel...) ne peut se faire que
+        // dans l'iframe — le parent se contente de demander l'axe, comme pour les aperçus
+        // d'alertes ci-dessus. La réponse ('scene-element-moved') est traitée par le handler déjà
+        // en place plus haut (window.addEventListener('message', ...)), donc l'enregistrement et
+        // la resynchro suivent le même chemin qu'un drag classique.
+        function centerSelected(axis) {
+            if (!selectedId || !frame.contentWindow) return;
+            frame.contentWindow.postMessage({ type: 'scene-center-element', elementId: selectedId, axis }, '*');
+        }
+        document.getElementById('btnCenterH').addEventListener('click', () => centerSelected('x'));
+        document.getElementById('btnCenterV').addEventListener('click', () => centerSelected('y'));
 
-        // ---------- Couleurs de thème ----------
-        document.querySelectorAll('.scene-theme-color').forEach((input) => {
-            input.addEventListener('change', async () => {
-                const { page, field } = input.dataset;
-                const res = await callApi('/api/profiles/' + ACTIVE_PROFILE_ID + '/theme/' + page, {
-                    method: 'PATCH',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ [field]: input.value })
-                });
-                if (res) toast('Couleur enregistrée.');
-            });
-        });
-
-        // ---------- Masquer / Afficher ----------
-        document.addEventListener('click', async (e) => {
-            const btn = e.target.closest('.scene-el-toggle-hidden');
-            if (!btn) return;
-            const { page, el: elementId, custom } = btn.dataset;
-            const fullId = custom ? 'custom:' + elementId : elementId;
-            const current = elementState[page] && elementState[page][fullId];
-            const nextHidden = !(current && current.hidden);
-            btn.disabled = true;
-            const res = await callApi('/api/profiles/' + ACTIVE_PROFILE_ID + '/layout/' + page + '/' + fullId, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ hidden: nextHidden })
-            });
-            if (res) {
-                elementState[page][fullId] = { ...elementState[page][fullId], hidden: nextHidden };
-                btn.textContent = nextHidden ? 'Afficher' : 'Masquer';
-                toast(nextHidden ? 'Élément masqué.' : 'Élément affiché.');
-            }
-            btn.disabled = false;
-        });
-
-        // ---------- Réinitialiser (éléments intégrés) ----------
-        document.addEventListener('click', async (e) => {
-            const btn = e.target.closest('.scene-el-reset');
-            if (!btn) return;
-            const { page, el: elementId } = btn.dataset;
-            btn.disabled = true;
-            const res = await callApi('/api/profiles/' + ACTIVE_PROFILE_ID + '/layout/' + page + '/' + elementId, { method: 'DELETE' });
-            if (res) {
-                if (elementState[page]) elementState[page][elementId] = { hidden: false };
-                const row = btn.closest('.scene-el-row');
-                const toggleBtn = row && row.querySelector('.scene-el-toggle-hidden');
-                if (toggleBtn) toggleBtn.textContent = 'Masquer';
-                toast('Position réinitialisée.');
-            }
-            btn.disabled = false;
-        });
-
-        // ---------- Supprimer un texte custom ----------
-        document.addEventListener('click', async (e) => {
-            const btn = e.target.closest('.scene-el-delete');
-            if (!btn) return;
-            const { page, el: elementId } = btn.dataset;
-            btn.disabled = true;
-            const res = await callApi('/api/profiles/' + ACTIVE_PROFILE_ID + '/custom-text/' + page + '/' + elementId, { method: 'DELETE' });
-            if (res) {
-                toast('Texte supprimé.');
-            }
-            btn.disabled = false;
-        });
-
-        // ---------- Ajouter un texte ----------
-        document.querySelectorAll('.scene-add-text').forEach((btn) => {
-            btn.addEventListener('click', async () => {
-                const page = btn.dataset.page;
-                btn.disabled = true;
-                const res = await callApi('/api/profiles/' + ACTIVE_PROFILE_ID + '/custom-text/' + page, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        text: 'Nouveau texte',
-                        top: 30 + Math.random() * 30,
-                        left: 30 + Math.random() * 30
-                    })
-                });
-                if (res) toast('Texte ajouté — modifie-le dans la liste "Éléments" ci-dessous.');
-                btn.disabled = false;
-            });
-        });
+        fitCanvas();
+        loadScene('starting');
     </script>
 </body>
 </html>

@@ -45,10 +45,13 @@ body {
     font-style: normal;
 }
 
-/* ========== CONTENEUR D'ALERTES ==========
+/* ========== ALERTES : ZONE + BOÎTE ==========
+ * .alert-container est la ZONE : un cadre invisible positionné/redimensionné depuis l'éditeur
+ * de scène (c'est lui qui porte data-scene-el). L'alerte elle-même est .alert-box, composée à
+ * taille "naturelle" fixe en px, puis mise à l'échelle par fitAlertBox() (overlay-common.js)
+ * au plus grand format qui tient dans la zone — média affiché en entier, jamais recadré.
  * Une seule couleur d'accent par type d'alerte (--alert-accent, posée en JS depuis
- * display.alerts.types.<type>.border) plutôt qu'un dégradé plein cadre : bordure, badge
- * icône, titre et glow reprennent cette couleur, le fond reste une surface neutre.
+ * display.alerts.types.<type>.border) : bordure, badge icône, titre et glow la reprennent.
  */
 .alert-container {
     --alert-accent: var(--theme-primary, #a855f7);
@@ -59,27 +62,21 @@ body {
     --alert-hide-transform: translateY(-10px);
     --alert-transition: opacity 0.4s ease, transform 0.45s cubic-bezier(0.22, 1, 0.36, 1);
     position: fixed;
-    top: 20%;
+    top: 22%;
     left: 50%;
-    /* translate(-50%,-50%) est relatif à la taille ACTUELLE de la boîte : un redimensionnement
+    /* translate(-50%,-50%) est relatif à la taille ACTUELLE de la zone : un redimensionnement
        (width/height posés par l'éditeur de scène) garde donc le centrage automatiquement, sans
-       calcul particulier à faire côté JS. */
-    transform: translate(-50%, -50%) var(--alert-enter-transform);
+       calcul particulier à faire côté JS. La zone ne porte QUE ce centrage statique — les
+       transforms d'animation (var(--alert-*-transform), dont les scale() des styles zoom/
+       bounce) sont sur .alert-box : sinon le cadre lui-même rétrécissait avec l'animation de
+       sortie et restait figé à l'échelle réduite, et le drag de l'éditeur (qui ne compense que
+       la translation du transform, pas son échelle) décalait la zone en diagonale au clic. */
+    transform: translate(-50%, -50%);
     width: 40vw;
-    max-width: 600px;
+    height: 30vh;
     display: none;
     align-items: center;
-    gap: 1.6vw;
-    background:
-        linear-gradient(135deg, rgba(var(--alert-gradient-start-rgb, 15, 23, 42), 0.35) 0%, rgba(var(--alert-gradient-end-rgb, 15, 23, 42), 0.55) 100%),
-        rgba(var(--theme-panel-bg-rgb, 15, 23, 42), 0.85);
-    backdrop-filter: blur(16px);
-    border-radius: 16px;
-    overflow: hidden;
-    padding: 2.2vh 2vw;
-    border: 1.5px solid var(--alert-accent);
-    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45), 0 0 60px -22px var(--alert-accent);
-    text-align: left;
+    justify-content: center;
     opacity: 0;
     transition: var(--alert-transition);
     z-index: 300;
@@ -88,12 +85,45 @@ body {
 .alert-container.show {
     display: flex;
     opacity: 1;
-    transform: translate(-50%, -50%) var(--alert-show-transform);
 }
 
 .alert-container.hide {
     opacity: 0;
-    transform: translate(-50%, -50%) var(--alert-hide-transform);
+}
+
+/* La boîte d'alerte, à taille naturelle FIXE en px (600 de large) : flex:none pour que la zone
+ * flex ne la compresse jamais — sa taille mesurée doit rester la taille naturelle, c'est la
+ * base du calcul d'échelle de fitAlertBox(). Tailles internes en px (pas en vh/vw) pour que la
+ * composition ne dépende pas du viewport : seule l'échelle finale s'en charge. */
+.alert-box {
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: 24px;
+    width: 600px;
+    background:
+        linear-gradient(135deg, rgba(var(--alert-gradient-start-rgb, 15, 23, 42), 0.35) 0%, rgba(var(--alert-gradient-end-rgb, 15, 23, 42), 0.55) 100%),
+        rgba(var(--theme-panel-bg-rgb, 15, 23, 42), 0.85);
+    backdrop-filter: blur(16px);
+    border-radius: 16px;
+    overflow: hidden;
+    padding: 24px 28px;
+    border: 1.5px solid var(--alert-accent);
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45), 0 0 60px -22px var(--alert-accent);
+    text-align: left;
+    /* L'animation d'entrée/sortie (fade/slide/zoom/bounce) joue ici, pas sur la zone — les
+       variables sont définies par les classes .anim-* posées sur .alert-container (showAlert)
+       et héritées. Se combine sans conflit avec le zoom d'ajustement posé par fitAlertBox(). */
+    transform: var(--alert-enter-transform);
+    transition: var(--alert-transition);
+}
+
+.alert-container.show .alert-box {
+    transform: var(--alert-show-transform);
+}
+
+.alert-container.hide .alert-box {
+    transform: var(--alert-hide-transform);
 }
 
 /* ===== Styles d'animation d'entrée/sortie, un par type d'alerte (animationStyle) ===== */
@@ -127,20 +157,21 @@ body {
     display: none;
 }
 
-.alert-container.has-media {
+.alert-container.has-media .alert-box {
     flex-direction: column;
     align-items: stretch;
     gap: 0;
-    padding: 0 0 2vh;
-    width: 34vw;
-    max-width: 480px;
+    padding: 0 0 18px;
+    width: 480px;
 }
 
+/* Le média garde SES proportions et s'affiche en ENTIER (height:auto, pas de recadrage) :
+   c'est la mise à l'échelle globale de la boîte (fitAlertBox, overlay-common.js) qui le fait
+   tenir dans la zone d'alerte. */
 .alert-container.has-media .alert-media {
     display: block;
     width: 100%;
-    max-height: 24vh;
-    object-fit: cover;
+    height: auto;
 }
 
 .alert-container.has-media .alert-icon {
@@ -148,7 +179,7 @@ body {
 }
 
 .alert-container.has-media .alert-body {
-    padding: 1.6vh 2vw 0;
+    padding: 16px 20px 0;
     text-align: center;
 }
 
@@ -156,16 +187,18 @@ body {
     white-space: normal;
 }
 
+/* Tailles internes en px (plus de vh) : la boîte est composée à taille naturelle fixe puis mise
+   à l'échelle d'un bloc — sa composition ne doit pas dépendre du viewport. */
 .alert-icon {
     flex-shrink: 0;
-    width: 6vh;
-    height: 6vh;
+    width: 64px;
+    height: 64px;
     border-radius: 50%;
     background: var(--alert-accent);
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 2.6vh;
+    font-size: 28px;
     color: #0b0d12;
     box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.08);
 }
@@ -177,18 +210,18 @@ body {
 .alert-title {
     font-family: 'Baron Neue Black', 'Inter', sans-serif;
     color: var(--alert-accent);
-    font-size: 2vh;
+    font-size: 21px;
     letter-spacing: 1px;
     text-transform: uppercase;
-    margin-bottom: 0.4vh;
+    margin-bottom: 4px;
 }
 
 .alert-username {
     font-family: 'Baron Neue Black', 'Inter', sans-serif;
     color: var(--theme-text, #f8fafc);
-    font-size: 2.8vh;
+    font-size: 30px;
     line-height: 1.15;
-    margin-bottom: 0.4vh;
+    margin-bottom: 4px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -196,16 +229,16 @@ body {
 
 .alert-message {
     color: var(--theme-muted-text, #94a3b8);
-    font-size: 1.5vh;
+    font-size: 16px;
     font-weight: 500;
 }
 
 .alert-amount {
     display: inline-block;
-    margin-top: 0.6vh;
+    margin-top: 6px;
     color: var(--alert-accent);
     font-family: 'Baron Neue Black', 'Inter', sans-serif;
-    font-size: 2vh;
+    font-size: 21px;
 }
 
 @keyframes pulse {

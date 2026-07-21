@@ -391,22 +391,41 @@ function resetProfileText(id, page, textId) {
 }
 
 /**
- * Éléments texte ajoutés librement par l'utilisateur depuis l'éditeur de scène (pas présents dans
+ * Éléments ajoutés librement par l'utilisateur depuis l'éditeur de scène (pas présents dans
  * le HTML de base) — stockés par id généré, un objet (pas un tableau) pour patch/suppression
- * directs par id sans avoir à retrouver leur index.
+ * directs par id sans avoir à retrouver leur index. Historiquement limités au texte (d'où le
+ * nom de la clé `customTexts`, conservé pour ne pas invalider les profils existants), ils
+ * portent depuis un `type` : text (défaut, pour compat), image (URL), box (aplat de couleur),
+ * clock (horloge en direct), chat (panneau de chat Twitch en direct) ou alerts (conteneur
+ * d'alertes follow/sub/raid...) — voir renderCustomTextsFromConfig() dans overlay-common.js.
  */
-function addProfileCustomText(id, page, { text, top, left }) {
+const CUSTOM_ELEMENT_TYPES = ['text', 'image', 'box', 'clock', 'chat', 'alerts'];
+
+// Les widgets à id DOM unique (#chatContainer, #alertContainer — cf. addChatMessage()/showAlert()
+// qui les retrouvent par getElementById) ne supportent qu'une instance par page.
+const SINGLETON_ELEMENT_TYPES = ['chat', 'alerts'];
+
+function addProfileCustomText(id, page, { type, text, url, color, top, left }) {
     const profile = getProfileFull(id);
     profile.display = profile.display || {};
     profile.display.customTexts = profile.display.customTexts || {};
     profile.display.customTexts[page] = profile.display.customTexts[page] || {};
 
     const elementId = crypto.randomUUID();
-    profile.display.customTexts[page][elementId] = {
-        text: text || 'Nouveau texte',
+    const entry = {
+        type: CUSTOM_ELEMENT_TYPES.includes(type) ? type : 'text',
         top: typeof top === 'number' ? top : 40,
         left: typeof left === 'number' ? left : 40
     };
+    if (SINGLETON_ELEMENT_TYPES.includes(entry.type)
+        && Object.values(profile.display.customTexts[page]).some((e) => e.type === entry.type)) {
+        throw new Error('Un seul élément de ce type par scène');
+    }
+    if (entry.type === 'text') entry.text = text || 'Nouveau texte';
+    if (entry.type === 'chat') entry.text = text || 'CHAT'; // titre du panneau
+    if (entry.type === 'image') entry.url = typeof url === 'string' ? url : '';
+    if (entry.type === 'box') entry.color = typeof color === 'string' ? color : '#a855f7';
+    profile.display.customTexts[page][elementId] = entry;
 
     profile.updatedAt = new Date().toISOString();
     writeProfileFile(profile);
@@ -436,6 +455,93 @@ function removeProfileCustomText(id, page, elementId) {
     if (profile.display && profile.display.customTexts && profile.display.customTexts[page]) {
         delete profile.display.customTexts[page][elementId];
     }
+    profile.updatedAt = new Date().toISOString();
+    writeProfileFile(profile);
+    if (id === getActiveProfileId()) {
+        recomputeDisplay();
+    }
+}
+
+// ============================================================================
+// Scènes personnalisées : pages d'overlay créées par l'utilisateur depuis /scene-editor,
+// servies sur /scene/<sceneId> pour être ajoutées comme source navigateur dans OBS. Une
+// scène n'est qu'une "page" supplémentaire aux yeux du reste du système : ses éléments
+// réutilisent tels quels customTexts[sceneId] / layout[sceneId] — aucun code spécifique
+// ailleurs, seule getThemeKeyFromLocation() (overlay-common.js) sait extraire l'id de l'URL.
+// ============================================================================
+
+function addProfileScene(id, name) {
+    const profile = getProfileFull(id);
+    profile.display = profile.display || {};
+    profile.display.scenes = profile.display.scenes || {};
+
+    const sceneId = crypto.randomUUID();
+    profile.display.scenes[sceneId] = {
+        name: String(name || '').trim() || 'Nouvelle scène',
+        createdAt: new Date().toISOString(),
+        // Fond transparent par défaut (usage overlay par-dessus le jeu) ; 'color'/'gradient'
+        // activent aussi les halos animés .background-animation/.breathing-effect, pour pouvoir
+        // recréer l'ambiance des pages intégrées (voir applySceneSettingsFromConfig(),
+        // overlay-common.js).
+        background: { mode: 'transparent', color: '#0f172a', color2: '#1e293b' },
+        // Effets décoratifs (particules, étoiles...) : tous coupés par défaut — contrairement aux
+        // pages intégrées qui suivent display.animations, une scène neuve doit rester vierge.
+        effects: {}
+    };
+
+    profile.updatedAt = new Date().toISOString();
+    writeProfileFile(profile);
+    if (id === getActiveProfileId()) {
+        recomputeDisplay();
+    }
+    return sceneId;
+}
+
+// Les 4 pages intégrées peuvent elles aussi porter des réglages de scène (fond, effets) : leur
+// entrée dans display.scenes est créée à la volée au premier réglage, identifiée par leur clé de
+// page plutôt qu'un uuid — l'éditeur et /scene/:id savent les distinguer des scènes créées.
+const BUILTIN_PAGE_KEYS = ['starting', 'index', 'pause', 'ending'];
+
+/** Patch partiel {name?, background?, effects?} — background/effects fusionnés clé par clé. */
+function updateProfileScene(id, sceneId, patch) {
+    const profile = getProfileFull(id);
+    profile.display = profile.display || {};
+    profile.display.scenes = profile.display.scenes || {};
+    let scene = profile.display.scenes[sceneId];
+    if (!scene) {
+        if (!BUILTIN_PAGE_KEYS.includes(sceneId)) {
+            throw new Error('Scène introuvable');
+        }
+        scene = profile.display.scenes[sceneId] = {};
+    }
+    if (typeof patch.name === 'string' && patch.name.trim()) scene.name = patch.name.trim();
+    if (isPlainObject(patch.background)) scene.background = { ...scene.background, ...patch.background };
+    if (isPlainObject(patch.effects)) scene.effects = { ...scene.effects, ...patch.effects };
+
+    profile.updatedAt = new Date().toISOString();
+    writeProfileFile(profile);
+    if (id === getActiveProfileId()) {
+        recomputeDisplay();
+    }
+}
+
+function removeProfileScene(id, sceneId) {
+    if (BUILTIN_PAGE_KEYS.includes(sceneId)) {
+        throw new Error('Les scènes intégrées ne peuvent pas être supprimées');
+    }
+    const profile = getProfileFull(id);
+    const display = profile.display || {};
+    if (!display.scenes || !display.scenes[sceneId]) {
+        throw new Error('Scène introuvable');
+    }
+    delete display.scenes[sceneId];
+    // Purge tout ce qui était rattaché à cette page (éléments, positions, textes) — sinon des
+    // données orphelines s'accumulent dans le profil à chaque scène supprimée.
+    if (display.customTexts) delete display.customTexts[sceneId];
+    if (display.layout) delete display.layout[sceneId];
+    if (display.texts) delete display.texts[sceneId];
+    if (display.themes) delete display.themes[sceneId];
+
     profile.updatedAt = new Date().toISOString();
     writeProfileFile(profile);
     if (id === getActiveProfileId()) {
@@ -722,6 +828,11 @@ module.exports.resetProfileText = resetProfileText;
 module.exports.addProfileCustomText = addProfileCustomText;
 module.exports.updateProfileCustomText = updateProfileCustomText;
 module.exports.removeProfileCustomText = removeProfileCustomText;
+module.exports.CUSTOM_ELEMENT_TYPES = CUSTOM_ELEMENT_TYPES;
+module.exports.BUILTIN_PAGE_KEYS = BUILTIN_PAGE_KEYS;
+module.exports.addProfileScene = addProfileScene;
+module.exports.updateProfileScene = updateProfileScene;
+module.exports.removeProfileScene = removeProfileScene;
 module.exports.setProfileAudio = setProfileAudio;
 module.exports.deleteProfileAudio = deleteProfileAudio;
 module.exports.getProfileAudioFilePath = getProfileAudioFilePath;

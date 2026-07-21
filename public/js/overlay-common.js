@@ -23,11 +23,20 @@ function hexToRgbTriplet(hex) {
     return `${r}, ${g}, ${b}`;
 }
 
+// Clés des 4 pages intégrées — tout autre pageKey est l'id d'une scène personnalisée. Sert à
+// choisir les bons défauts : les pages intégrées gardent leur fond de thème et suivent les
+// réglages d'animations globaux tant qu'aucun réglage de scène ne les surcharge.
+const OVERLAY_BUILTIN_PAGES = ['starting', 'index', 'pause', 'ending'];
+
 function getThemeKeyFromLocation() {
     const path = (typeof window !== 'undefined' && window.location && window.location.pathname) ? window.location.pathname.toLowerCase() : '';
     if (path.endsWith('/starting.html') || path.endsWith('starting.html')) return 'starting';
     if (path.endsWith('/ending.html') || path.endsWith('ending.html')) return 'ending';
     if (path.endsWith('/pause.html') || path.endsWith('pause.html')) return 'pause';
+    // Scène personnalisée (/scene/<uuid>) : la clé de page est l'id de la scène — layout,
+    // customTexts, texts... s'indexent dessus exactement comme sur les 4 pages intégrées.
+    const sceneMatch = path.match(/\/scene\/([a-z0-9-]+)/);
+    if (sceneMatch) return sceneMatch[1];
     return 'index';
 }
 
@@ -111,7 +120,10 @@ function applyChatVisibilityFromConfig() {
     const cfg = getOverlayConfig();
     const pageKey = getThemeKeyFromLocation();
     const visible = cfg.chat?.enabled?.[pageKey] !== false;
-    document.querySelectorAll('.chat-panel').forEach(el => {
+    // :not([data-scene-custom-text]) : un widget chat AJOUTÉ depuis l'éditeur de scène a sa
+    // propre visibilité (œil de l'éditeur) — la bascule globale de /settings ne concerne que le
+    // panneau intégré de la page.
+    document.querySelectorAll('.chat-panel:not([data-scene-custom-text])').forEach(el => {
         el.style.display = visible ? '' : 'none';
     });
 }
@@ -137,10 +149,49 @@ function applyLayoutFromConfig() {
         if (elementId.startsWith('custom:')) return; // gérés par renderCustomTextsFromConfig()
         const pos = layout[elementId];
 
+        // Échelle visuelle par élément via CSS zoom : contrairement au redimensionnement
+        // width/height (qui donne plus d'espace au contenu à taille de texte constante), le zoom
+        // agrandit tout — texte, icônes, paddings — comme l'échelle d'une source dans OBS, sans
+        // toucher à transform (réservé aux animations). Chrome multiplie par le zoom TOUTES les
+        // longueurs de l'élément (top/left/width/height compris — vérifié empiriquement) : les
+        // valeurs stockées étant "visuelles" (ce que l'utilisateur voit et dépose au drag), tout
+        // ce qu'on écrit dans les styles est donc divisé par le zoom. Les badges à texte adaptatif
+        // (data-scene-scale-text) sont exclus : leur police suit déjà le redimensionnement, un
+        // zoom par-dessus ferait double emploi et fausserait leur mesure "naturelle".
+        const isScaleTextBadge = el.dataset.sceneScaleText !== undefined;
+        const zoom = (!isScaleTextBadge && pos && typeof pos.scale === 'number' && pos.scale > 0) ? pos.scale / 100 : 1;
+        el.style.zoom = zoom !== 1 ? String(zoom) : '';
+
+        // Couleurs de thème surchargées PAR ÉLÉMENT : les variables --theme-* sont posées
+        // localement sur l'élément — tout son CSS (et celui de ses descendants) qui consomme ces
+        // variables les résout alors à la valeur locale, sans toucher au reste de la page. Les
+        // variantes -rgb (utilisées dans des rgba(...) par le CSS des panneaux) suivent.
+        // Entièrement déclaratif : sans override, on retire la propriété (retour au thème de la
+        // page). Les datasets exposent les valeurs à l'éditeur de scène (reportReady, bridge).
+        [['primary', '--theme-primary'], ['secondary', '--theme-secondary'], ['text', '--theme-text'],
+         ['panelBg', '--theme-panel-bg'], ['panelBorder', '--theme-panel-border']].forEach(([key, cssVar]) => {
+            const value = (pos && typeof pos[key] === 'string') ? pos[key] : null;
+            if (value) {
+                el.style.setProperty(cssVar, value);
+                const rgb = hexToRgbTriplet(value);
+                if (rgb) el.style.setProperty(cssVar + '-rgb', rgb);
+            } else {
+                el.style.removeProperty(cssVar);
+                el.style.removeProperty(cssVar + '-rgb');
+            }
+            el.dataset['prop' + key.charAt(0).toUpperCase() + key.slice(1)] = value || '';
+        });
+        el.dataset.propScale = (pos && typeof pos.scale === 'number') ? String(pos.scale) : '';
+
         if (pos && typeof pos.top === 'number' && typeof pos.left === 'number') {
+            // Ramené dans [0,100] : un ancien bug de l'éditeur (compensation de drag ignorant le
+            // scale() des animations d'alerte) a pu enregistrer des positions hors écran (ex:
+            // top 114vh / left 119vw constaté en vrai) — l'élément semblait alors avoir disparu.
+            // Le bornage au rendu répare ces données sans migration : l'élément réapparaît en
+            // bord d'écran, prêt à être repositionné.
             el.style.position = 'fixed';
-            el.style.top = pos.top + 'vh';
-            el.style.left = pos.left + 'vw';
+            el.style.top = (Math.min(100, Math.max(0, pos.top)) / zoom) + 'vh';
+            el.style.left = (Math.min(100, Math.max(0, pos.left)) / zoom) + 'vw';
             el.style.right = 'auto';
             el.style.bottom = 'auto';
         } else {
@@ -153,9 +204,13 @@ function applyLayoutFromConfig() {
 
         // Ne touche display que si l'éditeur de scène a un avis explicite dessus — sinon on
         // laisse la main à applyChatVisibilityFromConfig()/applyBottomBarVisibilityFromConfig()
-        // (chat/bandeau bas ont leur propre bascule dans les réglages classiques).
+        // (chat/bandeau bas ont leur propre bascule dans les réglages classiques). 'important' :
+        // en mode édition, le bridge force l'affichage des zones d'alertes via une règle
+        // !important — seul un inline important garde la main pour qu'un élément masqué à l'œil
+        // reste réellement masqué (et remonté comme tel).
         if (pos && typeof pos.hidden === 'boolean') {
-            el.style.display = pos.hidden ? 'none' : '';
+            if (pos.hidden) el.style.setProperty('display', 'none', 'important');
+            else el.style.removeProperty('display');
         }
 
         // Taille : de vraies dimensions CSS (pas transform:scale, qui déformerait le texte/les
@@ -232,9 +287,10 @@ function applyLayoutFromConfig() {
                 el.style.fontSize = '';
             }
         } else {
-            el.style.width = hasWidth ? pos.width + 'vw' : '';
+            // Divisé par le zoom : les dimensions stockées sont visuelles (voir plus haut).
+            el.style.width = hasWidth ? (pos.width / zoom) + 'vw' : '';
             el.style.maxWidth = hasWidth ? 'none' : '';
-            el.style.height = hasHeight ? pos.height + 'vh' : '';
+            el.style.height = hasHeight ? (pos.height / zoom) + 'vh' : '';
             el.style.maxHeight = hasHeight ? 'none' : '';
         }
     });
@@ -274,39 +330,186 @@ function applyTextOverridesFromConfig() {
 }
 
 /**
- * Éléments texte ajoutés librement depuis l'éditeur de scène (pas dans le HTML de base) —
- * cfg.customTexts[page] = { id: {text, top, left} }. Recréés en entier à chaque appel plutôt que
- * diffés un par un : plus simple et cet appel reste rare (init + config-updated).
+ * Éléments ajoutés librement depuis l'éditeur de scène (pas dans le HTML de base) —
+ * cfg.customTexts[page] = { id: {type, top, left, ...} }, type ∈ text/image/box/clock (absent =
+ * text, compat avec les profils créés quand seul le texte existait — d'où le nom de la clé).
+ * Recréés en entier à chaque appel plutôt que diffés un par un : plus simple et cet appel reste
+ * rare (init + config-updated).
  */
 function renderCustomTextsFromConfig() {
     const cfg = getOverlayConfig();
     const pageKey = getThemeKeyFromLocation();
+
+    // Le widget chat est recréé à CHAQUE config-updated (comme tout élément custom) : sans
+    // transplantation, les messages déjà reçus seraient perdus au moindre réglage modifié —
+    // le WebSocket ne rejoue pas l'historique.
+    const previousChat = document.querySelector('[data-scene-custom-text] #chatContainer');
+    const previousChatMessages = previousChat ? previousChat.innerHTML : null;
+
     document.querySelectorAll('[data-scene-custom-text]').forEach((el) => el.remove());
 
     const customTexts = cfg.customTexts?.[pageKey];
     if (!customTexts) return;
 
+    // Style texte partagé par les types text et clock : taille (vh), couleur, police, néon.
+    function applyTextStyle(el, item, defaultSize) {
+        const size = (typeof item.size === 'number' && item.size > 0) ? item.size : defaultSize;
+        const family = item.font === 'inter' ? "Inter, sans-serif" : "'Baron Neue Black', Inter, sans-serif";
+        const color = item.color || '#ffffff';
+        el.style.color = color;
+        el.style.font = '600 ' + size + 'vh ' + family;
+        el.style.textShadow = item.glow
+            ? '0 0 10px ' + color + ', 0 0 32px ' + color + ', 0 2px 8px rgba(0, 0, 0, 0.6)'
+            : '0 2px 8px rgba(0, 0, 0, 0.6)';
+        el.dataset.colorValue = item.color || '';
+    }
+
+    // Valeurs de style brutes exposées à l'éditeur de scène : le panneau de propriétés n'a pas
+    // accès à la config des overlays, il lit ces datasets via scene-editor-bridge.js
+    // (reportReady). Chaîne vide = pas d'override, l'éditeur affiche alors sa valeur par défaut.
+    function exposeStyleProps(el, item) {
+        el.dataset.propSize = (typeof item.size === 'number') ? String(item.size) : '';
+        el.dataset.propFont = item.font || '';
+        el.dataset.propGlow = item.glow ? '1' : '';
+        el.dataset.propRadius = (typeof item.radius === 'number') ? String(item.radius) : '';
+        el.dataset.propOpacity = (typeof item.opacity === 'number') ? String(item.opacity) : '';
+        el.dataset.propScale = (typeof item.scale === 'number') ? String(item.scale) : '';
+    }
+
     for (const [id, item] of Object.entries(customTexts)) {
+        const type = item.type || 'text';
         const el = document.createElement('div');
-        el.textContent = item.text || '';
         el.dataset.sceneEl = 'custom:' + id;
         el.dataset.sceneCustomText = '1';
-        // Copie indépendante du texte réel : une fois en mode édition de scène, un badge
-        // d'étiquette est ajouté comme enfant DOM de cet élément (voir addLabel() dans
-        // scene-editor-bridge.js), ce qui pollue el.textContent — ce dataset reste la source
-        // fiable pour retrouver le texte "propre" depuis la sidebar.
-        el.dataset.textValue = item.text || '';
+        el.dataset.customType = type;
+        // L'état masqué des éléments custom vit dans layout[page]['custom:<id>'] (même mécanisme
+        // que les éléments intégrés — applyLayoutFromConfig() saute volontairement les ids
+        // custom, c'est donc ici qu'il s'applique). display:none plutôt que ne pas rendre du
+        // tout : l'éditeur de scène doit continuer à lister l'élément pour pouvoir le réafficher.
+        // Exception alerts : ce widget est déjà masqué par défaut en CSS (il n'apparaît que le
+        // temps d'une alerte via .show) — on ne pose un display inline que pour le forcer caché.
+        const hiddenByLayout = !!cfg.layout?.[pageKey]?.['custom:' + id]?.hidden;
+        // 'important' : en mode édition, le bridge force l'affichage des zones d'alertes en
+        // pointillés via une règle !important — seul un inline important garde la main pour
+        // qu'un élément masqué à l'œil reste réellement masqué (et remonté comme tel).
+        if (hiddenByLayout) el.style.setProperty('display', 'none', 'important');
+        // Échelle visuelle (chat : son texte interne a des tailles CSS fixes, le zoom est le
+        // seul moyen de tout agrandir d'un bloc) — mêmes règles que les éléments intégrés dans
+        // applyLayoutFromConfig() : valeurs stockées visuelles, styles divisés par le zoom.
+        // Pas d'échelle pour les alertes : leur taille découle de la zone (fitAlertBox).
+        const zoom = (type === 'chat' && typeof item.scale === 'number' && item.scale > 0)
+            ? item.scale / 100 : 1;
+        if (zoom !== 1) el.style.zoom = String(zoom);
         el.style.position = 'fixed';
-        el.style.top = (item.top ?? 40) + 'vh';
-        el.style.left = (item.left ?? 40) + 'vw';
-        el.style.color = '#fff';
-        el.style.font = "600 2.4vh 'Baron Neue Black', Inter, sans-serif";
-        el.style.textShadow = '0 2px 8px rgba(0, 0, 0, 0.6)';
+        // Même bornage [0,100] que les éléments intégrés (applyLayoutFromConfig) : répare les
+        // positions hors écran enregistrées par l'ancien bug de drag.
+        el.style.top = (Math.min(100, Math.max(0, item.top ?? 40)) / zoom) + 'vh';
+        el.style.left = (Math.min(100, Math.max(0, item.left ?? 40)) / zoom) + 'vw';
         el.style.zIndex = '250';
-        // De vraies dimensions CSS (pas transform:scale, qui déformerait le texte) : le texte
-        // dispose de plus/moins d'espace et wrappe normalement au lieu d'être étiré.
-        if (typeof item.width === 'number' && item.width > 0) el.style.width = item.width + 'vw';
-        if (typeof item.height === 'number' && item.height > 0) el.style.height = item.height + 'vh';
+        // De vraies dimensions CSS (pas transform:scale, qui déformerait le contenu) : l'élément
+        // dispose de plus/moins d'espace et le texte wrappe normalement au lieu d'être étiré.
+        if (typeof item.width === 'number' && item.width > 0) el.style.width = (item.width / zoom) + 'vw';
+        if (typeof item.height === 'number' && item.height > 0) el.style.height = (item.height / zoom) + 'vh';
+
+        if (type === 'text') {
+            el.textContent = item.text || '';
+            // Copie indépendante du texte réel : une fois en mode édition de scène, un badge
+            // d'étiquette est ajouté comme enfant DOM de cet élément (voir addLabel() dans
+            // scene-editor-bridge.js), ce qui pollue el.textContent — ce dataset reste la source
+            // fiable pour retrouver le texte "propre" depuis la sidebar.
+            el.dataset.textValue = item.text || '';
+            applyTextStyle(el, item, 2.4);
+        } else if (type === 'image') {
+            el.dataset.urlValue = item.url || '';
+            if (!el.style.width) el.style.width = '20vw';
+            if (item.url) {
+                const img = document.createElement('img');
+                img.src = item.url;
+                img.alt = '';
+                img.style.display = 'block';
+                img.style.width = '100%';
+                img.style.height = el.style.height ? '100%' : 'auto';
+                img.style.objectFit = 'contain';
+                if (typeof item.radius === 'number') img.style.borderRadius = item.radius + 'px';
+                if (typeof item.opacity === 'number') img.style.opacity = String(item.opacity / 100);
+                el.appendChild(img);
+            } else {
+                // Pas encore d'URL : un cadre visible reste nécessaire pour pouvoir sélectionner/
+                // déplacer l'élément dans l'éditeur — invisible en usage normal serait acceptable,
+                // mais autant montrer clairement qu'une image attend son URL.
+                if (!el.style.height) el.style.height = '12vh';
+                el.style.border = '2px dashed rgba(255, 255, 255, 0.45)';
+                el.style.borderRadius = '8px';
+                if (!hiddenByLayout) el.style.display = 'flex';
+                el.style.alignItems = 'center';
+                el.style.justifyContent = 'center';
+                el.style.color = 'rgba(255, 255, 255, 0.65)';
+                el.style.font = "600 1.8vh Inter, sans-serif";
+                el.textContent = 'Image — URL à définir';
+            }
+        } else if (type === 'box') {
+            el.dataset.colorValue = item.color || '#a855f7';
+            if (!el.style.width) el.style.width = '20vw';
+            if (!el.style.height) el.style.height = '20vh';
+            el.style.background = item.color || '#a855f7';
+            el.style.borderRadius = (typeof item.radius === 'number' ? item.radius : 8) + 'px';
+            if (typeof item.opacity === 'number') el.style.opacity = String(item.opacity / 100);
+            // Une boîte sert de fond par nature : toujours sous les autres éléments custom
+            // (texte, image, horloge à 250), sinon une boîte ajoutée après eux les recouvrirait
+            // sans aucun moyen de changer l'ordre d'empilement depuis l'éditeur.
+            el.style.zIndex = '240';
+        } else if (type === 'clock') {
+            // Le temps vit dans un span enfant dédié : en mode édition, étiquette et poignées de
+            // redimensionnement sont ajoutées comme enfants du même élément — écraser
+            // el.textContent chaque seconde les détruirait.
+            const span = document.createElement('span');
+            span.dataset.sceneClockDisplay = '1';
+            span.textContent = new Date().toLocaleTimeString('fr-FR');
+            el.appendChild(span);
+            applyTextStyle(el, item, 4);
+            ensureCustomClockTicker();
+        } else if (type === 'chat') {
+            // Vrai panneau de chat : même structure/classes que le panneau intégré d'index.html —
+            // addChatMessage() (getElementById('chatContainer')) et le CSS .chat-panel de
+            // overlay-common.css fonctionnent tels quels. Unicité par scène garantie côté store
+            // (SINGLETON_ELEMENT_TYPES). item.text = titre de l'en-tête.
+            el.dataset.textValue = item.text || 'CHAT';
+            el.className = 'chat-panel';
+            if (!el.style.width) el.style.width = '15vw';
+            if (!el.style.height) el.style.height = '40vh';
+            const header = document.createElement('div');
+            header.className = 'chat-header';
+            header.innerHTML = '<i class="fas fa-comments"></i> ';
+            header.appendChild(document.createTextNode(item.text || 'CHAT'));
+            const container = document.createElement('div');
+            container.className = 'chat-container';
+            container.id = 'chatContainer';
+            if (previousChatMessages) container.innerHTML = previousChatMessages;
+            el.appendChild(header);
+            el.appendChild(container);
+        } else if (type === 'alerts') {
+            // ZONE d'alertes (follow/sub/raid/bits...) : mêmes ids et structure zone/boîte
+            // qu'index.html, donc showAlert()/fitAlertBox() la pilotent tels quels — l'alerte
+            // s'ajuste au plus grand format qui tient dans le cadre défini dans l'éditeur.
+            // Invisible tant qu'aucune alerte ne joue (.show) ; en mode édition, seul le cadre
+            // est matérialisé (voir scene-editor-bridge.js). Testable depuis /tests ou la barre
+            // d'aperçu de l'éditeur.
+            el.className = 'alert-container';
+            el.id = 'alertContainer';
+            el.dataset.sceneAlertZone = '1';
+            el.innerHTML = '<div class="alert-box" id="alertBox">'
+                + '<img class="alert-media" id="alertMedia" alt="">'
+                + '<div class="alert-icon" id="alertIcon"><i class="fas fa-heart"></i></div>'
+                + '<div class="alert-body">'
+                + '<div class="alert-title" id="alertTitle"></div>'
+                + '<div class="alert-username" id="alertUsername"></div>'
+                + '<div class="alert-message" id="alertMessage"></div>'
+                + '<div class="alert-amount" id="alertAmount" style="display: none;"></div>'
+                + '</div>'
+                + '</div>';
+            el.style.zIndex = '300';
+        }
+        exposeStyleProps(el, item);
         document.body.appendChild(el);
     }
 
@@ -314,6 +517,56 @@ function renderCustomTextsFromConfig() {
     // d'apparaître, pour qu'il les rende déplaçables/éditables — lui seul écoute cet événement,
     // aucun effet en usage normal (OBS, navigateur direct).
     window.dispatchEvent(new CustomEvent('scene-custom-texts-rendered'));
+}
+
+/**
+ * Réglages de scène (cfg.scenes[pageKey] = {background, effects, name?}) : fond de page
+ * (thème / transparent / couleur / dégradé) et halos animés d'ambiance. Valent pour TOUTES les
+ * pages — intégrées comprises, leur entrée étant créée au premier réglage depuis l'éditeur ;
+ * sans réglage, une page intégrée garde son fond de thème ('theme') et une scène personnalisée
+ * reste transparente. Les EFFETS (particules, étoiles...) ne sont pas gérés ici mais à la
+ * création dans initCommonOverlay() — comme pour les réglages d'animation globaux, un changement
+ * d'effet ne s'applique donc qu'au prochain rechargement de la page (l'éditeur de scène recharge
+ * son aperçu lui-même).
+ */
+function applySceneSettingsFromConfig() {
+    const cfg = getOverlayConfig();
+    const pageKey = getThemeKeyFromLocation();
+    const isBuiltin = OVERLAY_BUILTIN_PAGES.includes(pageKey);
+    const bg = cfg.scenes?.[pageKey]?.background || {};
+    const mode = bg.mode || (isBuiltin ? 'theme' : 'transparent');
+
+    if (mode === 'color') {
+        document.body.style.background = bg.color || '#0f172a';
+    } else if (mode === 'gradient') {
+        document.body.style.background = 'linear-gradient(135deg, ' + (bg.color || '#0f172a') + ', ' + (bg.color2 || '#1e293b') + ')';
+    } else if (mode === 'transparent') {
+        document.body.style.background = 'transparent';
+    } else {
+        // 'theme' : retour au fond CSS de la page (var(--theme-bg), overlay-common.css).
+        document.body.style.background = '';
+    }
+
+    // Les halos .background-animation/.breathing-effect n'ont de sens que sur un fond opaque —
+    // sur un fond transparent ils peindraient un dégradé radial par-dessus le jeu. En mode
+    // 'theme', on rend la main au CSS de la page (certaines pages intégrées en ont d'origine).
+    document.querySelectorAll('.background-animation, .breathing-effect').forEach((el) => {
+        el.style.display = (mode === 'color' || mode === 'gradient') ? '' : (mode === 'transparent' ? 'none' : '');
+    });
+}
+
+// Un seul ticker partagé pour toutes les horloges custom de la page, démarré à la première
+// horloge rencontrée et jamais arrêté (inoffensif si les horloges disparaissent : le sélecteur
+// ne matche alors plus rien).
+let customClockTickerStarted = false;
+function ensureCustomClockTicker() {
+    if (customClockTickerStarted) return;
+    customClockTickerStarted = true;
+    setInterval(() => {
+        document.querySelectorAll('[data-scene-clock-display]').forEach((el) => {
+            el.textContent = new Date().toLocaleTimeString('fr-FR');
+        });
+    }, 1000);
 }
 
 function applyBottomBarContentFromConfig() {
@@ -401,6 +654,14 @@ function showAlert(type, username, message = '', amount = '') {
         const alertMessage = document.getElementById('alertMessage');
         const alertAmount = document.getElementById('alertAmount');
 
+        // Pages sans conteneur d'alertes (scènes personnalisées /scene/<id>, pages starting/
+        // pause/ending) : les événements Twitch arrivent quand même par WebSocket — ignorer
+        // proprement plutôt que de planter sur alertIcon.innerHTML.
+        if (!alertContainer || !alertIcon) {
+            resolve();
+            return;
+        }
+
         // Utiliser la config pour les types d'alertes
         const typesCfg = (cfg.alerts && cfg.alerts.types) ? cfg.alerts.types : {};
         const config = typesCfg[type] || typesCfg.follow;
@@ -429,9 +690,13 @@ function showAlert(type, username, message = '', amount = '') {
         // overlay-common.css).
         if (alertMedia) {
             if (config.media) {
+                // Re-fit une fois le média chargé : sa hauteur naturelle change la taille de la
+                // boîte, donc l'échelle qui la fait tenir dans la zone.
+                alertMedia.onload = () => fitAlertBox();
                 alertMedia.src = config.media;
                 alertContainer.classList.add('has-media');
             } else {
+                alertMedia.onload = null;
                 alertMedia.removeAttribute('src');
                 alertContainer.classList.remove('has-media');
             }
@@ -458,10 +723,12 @@ function showAlert(type, username, message = '', amount = '') {
             audio.play().catch(() => {});
         }
 
-        // Afficher l'alerte
+        // Afficher l'alerte — l'ajustement à la zone se mesure une fois .show posé (display:flex,
+        // sinon toutes les mesures valent 0).
         alertContainer.classList.remove('hide');
         alertContainer.classList.add('show');
         alertContainer.style.opacity = 1;
+        fitAlertBox();
 
         // Ajouter l'effet de confettis avec la config, assortis à la couleur de l'alerte
         if (typeof confetti !== 'undefined' && (!cfg.alerts || cfg.alerts.confettiEnabled !== false)) {
@@ -482,6 +749,27 @@ function showAlert(type, username, message = '', amount = '') {
             setTimeout(resolve, 600);
         }, cfg.alerts?.duration ?? 6000);
     });
+}
+
+/**
+ * Met la boîte d'alerte (#alertBox, composée à taille naturelle fixe en px — voir .alert-box
+ * dans overlay-common.css) à l'échelle du plus grand format qui tient dans sa zone
+ * (#alertContainer, le cadre positionné depuis l'éditeur de scène). Agrandit comme réduit :
+ * une grande zone donne une grande alerte. Rappelée au chargement du média (sa hauteur
+ * naturelle n'est connue qu'à ce moment-là — sans ça un GIF encore non chargé donnerait une
+ * boîte mesurée trop courte, donc une échelle trop grande).
+ */
+function fitAlertBox() {
+    const zone = document.getElementById('alertContainer');
+    const box = document.getElementById('alertBox');
+    if (!zone || !box) return;
+    box.style.zoom = '';
+    const zoneWidth = zone.clientWidth;
+    const zoneHeight = zone.clientHeight;
+    const boxWidth = box.offsetWidth;
+    const boxHeight = box.offsetHeight;
+    if (!zoneWidth || !zoneHeight || !boxWidth || !boxHeight) return;
+    box.style.zoom = String(Math.max(0.1, Math.min(zoneWidth / boxWidth, zoneHeight / boxHeight)));
 }
 
 function processAlertQueue() {
@@ -605,6 +893,7 @@ function initWebSocket() {
             // chargement de la page et ne peuvent pas être réappliqués ici.
             globalThis.OVERLAY_CONFIG = data.config;
             applyThemeFromConfig();
+            applySceneSettingsFromConfig();
             applyBottomBarContentFromConfig();
             applyBottomBarVisibilityFromConfig();
             applyChatVisibilityFromConfig();
@@ -773,7 +1062,15 @@ function initDVDLogo() {
 
     // Désactivé : masquer explicitement, sinon le logo reste visible (figé au coin
     // haut-gauche, sa position CSS par défaut) faute de transform jamais appliqué.
-    if (cfg.animations?.enabled === false || cfg.animations?.dvdLogo?.enabled === false) {
+    // La bascule de la scène est prioritaire quand elle est renseignée (comme les autres effets —
+    // voir animEnabled() dans initCommonOverlay) ; sinon réglages globaux pour les pages
+    // intégrées, coupé pour une scène personnalisée.
+    const dvdPageKey = getThemeKeyFromLocation();
+    const dvdSceneFx = cfg.scenes?.[dvdPageKey]?.effects || {};
+    const dvdEnabled = (dvdSceneFx.dvdLogo !== undefined)
+        ? !!dvdSceneFx.dvdLogo
+        : (OVERLAY_BUILTIN_PAGES.includes(dvdPageKey) && cfg.animations?.enabled !== false && cfg.animations?.dvdLogo?.enabled !== false);
+    if (!dvdEnabled) {
         logoContainer.style.display = 'none';
         return;
     }
@@ -841,6 +1138,9 @@ function initCommonOverlay() {
     // Thème (couleurs) + variables CSS
     applyThemeFromConfig();
 
+    // Fond et halos d'ambiance des scènes personnalisées (no-op sur les pages intégrées)
+    applySceneSettingsFromConfig();
+
     // Contenu bottom bar (textes centralisés)
     applyBottomBarContentFromConfig();
 
@@ -874,24 +1174,32 @@ function initCommonOverlay() {
     // Initialiser WebSocket
     initWebSocket();
 
-    // Créer les animations de base
-    if (cfg.animations?.enabled !== false) {
-        if (cfg.animations?.particles?.enabled !== false) {
-            createParticles(cfg.animations?.particles?.count ?? 30, cfg.animations?.particles?.duration ?? [5, 8]);
-        }
-        if (cfg.animations?.stars?.enabled !== false) {
-            createStars(cfg.animations?.stars?.count ?? 80, cfg.animations?.stars?.duration ?? [1.5, 2.5]);
-        }
-        if (cfg.animations?.meteors?.enabled !== false) {
-            createMeteors(cfg.animations?.meteors?.count ?? 8, cfg.animations?.meteors?.duration ?? [2, 3]);
-        }
-        if (cfg.animations?.circuitLines?.enabled !== false) {
-            createCircuitLines(
-                cfg.animations?.circuitLines?.horizontal ?? 10,
-                cfg.animations?.circuitLines?.vertical ?? 8,
-                cfg.animations?.circuitLines?.duration ?? 6
-            );
-        }
+    // Créer les animations de base. Chaque scène (intégrée ou personnalisée) peut surcharger
+    // effet par effet via cfg.scenes[pageKey].effects ; un effet non renseigné retombe sur les
+    // réglages d'animations globaux pour les pages intégrées, et sur "coupé" pour une scène
+    // personnalisée (qui doit naître vierge). Les compteurs/durées restent ceux des réglages
+    // globaux : pas de raison de les dupliquer par scène.
+    const scenePageKey = getThemeKeyFromLocation();
+    const sceneFx = cfg.scenes?.[scenePageKey]?.effects || {};
+    const sceneIsBuiltin = OVERLAY_BUILTIN_PAGES.includes(scenePageKey);
+    const animEnabled = (name) => (sceneFx[name] !== undefined)
+        ? !!sceneFx[name]
+        : (sceneIsBuiltin && cfg.animations?.enabled !== false && cfg.animations?.[name]?.enabled !== false);
+    if (animEnabled('particles')) {
+        createParticles(cfg.animations?.particles?.count ?? 30, cfg.animations?.particles?.duration ?? [5, 8]);
+    }
+    if (animEnabled('stars')) {
+        createStars(cfg.animations?.stars?.count ?? 80, cfg.animations?.stars?.duration ?? [1.5, 2.5]);
+    }
+    if (animEnabled('meteors')) {
+        createMeteors(cfg.animations?.meteors?.count ?? 8, cfg.animations?.meteors?.duration ?? [2, 3]);
+    }
+    if (animEnabled('circuitLines')) {
+        createCircuitLines(
+            cfg.animations?.circuitLines?.horizontal ?? 10,
+            cfg.animations?.circuitLines?.vertical ?? 8,
+            cfg.animations?.circuitLines?.duration ?? 6
+        );
     }
 
     // Initialiser le logo DVD

@@ -153,7 +153,7 @@ class TwitchOverlayServer {
                                 </a>
                                 <a href="/scene-editor" class="link-card">
                                     <h3>Éditeur de scène</h3>
-                                    <p>Positionner le chat, les panneaux, les alertes...</p>
+                                    <p>Positionner les éléments, créer des scènes...</p>
                                 </a>
                                 <a href="/logs" class="link-card">
                                     <h3>Logs</h3>
