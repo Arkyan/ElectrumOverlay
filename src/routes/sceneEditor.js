@@ -791,7 +791,7 @@ const SCENE_EDITOR_HTML = ({ activeId, themes, pause, scenes, animDefaults }) =>
                     note += '<p class="hint">Le cadre définit où les alertes peuvent apparaître : chaque alerte s\\'affiche au plus grand format qui y tient, média (image/GIF) en entier. Teste le rendu avec la barre "Aperçu" en haut.</p>';
                 }
                 if (item.customType === 'spotify') {
-                    note += '<p class="hint">Affiche le morceau en cours de lecture sur le compte Spotify connecté — configure la connexion depuis la page <a href="/spotify" target="_blank">Spotify</a>.</p>';
+                    note += '<p class="hint">Affiche le morceau en cours de lecture sur le compte Spotify connecté — configure la connexion depuis la page <a href="/integrations" target="_blank">Intégrations</a>.</p>';
                 }
             } else {
                 const theme = THEMES[currentKey] || {};

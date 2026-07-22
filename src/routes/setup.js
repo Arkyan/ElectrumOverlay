@@ -60,7 +60,7 @@ async function restartApp(stopServer) {
 }
 
 /**
- * Routes de configuration (identifiants Twitch, autorisation, branding/ngrok/Trucky).
+ * Routes de configuration (identifiants Twitch, autorisation, branding/ngrok).
  * Les 3 sections sont indépendantes : on peut revenir en modifier une seule sans redonner les
  * autres, qu'elles aient déjà été renseignées ou non.
  * `stopServer` : callback async pour fermer proprement le serveur avant un redémarrage.
@@ -108,13 +108,14 @@ function createSetupRoutes(auth, stopServer) {
         });
     });
 
-    // Branding + intégrations optionnelles, puis redémarrage (ngrok/Trucky ne se reconfigurent
-    // qu'au démarrage du process, contrairement aux réglages purement visuels de /settings).
+    // Branding + ngrok, puis redémarrage (ngrok ne se reconfigure qu'au démarrage du process,
+    // contrairement aux réglages purement visuels de /settings). Les intégrations tierces
+    // optionnelles (Spotify, Trucky) vivent sur /integrations — pas de restart nécessaire là-bas,
+    // leurs services relisent la config à chaque appel.
     router.post('/api/setup/finish', (req, res) => {
         const {
             infoLine1, infoLine2, infoLine3, scrollingText, accentColor,
-            ngrokEnabled, ngrokAuthtoken,
-            truckyEnabled, truckyUserId
+            ngrokEnabled, ngrokAuthtoken
         } = req.body || {};
 
         if (!auth.isAuthenticated()) {
@@ -138,7 +139,6 @@ function createSetupRoutes(auth, stopServer) {
                 // Laisser vide = garder l'authtoken déjà enregistré (jamais réaffiché en clair).
                 ...(ngrokAuthtoken ? { AUTHTOKEN: ngrokAuthtoken.trim() } : {})
             },
-            trucky: { enable: Boolean(truckyEnabled), USER_ID: (truckyUserId || '').trim() },
             display: {
                 panels: {
                     bottom: {
@@ -222,7 +222,7 @@ const SETUP_PAGE_HTML = (config) => {
         </section>
 
         <section class="card" id="step3">
-            <h2 class="card-title">Branding et intégrations</h2>
+            <h2 class="card-title">Branding et ngrok</h2>
             <div class="field">
                 <label for="accentColor">Couleur principale de l'overlay</label>
                 <input type="color" id="accentColor" value="${esc(accentDefault)}">
@@ -253,17 +253,8 @@ const SETUP_PAGE_HTML = (config) => {
                 </div>
             </div>
 
-            <div class="sub-block">
-                <label class="checkbox-row"><input type="checkbox" id="truckyEnabled" ${config.trucky.enable ? 'checked' : ''}> Activer les statistiques Trucky (ETS2/ATS)</label>
-                <div class="hint">Nécessite Google Chrome ou Microsoft Edge installé sur cette machine.</div>
-                <div class="field" style="margin-top:var(--space-3);margin-bottom:0;">
-                    <label for="truckyUserId">ID utilisateur Trucky</label>
-                    <input type="text" id="truckyUserId" value="${esc(config.trucky.USER_ID || '')}">
-                </div>
-            </div>
-
             <button type="button" class="btn btn-primary" id="btnFinish">Enregistrer</button>
-            <div class="hint">Le serveur redémarre après cette sauvegarde (ngrok/Trucky ne se reconfigurent qu'au lancement).</div>
+            <div class="hint">Le serveur redémarre après cette sauvegarde (ngrok ne se reconfigure qu'au lancement). Spotify et Trucky se configurent séparément depuis <a href="/integrations">Intégrations</a>, sans redémarrage.</div>
             <div class="msg" id="msg3" role="status"></div>
         </section>
     </div>
@@ -341,9 +332,7 @@ const SETUP_PAGE_HTML = (config) => {
                 scrollingText: document.getElementById('scrollingText').value.trim(),
                 accentColor: document.getElementById('accentColor').value,
                 ngrokEnabled: document.getElementById('ngrokEnabled').checked,
-                ngrokAuthtoken: document.getElementById('ngrokAuthtoken').value.trim(),
-                truckyEnabled: document.getElementById('truckyEnabled').checked,
-                truckyUserId: document.getElementById('truckyUserId').value.trim()
+                ngrokAuthtoken: document.getElementById('ngrokAuthtoken').value.trim()
             };
             const res = await fetch('/api/setup/finish', {
                 method: 'POST',

@@ -14,7 +14,7 @@ const createProfilesRoutes = require('./src/routes/profiles');
 const createLogsRoutes = require('./src/routes/logs');
 const createTestToolsRoutes = require('./src/routes/testtools');
 const createSceneEditorRoutes = require('./src/routes/sceneEditor');
-const createSpotifyRoutes = require('./src/routes/spotify');
+const createIntegrationsRoutes = require('./src/routes/integrations');
 const LogBuffer = require('./src/services/LogBuffer');
 
 // Deux morceaux sont "les mêmes" pour décider s'il faut redéfusser 'spotify-track-updated' — on
@@ -126,9 +126,9 @@ class TwitchOverlayServer {
         const sceneEditorRoutes = createSceneEditorRoutes();
         this.app.use('/', sceneEditorRoutes);
 
-        // Intégration Spotify (morceau en cours de lecture, utilisable comme élément de scène)
-        const spotifyRoutes = createSpotifyRoutes(this.spotifyAuth);
-        this.app.use('/', spotifyRoutes);
+        // Intégrations tierces optionnelles (Spotify, Trucky)
+        const integrationsRoutes = createIntegrationsRoutes(this.spotifyAuth);
+        this.app.use('/', integrationsRoutes);
 
         // Panneau d'administration (accueil de la fenêtre Electron) — volontairement séparé de
         // `/`, qui doit toujours rester l'overlay pour les sources navigateur OBS.
@@ -171,9 +171,9 @@ class TwitchOverlayServer {
                                     <h3>Éditeur de scène</h3>
                                     <p>Positionner les éléments, créer des scènes...</p>
                                 </a>
-                                <a href="/spotify" class="link-card">
-                                    <h3>Spotify</h3>
-                                    <p>Afficher le morceau en cours de lecture</p>
+                                <a href="/integrations" class="link-card">
+                                    <h3>Intégrations</h3>
+                                    <p>Spotify, Trucky...</p>
                                 </a>
                                 <a href="/logs" class="link-card">
                                     <h3>Logs</h3>
@@ -495,7 +495,7 @@ class TwitchOverlayServer {
      * de quota Spotify. Ne diffuse un 'spotify-track-updated' QUE si le morceau a réellement
      * changé (voir sameSpotifyTrack) — sinon chaque poll spammerait inutilement tous les overlays
      * ouverts, y compris ceux sans widget Spotify. Ne tourne que si l'utilisateur a connecté son
-     * compte (voir /spotify) ; sans ça, ensureValidToken() lèverait à chaque appel pour rien.
+     * compte (voir /integrations) ; sans ça, ensureValidToken() lèverait à chaque appel pour rien.
      */
     startSpotifyPolling() {
         const poll = async () => {
