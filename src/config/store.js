@@ -287,6 +287,95 @@ function deleteProfile(id) {
     fs.rmSync(profileMediaDir(id), { recursive: true, force: true });
 }
 
+// ============================================================================
+// Commandes de chat personnalisées (voir src/services/CommandManager.js). Section globale
+// simple (pas liée à un profil) : `config.commands` est un tableau remplacé en bloc à chaque
+// saveConfig (deepMergeInPlace ne fusionne pas les tableaux élément par élément), donc chaque
+// fonction ci-dessous relit puis réécrit le tableau complet.
+// ============================================================================
+
+const COMMAND_PERMISSIONS = ['everyone', 'vip', 'moderator', 'broadcaster'];
+
+function normalizeTrigger(trigger) {
+    const value = String(trigger || '').trim().toLowerCase();
+    if (!/^![^\s]+$/.test(value)) {
+        throw new Error('Le déclencheur doit commencer par "!" et ne pas contenir d\'espace');
+    }
+    return value;
+}
+
+function listCommands() {
+    return config.commands || [];
+}
+
+function createCommand(data) {
+    const trigger = normalizeTrigger(data.trigger);
+    if (listCommands().some(c => c.trigger === trigger)) {
+        throw new Error(`Une commande ${trigger} existe déjà`);
+    }
+    const now = new Date().toISOString();
+    const command = {
+        id: crypto.randomUUID(),
+        trigger,
+        enabled: data.enabled !== false,
+        permission: COMMAND_PERMISSIONS.includes(data.permission) ? data.permission : 'everyone',
+        cooldownSeconds: Number.isFinite(Number(data.cooldownSeconds)) ? Math.max(0, Number(data.cooldownSeconds)) : 5,
+        chatReply: {
+            enabled: Boolean(data.chatReply?.enabled),
+            message: String(data.chatReply?.message || '').trim()
+        },
+        overlayAction: {
+            enabled: Boolean(data.overlayAction?.enabled),
+            panel: data.overlayAction?.panel === 'bottom' ? 'bottom' : 'left'
+        },
+        createdAt: now,
+        updatedAt: now
+    };
+    const commands = [...listCommands(), command];
+    saveConfig({ commands });
+    return command;
+}
+
+function updateCommand(id, patch) {
+    const commands = listCommands();
+    const existing = commands.find(c => c.id === id);
+    if (!existing) {
+        throw new Error('Commande introuvable');
+    }
+    const trigger = patch.trigger !== undefined ? normalizeTrigger(patch.trigger) : existing.trigger;
+    if (commands.some(c => c.id !== id && c.trigger === trigger)) {
+        throw new Error(`Une commande ${trigger} existe déjà`);
+    }
+    const updated = {
+        ...existing,
+        trigger,
+        enabled: patch.enabled !== undefined ? Boolean(patch.enabled) : existing.enabled,
+        permission: COMMAND_PERMISSIONS.includes(patch.permission) ? patch.permission : existing.permission,
+        cooldownSeconds: patch.cooldownSeconds !== undefined && Number.isFinite(Number(patch.cooldownSeconds))
+            ? Math.max(0, Number(patch.cooldownSeconds))
+            : existing.cooldownSeconds,
+        chatReply: patch.chatReply !== undefined ? {
+            enabled: Boolean(patch.chatReply?.enabled),
+            message: String(patch.chatReply?.message || '').trim()
+        } : existing.chatReply,
+        overlayAction: patch.overlayAction !== undefined ? {
+            enabled: Boolean(patch.overlayAction?.enabled),
+            panel: patch.overlayAction?.panel === 'bottom' ? 'bottom' : 'left'
+        } : existing.overlayAction,
+        updatedAt: new Date().toISOString()
+    };
+    saveConfig({ commands: commands.map(c => c.id === id ? updated : c) });
+    return updated;
+}
+
+function deleteCommand(id) {
+    const commands = listCommands();
+    if (!commands.some(c => c.id === id)) {
+        throw new Error('Commande introuvable');
+    }
+    saveConfig({ commands: commands.filter(c => c.id !== id) });
+}
+
 function setActiveProfile(id) {
     if (!listProfileIds().includes(id)) {
         throw new Error('Profil introuvable');
@@ -844,3 +933,8 @@ module.exports.deleteProfileMedia = deleteProfileMedia;
 module.exports.getProfileMediaFilePath = getProfileMediaFilePath;
 module.exports.readProfileMediaBuffer = readProfileMediaBuffer;
 module.exports.importProfile = importProfile;
+module.exports.COMMAND_PERMISSIONS = COMMAND_PERMISSIONS;
+module.exports.listCommands = listCommands;
+module.exports.createCommand = createCommand;
+module.exports.updateCommand = updateCommand;
+module.exports.deleteCommand = deleteCommand;

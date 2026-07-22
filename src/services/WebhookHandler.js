@@ -5,9 +5,10 @@ const config = require('../config/store');
  * Classe pour gérer les webhooks EventSub
  */
 class WebhookHandler {
-    constructor(streamStats, broadcastFunction = null) {
+    constructor(streamStats, broadcastFunction = null, commandManager = null) {
         this.streamStats = streamStats;
         this.broadcastEvent = broadcastFunction;
+        this.commandManager = commandManager;
         this.webhookSecret = config.twitch.WEBHOOK_SECRET;
 
         // Headers des notifications
@@ -26,6 +27,12 @@ class WebhookHandler {
         };
 
         this.HMAC_PREFIX = 'sha256=';
+
+        // Twitch garantit une livraison "au moins une fois" : la même notification peut être
+        // renvoyée (timeout réseau, etc.). Sans déduplication par Message-Id, un stream.online
+        // en double au milieu d'un stream réinitialiserait les stats (follows/subs/messages) en
+        // pleine diffusion. Set borné pour ne pas grossir indéfiniment sur un stream de plusieurs heures.
+        this.processedMessageIds = new Set();
     }
 
     /**
@@ -92,7 +99,6 @@ class WebhookHandler {
             category_name: event.category_name,
             game_name: event.game_name
         });
-        this.streamStats.reset();
 
         // Diffuser l'événement via WebSocket
         if (this.broadcastEvent) {
@@ -237,13 +243,24 @@ class WebhookHandler {
                 message: event.message.text,
                 color: event.color || '#ffffff',
                 badges: badgesFormatted,
-                emotes: event.message.emotes || [],
+                // Twitch renvoie le texte et les emotes entremêlés dans message.fragments (pas
+                // dans un champ message.emotes séparé) — inclut aussi les emotes sub d'une autre
+                // chaîne que le chatter a le droit d'utiliser, résolues côté Twitch.
+                fragments: event.message.fragments || [],
                 timestamp: new Date().toISOString(),
                 userId: event.chatter_user_id,
                 displayName: event.chatter_user_name
             };
 
             this.broadcastEvent(messageData);
+        }
+
+        // Commandes personnalisées (!discord...) — fire-and-forget, ne doit jamais retarder ni
+        // faire échouer la réponse au webhook.
+        if (this.commandManager) {
+            this.commandManager.handleMessage(event).catch(error => {
+                console.error('❌ Erreur CommandManager:', error.message);
+            });
         }
     }
 
@@ -300,10 +317,23 @@ class WebhookHandler {
             const messageType = req.headers[this.headers.MESSAGE_TYPE];
 
             switch (messageType) {
-                case this.messageTypes.NOTIFICATION:
+                case this.messageTypes.NOTIFICATION: {
+                    const messageId = req.headers[this.headers.MESSAGE_ID];
+                    if (messageId && this.processedMessageIds.has(messageId)) {
+                        console.log(`⏭️  Notification déjà traitée (doublon Twitch), ignorée: ${messageId}`);
+                        res.sendStatus(204);
+                        break;
+                    }
+                    if (messageId) {
+                        this.processedMessageIds.add(messageId);
+                        if (this.processedMessageIds.size > 1000) {
+                            this.processedMessageIds.delete(this.processedMessageIds.values().next().value);
+                        }
+                    }
                     this.routeEvent(notification.subscription.type, notification.event);
                     res.sendStatus(204);
                     break;
+                }
 
                 case this.messageTypes.VERIFICATION:
                     console.log('🔐 Vérification webhook');

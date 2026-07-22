@@ -15,7 +15,9 @@ const createLogsRoutes = require('./src/routes/logs');
 const createTestToolsRoutes = require('./src/routes/testtools');
 const createSceneEditorRoutes = require('./src/routes/sceneEditor');
 const createIntegrationsRoutes = require('./src/routes/integrations');
+const createCommandsRoutes = require('./src/routes/commands');
 const LogBuffer = require('./src/services/LogBuffer');
+const CommandManager = require('./src/services/CommandManager');
 
 // Deux morceaux sont "les mêmes" pour décider s'il faut redéfusser 'spotify-track-updated' — on
 // ignore volontairement progressMs (change à chaque poll même pour un morceau inchangé, ce qui
@@ -43,7 +45,8 @@ class TwitchOverlayServer {
         this.spotifyAuth = new SpotifyAuth();
         this.streamStats = new StreamStatsManager();
         this.eventSubManager = new EventSubManager(this.auth);
-        this.webhookHandler = new WebhookHandler(this.streamStats, this.broadcastEvent.bind(this));
+        this.commandManager = new CommandManager(this.auth, this.broadcastEvent.bind(this));
+        this.webhookHandler = new WebhookHandler(this.streamStats, this.broadcastEvent.bind(this), this.commandManager);
 
         this.isRunning = false;
 
@@ -56,6 +59,16 @@ class TwitchOverlayServer {
      * Configuration des middlewares
      */
     setupMiddleware() {
+        // Doit être enregistré AVANT express.json() plus bas : Express n'applique qu'un seul
+        // body-parser par requête (le premier à s'exécuter "gagne", les suivants deviennent des
+        // no-op), donc si express.json() tournait en premier ici, WebhookHandler recevrait un
+        // req.body déjà désérialisé et devrait le re-sérialiser pour calculer le HMAC — ce qui ne
+        // reproduit pas forcément les octets bruts envoyés par Twitch (échec de vérification de
+        // signature intermittent selon le contenu du payload, pas systématique).
+        this.app.post('/eventsub', express.raw({ type: 'application/json' }), (req, res) => {
+            this.webhookHandler.handleWebhook(req, res);
+        });
+
         // Tant que l'assistant n'est pas terminé, rediriger toute page (overlays inclus, servis
         // statiquement plus bas et qui court-circuiteraient sinon ce contrôle) vers /setup.
         const SETUP_ALLOWED_PREFIXES = [
@@ -92,11 +105,6 @@ class TwitchOverlayServer {
     /**
      * Configuration des routes
      */    setupRoutes() {
-        // Route principale pour les webhooks EventSub
-        this.app.post('/eventsub', express.raw({ type: 'application/json' }), (req, res) => {
-            this.webhookHandler.handleWebhook(req, res);
-        });
-
         // Routes API. this.ngrokManager change à chaque start()/stop() : on passe un accesseur
         // plutôt que la valeur (capturée une seule fois ici, à la construction).
         const apiRoutes = createRoutes(this.eventSubManager, this.streamStats, this.auth, () => this.ngrokManager);
@@ -129,6 +137,10 @@ class TwitchOverlayServer {
         // Intégrations tierces optionnelles (Spotify, Trucky)
         const integrationsRoutes = createIntegrationsRoutes(this.spotifyAuth);
         this.app.use('/', integrationsRoutes);
+
+        // Commandes de chat personnalisées (réponse chat et/ou action overlay)
+        const commandsRoutes = createCommandsRoutes(this.commandManager);
+        this.app.use('/', commandsRoutes);
 
         // Panneau d'administration (accueil de la fenêtre Electron) — volontairement séparé de
         // `/`, qui doit toujours rester l'overlay pour les sources navigateur OBS.
@@ -174,6 +186,10 @@ class TwitchOverlayServer {
                                 <a href="/integrations" class="link-card">
                                     <h3>Intégrations</h3>
                                     <p>Spotify, Trucky...</p>
+                                </a>
+                                <a href="/commands" class="link-card">
+                                    <h3>Commandes</h3>
+                                    <p>Commandes de chat personnalisées (!discord...)</p>
                                 </a>
                                 <a href="/logs" class="link-card">
                                     <h3>Logs</h3>

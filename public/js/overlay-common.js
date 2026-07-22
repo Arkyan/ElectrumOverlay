@@ -599,7 +599,13 @@ function applySpotifyTrackTo(el, track) {
     const title = el.querySelector('[data-spotify-title]');
     const artist = el.querySelector('[data-spotify-artist]');
     if (!art || !title || !artist) return;
-    if (track) {
+
+    // N'affiche le widget QUE si une musique joue réellement (pas en pause, pas à l'arrêt) —
+    // display:none en usage normal ; forcé visible en mode édition (voir le CSS
+    // [data-custom-type="spotify"] injecté par scene-editor-bridge.js) pour rester positionnable
+    // même quand rien ne joue, fillWidgetPreview() y affichant alors un exemple à la place.
+    if (track && track.isPlaying) {
+        el.style.display = '';
         title.textContent = track.title;
         artist.textContent = track.artist;
         if (track.albumArt) {
@@ -612,13 +618,12 @@ function applySpotifyTrackTo(el, track) {
             art.removeAttribute('src');
             art.style.display = 'none';
         }
-        el.classList.toggle('is-paused', !track.isPlaying);
     } else {
+        el.style.display = 'none';
         title.textContent = 'Spotify';
         artist.textContent = 'Rien en cours de lecture';
         art.removeAttribute('src');
         art.style.display = 'none';
-        el.classList.remove('is-paused');
     }
 }
 
@@ -882,7 +887,27 @@ function escapeHtml(text) {
     return div.innerHTML;
 }
 
-function addChatMessage(username, message, color, badgeUrls) {
+/**
+ * Rend le texte d'un message en résolvant les fragments "emote" en images (CDN Twitch — inclut
+ * les emotes de chaîne/sub/globaux, y compris les emotes sub d'une autre chaîne que le chatter a
+ * le droit d'utiliser : Twitch les résout déjà côté serveur dans message.fragments). Retombe sur
+ * le texte brut échappé si fragments est absent/vide (ex: anciens messages, message de test sans
+ * fragments) — comportement identique à avant pour ce cas.
+ */
+function renderChatMessageHTML(message, fragments) {
+    if (!Array.isArray(fragments) || fragments.length === 0) {
+        return escapeHtml(message || '');
+    }
+    return fragments.map((fragment) => {
+        if (fragment.type === 'emote' && fragment.emote?.id) {
+            const src = `https://static-cdn.jtvnw.net/emoticons/v2/${fragment.emote.id}/default/dark/1.0`;
+            return `<img src="${src}" alt="${escapeHtml(fragment.text || '')}" title="${escapeHtml(fragment.text || '')}" class="chat-emote">`;
+        }
+        return escapeHtml(fragment.text || '');
+    }).join('');
+}
+
+function addChatMessage(username, message, color, badgeUrls, fragments) {
     const cfg = getOverlayConfig();
     const container = document.getElementById('chatContainer');
     if (!container) return;
@@ -894,7 +919,7 @@ function addChatMessage(username, message, color, badgeUrls) {
             ${badgeUrls ? Object.entries(badgeUrls).map(([key, url]) => `<img src="${url}" alt="${key} badge" class="chat-badge">`).join('') : ''}
             ${escapeHtml(username || 'Anonymous')}
         </div>
-        <div class="chat-text">${escapeHtml(message || '')}</div>
+        <div class="chat-text">${renderChatMessageHTML(message, fragments)}</div>
     `;
     container.appendChild(messageElement);
     if (cfg.chat?.scrollBehavior === 'smooth') {
@@ -1010,7 +1035,7 @@ function initWebSocket() {
                     }
                 }
 
-                addChatMessage(data.username, data.message, data.color, badgeUrls);
+                addChatMessage(data.username, data.message, data.color, badgeUrls, data.fragments);
             }
         }
         else if (data.type === 'channel.raid') {

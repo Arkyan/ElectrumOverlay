@@ -173,6 +173,36 @@ class TwitchAuth {
     isAuthenticated() {
         return !!(this.userAccessToken);
     }
+
+    /**
+     * Envoyer un message dans le chat (pour les réponses de commandes personnalisées — voir
+     * CommandManager). Nécessite le scope user:write:chat sur le token utilisateur ; sender_id
+     * est le broadcaster lui-même (pas de compte bot séparé).
+     */
+    async sendChatMessage(message) {
+        try {
+            const response = await axios.post('https://api.twitch.tv/helix/chat/messages', {
+                broadcaster_id: config.twitch.BROADCASTER_ID,
+                sender_id: config.twitch.BROADCASTER_ID,
+                message
+            }, {
+                headers: {
+                    'Authorization': `Bearer ${this.userAccessToken}`,
+                    'Client-Id': config.twitch.CLIENT_ID,
+                    'Content-Type': 'application/json'
+                }
+            });
+
+            const result = response.data.data[0];
+            if (!result.is_sent) {
+                console.warn(`⚠️  Message chat refusé par Twitch: ${result.drop_reason?.message || 'raison inconnue'}`);
+            }
+            return result;
+        } catch (error) {
+            console.error('❌ Erreur lors de l\'envoi du message de chat:', error.response?.data || error.message);
+            throw error;
+        }
+    }
 }
 
 module.exports = TwitchAuth;

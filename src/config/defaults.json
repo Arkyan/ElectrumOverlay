@@ -20,13 +20,15 @@
             "channel:read:subscriptions",
             "moderator:read:followers",
             "chat:read",
-            "chat:edit"
+            "chat:edit",
+            "user:write:chat"
         ]
     },
     "trucky": {
         "enable": false,
         "USER_ID": ""
     },
+    "commands": [],
     "spotify": {
         "CLIENT_ID": "",
         "CLIENT_SECRET": "",

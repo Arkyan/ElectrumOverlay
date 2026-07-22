@@ -44,13 +44,21 @@ const TEST_ACTIONS = {
     chat: () => ['channel.chat.message', {
         ...fakeBroadcaster(),
         chatter_user_id: '1', chatter_user_login: 'test_viewer', chatter_user_name: 'TestViewer',
-        message: { text: 'Ceci est un message de test dans le chat !', emotes: [] },
+        // Un fragment "emote" (Kappa, un emote global Twitch) en plus du texte — pratique pour
+        // vérifier le rendu des emotes dans le chat sans attendre un vrai message qui en contient.
+        message: {
+            text: 'Ceci est un message de test dans le chat ! Kappa',
+            fragments: [
+                { type: 'text', text: 'Ceci est un message de test dans le chat ! ' },
+                { type: 'emote', text: 'Kappa', emote: { id: '25' } }
+            ]
+        },
         color: '#9146FF', badges: []
     }],
     info: () => ['channel.chat.message', {
         ...fakeBroadcaster(),
         chatter_user_id: '1', chatter_user_login: 'test_viewer', chatter_user_name: 'TestViewer',
-        message: { text: '!info', emotes: [] },
+        message: { text: '!info', fragments: [{ type: 'text', text: '!info' }] },
         color: '#9146FF', badges: []
     }],
     streamOnline: () => ['stream.online', {

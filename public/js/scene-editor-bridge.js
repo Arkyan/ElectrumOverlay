@@ -91,6 +91,10 @@
                le cadre doit rester visible en permanence. Conséquence assumée : les alertes
                d'aperçu n'ont pas de fondu entrée/sortie ici (leurs mouvements restent). */
             [data-scene-alert-zone] { display: flex !important; opacity: 1 !important; background: rgba(244, 114, 182, 0.07); }
+            /* Widget Spotify : masqué en usage normal tant qu'aucune musique ne joue réellement
+               (voir applySpotifyTrackTo dans overlay-common.js) — en édition il doit rester
+               visible/positionnable même à l'arrêt, fillWidgetPreview() y affiche alors un exemple. */
+            [data-custom-type="spotify"] { display: flex !important; }
             [data-scene-alert-zone]:not(.show) .alert-box { display: none !important; }
             [data-scene-alert-zone]:not(.show)::after {
                 content: "Zone d'alerte — l'alerte s'y ajuste au plus grand";
