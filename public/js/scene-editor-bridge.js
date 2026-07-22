@@ -44,7 +44,8 @@
         box: 'Boîte',
         clock: 'Horloge',
         chat: 'Chat',
-        alerts: 'Alertes'
+        alerts: 'Alertes',
+        spotify: 'Spotify'
     };
 
     function customLabel(el) {
@@ -582,6 +583,25 @@
                     ['Viewer3', 'Exemple de message du chat']
                 ].map(([name, msg]) => '<div class="chat-message"><div class="chat-username">' + name
                     + '</div><div class="chat-text">' + msg + '</div></div>').join('');
+            }
+        }
+        if (el.dataset.customType === 'spotify') {
+            // Si rien ne joue réellement (widget resté sur son état par défaut "Spotify" / "Rien
+            // en cours de lecture"), affiche un exemple pour visualiser la mise en page — sans
+            // toucher au widget si un vrai morceau est déjà affiché (fetchInitialSpotifyTrack ou
+            // le WebSocket ont pu le peupler avant ce passage).
+            const titleEl = el.querySelector('[data-spotify-title]');
+            if (titleEl && titleEl.textContent === 'Spotify') {
+                titleEl.textContent = 'Titre du morceau';
+                const artistEl = el.querySelector('[data-spotify-artist]');
+                if (artistEl) artistEl.textContent = 'Nom de l\'artiste';
+                const artEl = el.querySelector('[data-spotify-art]');
+                if (artEl) {
+                    // 'block', pas '' : .spotify-art a display:none par défaut en CSS — un style
+                    // inline vidé retomberait dessus, laissant le dégradé de substitution invisible.
+                    artEl.style.display = 'block';
+                    artEl.style.background = 'linear-gradient(135deg, #1db954, #191414)';
+                }
             }
         }
     }

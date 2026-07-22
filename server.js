@@ -3,6 +3,7 @@ const path = require('path');
 const WebSocket = require('ws');
 const config = require('./src/config/store');
 const TwitchAuth = require('./src/services/TwitchAuth');
+const SpotifyAuth = require('./src/services/SpotifyAuth');
 const EventSubManager = require('./src/services/EventSubManager');
 const StreamStatsManager = require('./src/services/StreamStatsManager');
 const WebhookHandler = require('./src/services/WebhookHandler');
@@ -13,7 +14,17 @@ const createProfilesRoutes = require('./src/routes/profiles');
 const createLogsRoutes = require('./src/routes/logs');
 const createTestToolsRoutes = require('./src/routes/testtools');
 const createSceneEditorRoutes = require('./src/routes/sceneEditor');
+const createSpotifyRoutes = require('./src/routes/spotify');
 const LogBuffer = require('./src/services/LogBuffer');
+
+// Deux morceaux sont "les mêmes" pour décider s'il faut redéfusser 'spotify-track-updated' — on
+// ignore volontairement progressMs (change à chaque poll même pour un morceau inchangé, ce qui
+// spammerait une mise à jour de l'overlay toutes les 5s pour rien).
+function sameSpotifyTrack(a, b) {
+    if (!a && !b) return true;
+    if (!a || !b) return false;
+    return a.title === b.title && a.artist === b.artist && a.isPlaying === b.isPlaying;
+}
 
 /**
  * Classe principale de l'application
@@ -29,6 +40,7 @@ class TwitchOverlayServer {
 
         // Initialisation des services
         this.auth = new TwitchAuth();
+        this.spotifyAuth = new SpotifyAuth();
         this.streamStats = new StreamStatsManager();
         this.eventSubManager = new EventSubManager(this.auth);
         this.webhookHandler = new WebhookHandler(this.streamStats, this.broadcastEvent.bind(this));
@@ -114,6 +126,10 @@ class TwitchOverlayServer {
         const sceneEditorRoutes = createSceneEditorRoutes();
         this.app.use('/', sceneEditorRoutes);
 
+        // Intégration Spotify (morceau en cours de lecture, utilisable comme élément de scène)
+        const spotifyRoutes = createSpotifyRoutes(this.spotifyAuth);
+        this.app.use('/', spotifyRoutes);
+
         // Panneau d'administration (accueil de la fenêtre Electron) — volontairement séparé de
         // `/`, qui doit toujours rester l'overlay pour les sources navigateur OBS.
         this.app.get('/app', (req, res) => {
@@ -154,6 +170,10 @@ class TwitchOverlayServer {
                                 <a href="/scene-editor" class="link-card">
                                     <h3>Éditeur de scène</h3>
                                     <p>Positionner les éléments, créer des scènes...</p>
+                                </a>
+                                <a href="/spotify" class="link-card">
+                                    <h3>Spotify</h3>
+                                    <p>Afficher le morceau en cours de lecture</p>
                                 </a>
                                 <a href="/logs" class="link-card">
                                     <h3>Logs</h3>
@@ -384,6 +404,7 @@ class TwitchOverlayServer {
                 // Heartbeat pour maintenir le processus actif
                 this.startHeartbeat();
                 this.startViewerCountPolling();
+                this.startSpotifyPolling();
 
                 this.isRunning = true;
                 resolve();
@@ -412,6 +433,10 @@ class TwitchOverlayServer {
         if (this.viewerCountInterval) {
             clearInterval(this.viewerCountInterval);
             this.viewerCountInterval = null;
+        }
+        if (this.spotifyInterval) {
+            clearInterval(this.spotifyInterval);
+            this.spotifyInterval = null;
         }
         if (this.wss) {
             await new Promise((resolve) => this.wss.close(resolve));
@@ -461,6 +486,33 @@ class TwitchOverlayServer {
         };
         poll();
         this.viewerCountInterval = setInterval(poll, 60000);
+    }
+
+    /**
+     * Spotify n'a pas de webhook pour "lecture en cours" (contrairement aux events Twitch) —
+     * seul un polling périodique de son API permet de savoir ce qui joue. 5s : assez réactif pour
+     * un overlay (le morceau affiché ne doit pas sembler à la traîne) sans s'approcher des limites
+     * de quota Spotify. Ne diffuse un 'spotify-track-updated' QUE si le morceau a réellement
+     * changé (voir sameSpotifyTrack) — sinon chaque poll spammerait inutilement tous les overlays
+     * ouverts, y compris ceux sans widget Spotify. Ne tourne que si l'utilisateur a connecté son
+     * compte (voir /spotify) ; sans ça, ensureValidToken() lèverait à chaque appel pour rien.
+     */
+    startSpotifyPolling() {
+        const poll = async () => {
+            if (!this.spotifyAuth.isConnected()) return;
+            try {
+                const track = await this.spotifyAuth.getCurrentlyPlaying();
+                if (!sameSpotifyTrack(track, this.spotifyAuth.lastTrack)) {
+                    this.spotifyAuth.lastTrack = track;
+                    this.broadcastEvent({ type: 'spotify-track-updated', track });
+                }
+            } catch (error) {
+                // best-effort : un souci ponctuel de l'API Spotify (quota, token expiré et
+                // refresh en échec...) ne doit jamais interrompre le serveur
+            }
+        };
+        poll();
+        this.spotifyInterval = setInterval(poll, 5000);
     }
 
     /**

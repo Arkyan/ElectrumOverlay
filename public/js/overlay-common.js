@@ -393,11 +393,11 @@ function renderCustomTextsFromConfig() {
         // pointillés via une règle !important — seul un inline important garde la main pour
         // qu'un élément masqué à l'œil reste réellement masqué (et remonté comme tel).
         if (hiddenByLayout) el.style.setProperty('display', 'none', 'important');
-        // Échelle visuelle (chat : son texte interne a des tailles CSS fixes, le zoom est le
-        // seul moyen de tout agrandir d'un bloc) — mêmes règles que les éléments intégrés dans
-        // applyLayoutFromConfig() : valeurs stockées visuelles, styles divisés par le zoom.
+        // Échelle visuelle (chat/spotify : leur contenu interne a des tailles CSS fixes, le zoom
+        // est le seul moyen de tout agrandir d'un bloc) — mêmes règles que les éléments intégrés
+        // dans applyLayoutFromConfig() : valeurs stockées visuelles, styles divisés par le zoom.
         // Pas d'échelle pour les alertes : leur taille découle de la zone (fitAlertBox).
-        const zoom = (type === 'chat' && typeof item.scale === 'number' && item.scale > 0)
+        const zoom = ((type === 'chat' || type === 'spotify') && typeof item.scale === 'number' && item.scale > 0)
             ? item.scale / 100 : 1;
         if (zoom !== 1) el.style.zoom = String(zoom);
         el.style.position = 'fixed';
@@ -508,6 +508,22 @@ function renderCustomTextsFromConfig() {
                 + '</div>'
                 + '</div>';
             el.style.zIndex = '300';
+        } else if (type === 'spotify') {
+            // Morceau Spotify en cours de lecture — pas de singleton (contrairement à chat/alerts,
+            // aucun id DOM partagé n'est nécessaire) : plusieurs widgets peuvent coexister sur une
+            // même scène, tous mis à jour ensemble par applySpotifyTrack() (voir plus bas), appelée
+            // au premier chargement (fetch /api/spotify/now-playing) et à chaque message WebSocket
+            // 'spotify-track-updated'. item.color = couleur d'accent du titre/de la bordure.
+            el.className = 'spotify-widget';
+            el.dataset.colorValue = item.color || '#1db954';
+            el.style.setProperty('--spotify-accent', item.color || '#1db954');
+            if (!el.style.width) el.style.width = '22vw';
+            el.innerHTML = '<img class="spotify-art" data-spotify-art alt="">'
+                + '<div class="spotify-info">'
+                + '<div class="spotify-title" data-spotify-title>Spotify</div>'
+                + '<div class="spotify-artist" data-spotify-artist>Rien en cours de lecture</div>'
+                + '</div>';
+            applySpotifyTrackTo(el, lastSpotifyTrack);
         }
         exposeStyleProps(el, item);
         document.body.appendChild(el);
@@ -567,6 +583,61 @@ function ensureCustomClockTicker() {
             el.textContent = new Date().toLocaleTimeString('fr-FR');
         });
     }, 1000);
+}
+
+/**
+ * Dernier morceau Spotify connu, tenu à jour par le WebSocket ('spotify-track-updated', voir
+ * initWebSocket) et consulté par renderCustomTextsFromConfig() à chaque (re)création d'un widget
+ * (ex: après un config-updated) pour qu'il n'affiche jamais un état "vide" pendant les quelques
+ * secondes qui séparent le rendu du prochain poll serveur. `null` = rien en cours de lecture (état
+ * légitime, pas une absence de données).
+ */
+let lastSpotifyTrack = null;
+
+function applySpotifyTrackTo(el, track) {
+    const art = el.querySelector('[data-spotify-art]');
+    const title = el.querySelector('[data-spotify-title]');
+    const artist = el.querySelector('[data-spotify-artist]');
+    if (!art || !title || !artist) return;
+    if (track) {
+        title.textContent = track.title;
+        artist.textContent = track.artist;
+        if (track.albumArt) {
+            art.src = track.albumArt;
+            // 'block', pas '' : la classe .spotify-art a display:none par défaut (masquée tant
+            // qu'aucune pochette n'est connue) — effacer le style inline ne ferait que retomber
+            // sur cette règle de classe, laissant l'image invisible malgré le src posé.
+            art.style.display = 'block';
+        } else {
+            art.removeAttribute('src');
+            art.style.display = 'none';
+        }
+        el.classList.toggle('is-paused', !track.isPlaying);
+    } else {
+        title.textContent = 'Spotify';
+        artist.textContent = 'Rien en cours de lecture';
+        art.removeAttribute('src');
+        art.style.display = 'none';
+        el.classList.remove('is-paused');
+    }
+}
+
+/** Met à jour TOUS les widgets Spotify de la page (il n'y a pas de singleton, voir store.js). */
+function applySpotifyTrack(track) {
+    lastSpotifyTrack = track;
+    document.querySelectorAll('.spotify-widget').forEach((el) => applySpotifyTrackTo(el, track));
+}
+
+/** État initial au chargement, avant le premier message WebSocket — best-effort. */
+async function fetchInitialSpotifyTrack() {
+    try {
+        const res = await fetch('/api/spotify/now-playing');
+        const data = await res.json();
+        applySpotifyTrack(data.track || null);
+    } catch (error) {
+        // best-effort : un widget resterait alors sur son état "vide" par défaut jusqu'au
+        // prochain message WebSocket, sans casser le reste de la page.
+    }
 }
 
 function applyBottomBarContentFromConfig() {
@@ -903,6 +974,11 @@ function initWebSocket() {
             return;
         }
 
+        if (data.type === 'spotify-track-updated') {
+            applySpotifyTrack(data.track);
+            return;
+        }
+
         if (data.type === 'show-panel') {
             // Déclenchement direct (page /tests, plugin Stream Deck...) — pas de simulation de
             // message de chat. showInfoPanel/showBottomBar sont définis dans index.js (index.html
@@ -1155,6 +1231,13 @@ function initCommonOverlay() {
     captureDefaultTexts(); // avant le premier appel, sinon un texte déjà remplacé serait pris pour le défaut
     applyTextOverridesFromConfig();
     renderCustomTextsFromConfig();
+
+    // État initial d'un éventuel widget Spotify — avant le premier message WebSocket, sans quoi
+    // il resterait affiché "Rien en cours de lecture" jusqu'au prochain changement de morceau
+    // (potentiellement plusieurs minutes). N'appelle l'API que si la page en a réellement un.
+    if (document.querySelector('.spotify-widget')) {
+        fetchInitialSpotifyTrack();
+    }
 
     // Un badge marqué data-scene-scale-text (horloge, indicateur de pause...) contient une icône
     // FontAwesome chargée depuis un CDN externe : si applyLayoutFromConfig() tourne AVANT que cette

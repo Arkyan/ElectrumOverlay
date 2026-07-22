@@ -376,6 +376,7 @@ const SCENE_EDITOR_HTML = ({ activeId, themes, pause, scenes, animDefaults }) =>
                             <button type="button" data-type="clock">◷&nbsp;&nbsp;Horloge</button>
                             <button type="button" data-type="chat">💬&nbsp;&nbsp;Chat Twitch</button>
                             <button type="button" data-type="alerts">🔔&nbsp;&nbsp;Alertes</button>
+                            <button type="button" data-type="spotify">🎵&nbsp;&nbsp;Spotify</button>
                         </div>
                         <button type="button" class="se-icon-btn" id="btnAddElement" title="Ajouter un élément">+</button>
                         <button type="button" class="se-icon-btn" id="btnDeleteElement" title="Supprimer l'élément sélectionné">−</button>
@@ -602,7 +603,7 @@ const SCENE_EDITOR_HTML = ({ activeId, themes, pause, scenes, animDefaults }) =>
         });
 
         // ---------- Sources ----------
-        const TYPE_ICONS = { text: 'T', image: '▨', box: '■', clock: '◷', chat: '💬', alerts: '🔔' };
+        const TYPE_ICONS = { text: 'T', image: '▨', box: '■', clock: '◷', chat: '💬', alerts: '🔔', spotify: '🎵' };
 
         function renderSources() {
             const el = document.getElementById('sourcesList');
@@ -728,7 +729,11 @@ const SCENE_EDITOR_HTML = ({ activeId, themes, pause, scenes, animDefaults }) =>
             ],
             // Zone d'alertes : pas d'échelle — sa taille EST le réglage (l'alerte s'ajuste au
             // plus grand format qui tient dans le cadre).
-            alerts: []
+            alerts: [],
+            spotify: [
+                { prop: 'color', label: "Couleur d'accent", kind: 'color', def: '#1db954' },
+                { prop: 'scale', label: 'Échelle (%)', kind: 'number', def: 100, step: 5, min: 25, max: 400 }
+            ]
         };
 
         // Style par élément INTÉGRÉ : couleurs de thème locales (variables --theme-* posées sur
@@ -784,6 +789,9 @@ const SCENE_EDITOR_HTML = ({ activeId, themes, pause, scenes, animDefaults }) =>
                 }
                 if (item.customType === 'alerts') {
                     note += '<p class="hint">Le cadre définit où les alertes peuvent apparaître : chaque alerte s\\'affiche au plus grand format qui y tient, média (image/GIF) en entier. Teste le rendu avec la barre "Aperçu" en haut.</p>';
+                }
+                if (item.customType === 'spotify') {
+                    note += '<p class="hint">Affiche le morceau en cours de lecture sur le compte Spotify connecté — configure la connexion depuis la page <a href="/spotify" target="_blank">Spotify</a>.</p>';
                 }
             } else {
                 const theme = THEMES[currentKey] || {};

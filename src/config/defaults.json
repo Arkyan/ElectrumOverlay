@@ -27,6 +27,15 @@
         "enable": false,
         "USER_ID": ""
     },
+    "spotify": {
+        "CLIENT_ID": "",
+        "CLIENT_SECRET": "",
+        "REDIRECT_URI": "http://127.0.0.1:8080/api/spotify/callback",
+        "ACCESS_TOKEN": "",
+        "REFRESH_TOKEN": "",
+        "EXPIRES_AT": 0,
+        "SCOPES": ["user-read-currently-playing", "user-read-playback-state"]
+    },
     "ngrok": {
         "ENABLED": true,
         "AUTHTOKEN": ""
