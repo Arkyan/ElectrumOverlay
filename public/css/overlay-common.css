@@ -566,6 +566,16 @@ body {
     gap: 10px;
 }
 
+/* flex-shrink: 0 sur les 3 blocs (clavier, flèches, souris) : leur taille est fixe par nature
+ * (px × zoom). Sans ça, la moindre contrainte de largeur sur .keys-widget les comprimerait au
+ * lieu de simplement déborder — les rangées internes (flex: 0 0) ne se compriment pas, elles,
+ * donc le bloc réduit se faisait recouvrir par le suivant (souris par-dessus le clavier). */
+.keys-main,
+.keys-arrows,
+.keys-mouse {
+    flex-shrink: 0;
+}
+
 .keys-rows {
     display: flex;
     flex-direction: column;

@@ -81,7 +81,17 @@
                transparence par un fond opaque blanc — les pages transparentes (En direct, scènes
                personnalisées) perdaient leur fond noir d'aperçu. Sans effet hors éditeur. */
             :root { color-scheme: dark; }
-            [data-scene-el] { outline: 2px dashed rgba(34, 211, 238, 0.7); cursor: move; touch-action: none; }
+            /* --scene-inv-zoom = 1/zoom, posée par setInverseZoomVar() (overlay-common.js) sur tout
+               élément dont l'échelle applique un CSS zoom. Le zoom multiplie TOUTES les longueurs
+               de l'élément, décorations d'édition comprises : sans compensation, le cadre, son
+               étiquette et les poignées grossissaient avec l'échelle (à 400%, pointillé de 8px et
+               étiquette démesurée). Chaque longueur de ces décorations est donc divisée par le zoom
+               pour garder une taille visuelle constante quelle que soit l'échelle. La valeur de
+               repli 1 couvre les éléments sans échelle (aucune variable posée). */
+            [data-scene-el] {
+                outline: calc(2px * var(--scene-inv-zoom, 1)) dashed rgba(34, 211, 238, 0.7);
+                cursor: move; touch-action: none;
+            }
             /* Zones d'alertes : en édition on montre le CADRE (là où les alertes peuvent
                apparaître), pas une fausse alerte — display:flex force la zone visible malgré son
                display:none de repos (un masquage à l'œil reste prioritaire : il est posé en
@@ -123,9 +133,13 @@
             .overlay { pointer-events: none; }
             [data-scene-el] { pointer-events: auto; }
             .scene-el-label {
-                position: absolute; top: -22px; left: 0;
-                background: #111827; color: #fff; font: 600 11px/1.4 -apple-system, sans-serif;
-                padding: 2px 7px; border-radius: 4px; white-space: nowrap; pointer-events: none;
+                position: absolute; top: calc(-22px * var(--scene-inv-zoom, 1)); left: 0;
+                background: #111827; color: #fff;
+                font-family: -apple-system, sans-serif; font-weight: 600; line-height: 1.4;
+                font-size: calc(11px * var(--scene-inv-zoom, 1));
+                padding: calc(2px * var(--scene-inv-zoom, 1)) calc(7px * var(--scene-inv-zoom, 1));
+                border-radius: calc(4px * var(--scene-inv-zoom, 1));
+                white-space: nowrap; pointer-events: none;
                 z-index: 999999;
             }
             .scene-resize-handle {
@@ -138,14 +152,26 @@
                    de l'élément lui-même). Centrer sur le bord donne un écartement qui ne dépend
                    plus de la taille de la boîte. */
                 position: absolute;
-                width: 14px; height: 14px; border-radius: 3px;
-                background: #22d3ee; border: 2px solid #0b0d12;
+                width: calc(14px * var(--scene-inv-zoom, 1));
+                height: calc(14px * var(--scene-inv-zoom, 1));
+                border-radius: calc(3px * var(--scene-inv-zoom, 1));
+                background: #22d3ee; border: calc(2px * var(--scene-inv-zoom, 1)) solid #0b0d12;
                 z-index: 1000000;
             }
             .scene-resize-handle:hover, .scene-resize-handle.scene-resizing { background: #67e8f9; }
-            .scene-resize-both { right: -9px; bottom: -9px; cursor: nwse-resize; }
-            .scene-resize-x { right: -9px; top: 50%; transform: translateY(-50%); cursor: ew-resize; }
-            .scene-resize-y { bottom: -9px; left: 50%; transform: translateX(-50%); cursor: ns-resize; }
+            .scene-resize-both {
+                right: calc(-9px * var(--scene-inv-zoom, 1));
+                bottom: calc(-9px * var(--scene-inv-zoom, 1));
+                cursor: nwse-resize;
+            }
+            .scene-resize-x {
+                right: calc(-9px * var(--scene-inv-zoom, 1));
+                top: 50%; transform: translateY(-50%); cursor: ew-resize;
+            }
+            .scene-resize-y {
+                bottom: calc(-9px * var(--scene-inv-zoom, 1));
+                left: 50%; transform: translateX(-50%); cursor: ns-resize;
+            }
             /* Repères d'aimantation (centre de l'écran OU bords du cadre — voir setSnapGuides) :
                leur position (left/top) est posée dynamiquement en JS selon la ligne qui accroche
                réellement, ce CSS ne fixe que leur épaisseur/apparence. */
@@ -638,9 +664,15 @@
             if (el.dataset.sceneAlertZone) watchAlertZoneReset(el);
             addLabel(el, customLabel(el));
             makeDraggable(el, id);
-            addResizeHandle(el, id, 'both');
-            addResizeHandle(el, id, 'x');
-            addResizeHandle(el, id, 'y');
+            // Plateau clavier/souris : taille purement intrinsèque (contenu en px fixes × échelle,
+            // voir renderCustomTextsFromConfig) — il n'a donc pas de poignées, l'échelle (%) dans
+            // le panneau de propriétés est son seul réglage de taille. En laisser aurait écrit une
+            // largeur/hauteur désormais ignorée au rendu : redimensionnement sans aucun effet.
+            if (el.dataset.customType !== 'keys') {
+                addResizeHandle(el, id, 'both');
+                addResizeHandle(el, id, 'x');
+                addResizeHandle(el, id, 'y');
+            }
         });
     }
 

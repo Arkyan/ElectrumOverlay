@@ -129,6 +129,22 @@ function applyChatVisibilityFromConfig() {
 }
 
 /**
+ * Expose l'INVERSE du zoom de l'élément en variable CSS, posée partout où `style.zoom` est écrit
+ * (les deux seuls endroits : applyLayoutFromConfig et renderCustomTextsFromConfig) pour qu'elle ne
+ * puisse jamais se désynchroniser. Sans effet en usage normal (OBS, navigateur) : seul le CSS
+ * d'édition de scene-editor-bridge.js la consomme, pour que le cadre pointillé, l'étiquette et les
+ * poignées gardent une taille visuelle CONSTANTE — le zoom multipliant sinon aussi ces décorations
+ * (à 400%, un pointillé de 2px devient 8px et l'étiquette devient illisible de taille).
+ */
+function setInverseZoomVar(el, zoom) {
+    if (zoom && zoom !== 1) {
+        el.style.setProperty('--scene-inv-zoom', String(1 / zoom));
+    } else {
+        el.style.removeProperty('--scene-inv-zoom');
+    }
+}
+
+/**
  * Positions/visibilité custom posées depuis l'éditeur de scène (/scene-editor), par page —
  * cfg.layout[page] = { elementId: {top?, left?, hidden?} } (top/left en % de la hauteur/largeur).
  * Entièrement déclaratif : chaque élément déplaçable est reposé à partir de RIEN d'autre que la
@@ -161,6 +177,7 @@ function applyLayoutFromConfig() {
         const isScaleTextBadge = el.dataset.sceneScaleText !== undefined;
         const zoom = (!isScaleTextBadge && pos && typeof pos.scale === 'number' && pos.scale > 0) ? pos.scale / 100 : 1;
         el.style.zoom = zoom !== 1 ? String(zoom) : '';
+        setInverseZoomVar(el, zoom);
 
         // Couleurs de thème surchargées PAR ÉLÉMENT : les variables --theme-* sont posées
         // localement sur l'élément — tout son CSS (et celui de ses descendants) qui consomme ces
@@ -412,6 +429,7 @@ function renderCustomTextsFromConfig() {
         const zoom = ((type === 'chat' || type === 'spotify' || type === 'keys') && typeof item.scale === 'number' && item.scale > 0)
             ? item.scale / 100 : 1;
         if (zoom !== 1) el.style.zoom = String(zoom);
+        setInverseZoomVar(el, zoom);
         el.style.position = 'fixed';
         // Même bornage [0,100] que les éléments intégrés (applyLayoutFromConfig) : répare les
         // positions hors écran enregistrées par l'ancien bug de drag.
@@ -420,8 +438,19 @@ function renderCustomTextsFromConfig() {
         el.style.zIndex = '250';
         // De vraies dimensions CSS (pas transform:scale, qui déformerait le contenu) : l'élément
         // dispose de plus/moins d'espace et le texte wrappe normalement au lieu d'être étiré.
-        if (typeof item.width === 'number' && item.width > 0) el.style.width = (item.width / zoom) + 'vw';
-        if (typeof item.height === 'number' && item.height > 0) el.style.height = (item.height / zoom) + 'vh';
+        //
+        // Exception 'keys' : sa taille est ENTIÈREMENT intrinsèque (contenu en px fixes × zoom),
+        // l'échelle (%) EST son unique réglage de taille — comme la zone d'alertes dont la taille
+        // est le réglage. Appliquer en plus une largeur/hauteur stockée (en vw/vh, donc constante
+        // quand le zoom, lui, agrandit le contenu) borne le conteneur sans borner ce qu'il
+        // contient : au-delà de ~100% d'échelle le contenu déborde et les blocs flex se
+        // compriment (flex-shrink par défaut), ce qui faisait chevaucher la souris et le clavier.
+        // Les valeurs éventuellement déjà enregistrées par un redimensionnement sont ignorées.
+        const sizeFromContent = (type === 'keys');
+        if (!sizeFromContent) {
+            if (typeof item.width === 'number' && item.width > 0) el.style.width = (item.width / zoom) + 'vw';
+            if (typeof item.height === 'number' && item.height > 0) el.style.height = (item.height / zoom) + 'vh';
+        }
 
         if (type === 'text') {
             el.textContent = item.text || '';
