@@ -486,10 +486,11 @@ function resetProfileText(id, page, textId) {
  * nom de la clé `customTexts`, conservé pour ne pas invalider les profils existants), ils
  * portent depuis un `type` : text (défaut, pour compat), image (URL), box (aplat de couleur),
  * clock (horloge en direct), chat (panneau de chat Twitch en direct), alerts (conteneur
- * d'alertes follow/sub/raid...) ou spotify (morceau en cours de lecture, voir SpotifyAuth) — voir
- * renderCustomTextsFromConfig() dans overlay-common.js.
+ * d'alertes follow/sub/raid...), spotify (morceau en cours de lecture, voir SpotifyAuth) ou keys
+ * (touches clavier/souris pressées, voir electron/inputCapture.js — capture Electron-only, gérée
+ * par le toggle `inputDisplay.enabled`) — voir renderCustomTextsFromConfig() dans overlay-common.js.
  */
-const CUSTOM_ELEMENT_TYPES = ['text', 'image', 'box', 'clock', 'chat', 'alerts', 'spotify'];
+const CUSTOM_ELEMENT_TYPES = ['text', 'image', 'box', 'clock', 'chat', 'alerts', 'spotify', 'keys'];
 
 // Les widgets à id DOM unique (#chatContainer, #alertContainer — cf. addChatMessage()/showAlert()
 // qui les retrouvent par getElementById) ne supportent qu'une instance par page.
@@ -516,6 +517,18 @@ function addProfileCustomText(id, page, { type, text, url, color, top, left }) {
     if (entry.type === 'image') entry.url = typeof url === 'string' ? url : '';
     if (entry.type === 'box') entry.color = typeof color === 'string' ? color : '#a855f7';
     if (entry.type === 'spotify') entry.color = typeof color === 'string' ? color : '#1db954'; // vert Spotify
+    if (entry.type === 'keys') {
+        entry.color = typeof color === 'string' ? color : '#f59e0b'; // ambre
+        // azerty par défaut (app francophone) ; blocs tous visibles par défaut, l'utilisateur
+        // retire ceux dont il n'a pas besoin depuis l'éditeur de scène (voir PROP_SPECS.keys).
+        entry.layout = 'azerty';
+        entry.showFunctionRow = true;
+        entry.showDigitRow = true;
+        entry.showMovement = true;
+        entry.showModifiers = true;
+        entry.showArrows = true;
+        entry.showMouse = true;
+    }
     profile.display.customTexts[page][elementId] = entry;
 
     profile.updatedAt = new Date().toISOString();

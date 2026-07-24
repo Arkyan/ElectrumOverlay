@@ -374,6 +374,18 @@ function renderCustomTextsFromConfig() {
         el.dataset.propRadius = (typeof item.radius === 'number') ? String(item.radius) : '';
         el.dataset.propOpacity = (typeof item.opacity === 'number') ? String(item.opacity) : '';
         el.dataset.propScale = (typeof item.scale === 'number') ? String(item.scale) : '';
+        // Plateau clavier/souris ("keys") : sans ces datasets, l'éditeur de scène ne peut pas
+        // savoir quelle disposition/quels blocs sont réellement enregistrés — reportReady() dans
+        // scene-editor-bridge.js les relit à chaque resynchro (déclenchée par CHAQUE sauvegarde,
+        // y compris la sienne), donc leur absence faisait revenir les cases à "décoché" juste
+        // après les avoir cochées.
+        el.dataset.propLayout = item.layout || '';
+        el.dataset.propShowFunctionRow = item.showFunctionRow === false ? '0' : '1';
+        el.dataset.propShowDigitRow = item.showDigitRow === false ? '0' : '1';
+        el.dataset.propShowMovement = item.showMovement === false ? '0' : '1';
+        el.dataset.propShowModifiers = item.showModifiers === false ? '0' : '1';
+        el.dataset.propShowArrows = item.showArrows === false ? '0' : '1';
+        el.dataset.propShowMouse = item.showMouse === false ? '0' : '1';
     }
 
     for (const [id, item] of Object.entries(customTexts)) {
@@ -393,11 +405,11 @@ function renderCustomTextsFromConfig() {
         // pointillés via une règle !important — seul un inline important garde la main pour
         // qu'un élément masqué à l'œil reste réellement masqué (et remonté comme tel).
         if (hiddenByLayout) el.style.setProperty('display', 'none', 'important');
-        // Échelle visuelle (chat/spotify : leur contenu interne a des tailles CSS fixes, le zoom
-        // est le seul moyen de tout agrandir d'un bloc) — mêmes règles que les éléments intégrés
-        // dans applyLayoutFromConfig() : valeurs stockées visuelles, styles divisés par le zoom.
-        // Pas d'échelle pour les alertes : leur taille découle de la zone (fitAlertBox).
-        const zoom = ((type === 'chat' || type === 'spotify') && typeof item.scale === 'number' && item.scale > 0)
+        // Échelle visuelle (chat/spotify/keys : leur contenu interne a des tailles CSS fixes, le
+        // zoom est le seul moyen de tout agrandir d'un bloc) — mêmes règles que les éléments
+        // intégrés dans applyLayoutFromConfig() : valeurs stockées visuelles, styles divisés par
+        // le zoom. Pas d'échelle pour les alertes : leur taille découle de la zone (fitAlertBox).
+        const zoom = ((type === 'chat' || type === 'spotify' || type === 'keys') && typeof item.scale === 'number' && item.scale > 0)
             ? item.scale / 100 : 1;
         if (zoom !== 1) el.style.zoom = String(zoom);
         el.style.position = 'fixed';
@@ -524,6 +536,45 @@ function renderCustomTextsFromConfig() {
                 + '<div class="spotify-artist" data-spotify-artist>Rien en cours de lecture</div>'
                 + '</div>';
             applySpotifyTrackTo(el, lastSpotifyTrack);
+        } else if (type === 'keys') {
+            // Plateau clavier/souris façon NohBoard (voir electron/inputCapture.js) — pas de
+            // singleton (même logique que spotify) : tous les widgets .keys-widget de la page
+            // reçoivent chaque appui/relâchement via setKeyState() sur le message WebSocket
+            // 'input-key'. Contrairement à Spotify, rien à hydrater au chargement : le plateau est
+            // dessiné une fois, entièrement "relâché", et les cases s'allument/s'éteignent en
+            // direct — aucun état à retrouver après un rechargement de page.
+            el.className = 'keys-widget';
+            el.dataset.colorValue = item.color || '#f59e0b';
+            el.style.setProperty('--keys-accent', item.color || '#f59e0b');
+
+            const blocks = buildKeysBlocks(item.layout === 'qwerty' ? 'qwerty' : 'azerty');
+            const mainRows = [];
+            if (item.showFunctionRow !== false) mainRows.push(...blocks.functionRow);
+            if (item.showDigitRow !== false) mainRows.push(...blocks.digitRow);
+            if (item.showMovement !== false) mainRows.push(...blocks.movement);
+            if (item.showModifiers !== false) mainRows.push(...blocks.modifiers);
+            if (mainRows.length > 0) {
+                const main = buildKeysRows(mainRows);
+                main.classList.add('keys-main');
+                el.appendChild(main);
+            }
+
+            if (item.showArrows !== false) {
+                const arrows = buildKeysRows(KEYS_ARROWS_ROWS);
+                arrows.classList.add('keys-arrows');
+                el.appendChild(arrows);
+            }
+
+            if (item.showMouse !== false) {
+                const mouse = document.createElement('div');
+                mouse.className = 'keys-mouse';
+                mouse.innerHTML = '<div class="mouse-body">'
+                    + '<div class="mouse-btn" data-key-label="Clic gauche"></div>'
+                    + '<div class="mouse-wheel" data-key-label="Clic molette"></div>'
+                    + '<div class="mouse-btn" data-key-label="Clic droit"></div>'
+                    + '</div>';
+                el.appendChild(mouse);
+            }
         }
         exposeStyleProps(el, item);
         document.body.appendChild(el);
@@ -643,6 +694,114 @@ async function fetchInitialSpotifyTrack() {
         // best-effort : un widget resterait alors sur son état "vide" par défaut jusqu'au
         // prochain message WebSocket, sans casser le reste de la page.
     }
+}
+
+// Disposition façon "cluster gaming" (NohBoard) : uniquement les touches de ALLOWED_KEYS côté
+// electron/inputCapture.js, à peu près à leur emplacement physique réel — pas une vraie grille
+// 104 touches (qui serait pleine de trous, ces touches étant les seules jamais transmises, voir
+// le choix de scope pris avec l'utilisateur pour ne jamais exposer de texte tapé ailleurs).
+// Chaque entrée `{ l, u }` = une touche affichée (l = libellé, u = largeur en "unités" de
+// KEYS_UNIT_PX) ; une entrée sans `l` est un espaceur invisible de la même largeur.
+//
+// Groupé en blocs indépendamment masquables depuis l'éditeur de scène (item.showFunctionRow,
+// showDigitRow, showMovement, showModifiers — voir PROP_SPECS.keys dans sceneEditor.js) plutôt
+// qu'un plateau monolithique : les jeux n'utilisent presque jamais toutes ces touches à la fois,
+// et enlever des blocs est le principal levier de compacité (avec KEYS_UNIT_PX ci-dessous).
+//
+// Z/Q/A vs W/A/Q : sur un clavier AZERTY, la touche physiquement "avancer"/"gauche"/"lean gauche"
+// remonte le vkCode de Z/Q/A (jamais W/A/Q) une fois traduite par Windows selon le layout actif —
+// les DEUX touches "lean" (haut-gauche du diamant, à côté d'avancer) et "strafe" (bas-gauche)
+// utilisent en réalité les MÊMES deux vkCodes (A et Q) sur les deux dispositions, juste échangés :
+// QWERTY range "A" sur strafe et "Q" sur lean, AZERTY range "Q" sur strafe et "A" sur lean.
+// electron/inputCapture.js écoute donc TOUJOURS A/Q (+Z/W/E), et c'est uniquement l'affichage ici
+// qui choisit lequel dessiner à quelle position selon item.layout. S/D/E restent identiques sur
+// les deux dispositions (mêmes touches physiques).
+const KEYS_UNIT_PX = 26;
+
+function buildKeysBlocks(layout) {
+    const move = layout === 'qwerty'
+        ? { lean: 'Q', up: 'W', left: 'A' }
+        : { lean: 'A', up: 'Z', left: 'Q' };
+    return {
+        functionRow: [
+            [{ l: 'Échap', u: 1 }, { u: 0.5 },
+                { l: 'F1', u: 1 }, { l: 'F2', u: 1 }, { l: 'F3', u: 1 }, { l: 'F4', u: 1 }, { u: 0.5 },
+                { l: 'F5', u: 1 }, { l: 'F6', u: 1 }, { l: 'F7', u: 1 }, { l: 'F8', u: 1 }, { u: 0.5 },
+                { l: 'F9', u: 1 }, { l: 'F10', u: 1 }, { l: 'F11', u: 1 }, { l: 'F12', u: 1 }]
+        ],
+        digitRow: [
+            [{ l: '1', u: 1 }, { l: '2', u: 1 }, { l: '3', u: 1 }, { l: '4', u: 1 }, { l: '5', u: 1 },
+                { l: '6', u: 1 }, { l: '7', u: 1 }, { l: '8', u: 1 }, { l: '9', u: 1 }, { l: '0', u: 1 }]
+        ],
+        movement: [
+            [{ l: 'Tab', u: 1.5 }, { u: 0.5 }, { l: move.lean, u: 1 }, { l: move.up, u: 1 }, { l: 'E', u: 1 }],
+            [{ u: 2.25 }, { l: move.left, u: 1 }, { l: 'S', u: 1 }, { l: 'D', u: 1 }]
+        ],
+        modifiers: [
+            [{ l: 'Shift', u: 1.75 }, { l: 'Espace', u: 6 }, { l: 'Entrée', u: 1.5 }],
+            [{ l: 'Ctrl', u: 1.25 }, { l: 'Alt', u: 1.25 }]
+        ]
+    };
+}
+
+const KEYS_ARROWS_ROWS = [
+    [{ u: 1 }, { l: '↑', u: 1 }, { u: 1 }],
+    [{ l: '←', u: 1 }, { l: '↓', u: 1 }, { l: '→', u: 1 }]
+];
+
+// Doivent rester synchronisés à la main avec .keys-row/.keys-rows { gap } et .keys-box { height }
+// dans overlay-common.css — utilisés uniquement pour calculer une largeur/hauteur EXPLICITE ci-
+// dessous (voir buildKeysRows).
+const KEYS_ROW_GAP_PX = 3;
+const KEYS_BOX_HEIGHT_PX = 24;
+
+function rowWidthPx(row) {
+    return row.reduce((sum, k) => sum + k.u * KEYS_UNIT_PX, 0) + Math.max(0, row.length - 1) * KEYS_ROW_GAP_PX;
+}
+
+/** Construit un bloc de lignes de touches (plateau principal ou pavé flèches) à partir d'une
+ * disposition (blocs choisis de buildKeysBlocks(), ou KEYS_ARROWS_ROWS) — chaque touche porte
+ * data-key-label, utilisé par setKeyState() pour retrouver la bonne case à allumer/éteindre.
+ *
+ * Largeur/hauteur posées EXPLICITEMENT (pas laissées en "auto") : .keys-rows est un conteneur flex
+ * en colonne dont les enfants (.keys-row) sont eux-mêmes des conteneurs flex en ligne à largeur
+ * fixe — ce niveau d'imbrication flex-dans-flex est un cas connu où le calcul de taille "auto"
+ * (min-content) d'un flex-item diverge entre moteurs (constaté : correct sous Chromium/Electron,
+ * mais Firefox sous-évalue la largeur de ce bloc, faisant chevaucher les éléments suivants du flex
+ * parent, ex: le bloc souris qui se retrouve sur le clavier au lieu d'à côté). Une largeur/hauteur
+ * explicite lève toute ambiguïté, quel que soit le moteur. */
+function buildKeysRows(rows) {
+    const board = document.createElement('div');
+    board.className = 'keys-rows';
+    board.style.width = (rows.length ? Math.max(...rows.map(rowWidthPx)) : 0) + 'px';
+    board.style.height = (rows.length * KEYS_BOX_HEIGHT_PX + Math.max(0, rows.length - 1) * KEYS_ROW_GAP_PX) + 'px';
+    rows.forEach((row) => {
+        const rowEl = document.createElement('div');
+        rowEl.className = 'keys-row';
+        row.forEach((k) => {
+            const box = document.createElement('div');
+            box.style.flex = '0 0 ' + (k.u * KEYS_UNIT_PX) + 'px';
+            if (k.l) {
+                box.className = 'keys-box keys-key';
+                box.dataset.keyLabel = k.l;
+                box.textContent = k.l;
+            } else {
+                box.className = 'keys-box keys-spacer';
+            }
+            rowEl.appendChild(box);
+        });
+        board.appendChild(rowEl);
+    });
+    return board;
+}
+
+/** Bascule l'état visuel (allumé/éteint) de toutes les cases portant ce libellé, sur TOUS les
+ * widgets .keys-widget de la page (pas de singleton, voir store.js) — reçu via le message
+ * WebSocket 'input-key' (electron/main.js), state: 'down' ou 'up'. */
+function setKeyState(label, state) {
+    document.querySelectorAll('.keys-widget [data-key-label="' + label + '"]').forEach((box) => {
+        box.classList.toggle('active', state === 'down');
+    });
 }
 
 function applyBottomBarContentFromConfig() {
@@ -1001,6 +1160,11 @@ function initWebSocket() {
 
         if (data.type === 'spotify-track-updated') {
             applySpotifyTrack(data.track);
+            return;
+        }
+
+        if (data.type === 'input-key') {
+            setKeyState(data.label, data.state);
             return;
         }
 

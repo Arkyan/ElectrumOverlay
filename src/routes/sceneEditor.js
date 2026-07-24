@@ -377,6 +377,7 @@ const SCENE_EDITOR_HTML = ({ activeId, themes, pause, scenes, animDefaults }) =>
                             <button type="button" data-type="chat">💬&nbsp;&nbsp;Chat Twitch</button>
                             <button type="button" data-type="alerts">🔔&nbsp;&nbsp;Alertes</button>
                             <button type="button" data-type="spotify">🎵&nbsp;&nbsp;Spotify</button>
+                            <button type="button" data-type="keys">⌨️&nbsp;&nbsp;Touches</button>
                         </div>
                         <button type="button" class="se-icon-btn" id="btnAddElement" title="Ajouter un élément">+</button>
                         <button type="button" class="se-icon-btn" id="btnDeleteElement" title="Supprimer l'élément sélectionné">−</button>
@@ -603,7 +604,7 @@ const SCENE_EDITOR_HTML = ({ activeId, themes, pause, scenes, animDefaults }) =>
         });
 
         // ---------- Sources ----------
-        const TYPE_ICONS = { text: 'T', image: '▨', box: '■', clock: '◷', chat: '💬', alerts: '🔔', spotify: '🎵' };
+        const TYPE_ICONS = { text: 'T', image: '▨', box: '■', clock: '◷', chat: '💬', alerts: '🔔', spotify: '🎵', keys: '⌨️' };
 
         function renderSources() {
             const el = document.getElementById('sourcesList');
@@ -733,6 +734,20 @@ const SCENE_EDITOR_HTML = ({ activeId, themes, pause, scenes, animDefaults }) =>
             spotify: [
                 { prop: 'color', label: "Couleur d'accent", kind: 'color', def: '#1db954' },
                 { prop: 'scale', label: 'Échelle (%)', kind: 'number', def: 100, step: 5, min: 25, max: 400 }
+            ],
+            keys: [
+                { prop: 'color', label: "Couleur d'accent", kind: 'color', def: '#f59e0b' },
+                { prop: 'scale', label: 'Échelle (%)', kind: 'number', def: 100, step: 5, min: 25, max: 400 },
+                {
+                    prop: 'layout', label: 'Disposition clavier', kind: 'select', def: 'azerty',
+                    options: [{ value: 'azerty', label: 'AZERTY (ZQSD)' }, { value: 'qwerty', label: 'QWERTY (WASD)' }]
+                },
+                { prop: 'showFunctionRow', label: 'Rangée F1-F12', kind: 'check', def: true },
+                { prop: 'showDigitRow', label: 'Rangée chiffres', kind: 'check', def: true },
+                { prop: 'showMovement', label: 'Touches de déplacement', kind: 'check', def: true },
+                { prop: 'showModifiers', label: 'Shift/Ctrl/Alt/Espace/Entrée', kind: 'check', def: true },
+                { prop: 'showArrows', label: 'Flèches directionnelles', kind: 'check', def: true },
+                { prop: 'showMouse', label: 'Souris', kind: 'check', def: true }
             ]
         };
 
@@ -766,6 +781,16 @@ const SCENE_EDITOR_HTML = ({ activeId, themes, pause, scenes, animDefaults }) =>
                         <option value="inter"\${val === 'inter' ? ' selected' : ''}>Inter (lisible)</option>
                     </select></div>\`;
             }
+            // Sélecteur générique à options fournies par le spec (ex: layout clavier) — data-kind
+            // "text" (pas "select") : savePropChange() n'a pas de cas dédié, le select.value déjà
+            // une chaîne tombe dans son branch par défaut, même mécanisme que le sélecteur 'font'.
+            if (spec.kind === 'select') {
+                const val = raw || spec.def;
+                return \`<div class="field"><label>\${esc(spec.label)}</label>
+                    <select class="se-prop" data-prop="\${spec.prop}" data-kind="text">
+                        \${spec.options.map((o) => \`<option value="\${esc(o.value)}"\${o.value === val ? ' selected' : ''}>\${esc(o.label)}</option>\`).join('')}
+                    </select></div>\`;
+            }
             if (spec.kind === 'check') {
                 return \`<div class="field"><label class="checkbox-row"><input type="checkbox" class="se-prop" data-prop="\${spec.prop}" data-kind="check"\${raw ? ' checked' : ''}> \${esc(spec.label)}</label></div>\`;
             }
@@ -792,6 +817,9 @@ const SCENE_EDITOR_HTML = ({ activeId, themes, pause, scenes, animDefaults }) =>
                 }
                 if (item.customType === 'spotify') {
                     note += '<p class="hint">Affiche le morceau en cours de lecture sur le compte Spotify connecté — configure la connexion depuis la page <a href="/integrations" target="_blank">Intégrations</a>.</p>';
+                }
+                if (item.customType === 'keys') {
+                    note += '<p class="hint">Affiche les touches clavier/souris pressées (WASD, flèches, Espace, modificateurs, F1-F12, chiffres, clics) — active la capture depuis la page <a href="/integrations" target="_blank">Intégrations</a>.</p>';
                 }
             } else {
                 const theme = THEMES[currentKey] || {};

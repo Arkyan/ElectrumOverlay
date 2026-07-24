@@ -43,7 +43,8 @@ function createIntegrationsRoutes(spotifyAuth) {
             justConnected: req.query.connected === '1',
             error: req.query.error || null,
             truckyEnabled: config.trucky.enable,
-            truckyUserId: config.trucky.USER_ID
+            truckyUserId: config.trucky.USER_ID,
+            inputDisplayEnabled: config.inputDisplay.enabled
         }));
     });
 
@@ -116,12 +117,24 @@ function createIntegrationsRoutes(spotifyAuth) {
         }
     });
 
+    // Capture clavier/souris globale (electron/main.js) : lue en polling par le process Electron,
+    // pas de restart ni de diffusion WebSocket nécessaire (voir electron/inputCapture.js).
+    router.post('/api/integrations/input-display', (req, res) => {
+        try {
+            const body = req.body || {};
+            config.saveConfig({ inputDisplay: { enabled: Boolean(body.enabled) } });
+            res.json({ ok: true });
+        } catch (error) {
+            res.status(400).json({ error: error.message });
+        }
+    });
+
     return router;
 }
 
 const INTEGRATIONS_PAGE_HTML = ({
     clientId, clientSecret, redirectUri, configured, authUrl, connected, justConnected, error,
-    truckyEnabled, truckyUserId
+    truckyEnabled, truckyUserId, inputDisplayEnabled
 }) => `
 <html>
 <head>
@@ -155,6 +168,7 @@ const INTEGRATIONS_PAGE_HTML = ({
             <nav class="settings-nav" id="integrationsNav">
                 <button type="button" class="settings-nav-btn active" data-target="section-spotify">Spotify</button>
                 <button type="button" class="settings-nav-btn" data-target="section-trucky">Trucky</button>
+                <button type="button" class="settings-nav-btn" data-target="section-inputdisplay">Clavier/Souris</button>
             </nav>
             <div class="settings-content">
 
@@ -219,6 +233,19 @@ const INTEGRATIONS_PAGE_HTML = ({
                         </div>
                         <button type="button" class="btn btn-primary" id="btnSaveTrucky">Enregistrer</button>
                         <span class="msg" id="truckyMsg"></span>
+                    </div>
+                </div>
+
+                <div class="settings-section" id="section-inputdisplay">
+                    <h2>Clavier/Souris</h2>
+                    <p class="hint">Affiche les touches pressées (WASD, flèches, Espace, Shift/Ctrl/Alt, Tab, Échap, Entrée, F1-F12, chiffres) et les clics souris comme élément de scène (voir l'éditeur de scène — menu "+", widget "Touches").</p>
+                    <p class="msg error">⚠️ Une fois activée, la capture tourne pour tout le PC (pas seulement le jeu au premier plan) tant que l'app est ouverte — seules les touches listées ci-dessus sont affichées, jamais les lettres/chiffres tapés ailleurs (chat, mots de passe...). Désactive ce réglage si tu veux couper la capture.</p>
+
+                    <div class="card">
+                        <h2 class="card-title">Affichage des touches</h2>
+                        <label class="checkbox-row"><input type="checkbox" id="inputDisplayEnabled" ${inputDisplayEnabled ? 'checked' : ''}> Activer l'affichage des touches pressées</label>
+                        <button type="button" class="btn btn-primary" style="margin-top:var(--space-3);" id="btnSaveInputDisplay">Enregistrer</button>
+                        <span class="msg" id="inputDisplayMsg"></span>
                     </div>
                 </div>
 
@@ -325,6 +352,24 @@ const INTEGRATIONS_PAGE_HTML = ({
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ enabled, userId })
+                });
+                const data = await res.json();
+                msg.textContent = data.ok ? 'Enregistré.' : (data.error || 'Erreur');
+                msg.className = 'msg ' + (data.ok ? 'success' : 'error');
+            } catch (err) {
+                msg.textContent = 'Impossible de contacter le serveur.';
+                msg.className = 'msg error';
+            }
+        });
+
+        document.getElementById('btnSaveInputDisplay').addEventListener('click', async () => {
+            const enabled = document.getElementById('inputDisplayEnabled').checked;
+            const msg = document.getElementById('inputDisplayMsg');
+            try {
+                const res = await fetch('/api/integrations/input-display', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ enabled })
                 });
                 const data = await res.json();
                 msg.textContent = data.ok ? 'Enregistré.' : (data.error || 'Erreur');

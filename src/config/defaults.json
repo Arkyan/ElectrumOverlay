@@ -28,6 +28,9 @@
         "enable": false,
         "USER_ID": ""
     },
+    "inputDisplay": {
+        "enabled": false
+    },
     "commands": [],
     "spotify": {
         "CLIENT_ID": "",

@@ -45,7 +45,8 @@
         clock: 'Horloge',
         chat: 'Chat',
         alerts: 'Alertes',
-        spotify: 'Spotify'
+        spotify: 'Spotify',
+        keys: 'Touches'
     };
 
     function customLabel(el) {
@@ -608,6 +609,9 @@
                 }
             }
         }
+        // Pas de cas 'keys' ici : contrairement au chat/à Spotify, le plateau clavier/souris est
+        // un HUD permanent entièrement dessiné dès sa création (voir buildKeysRows() dans
+        // overlay-common.js) — rien à peupler pour rester visible/positionnable en édition.
     }
 
     // Après une alerte, showAlert() laisse la zone avec les classes .show + .hide (le prochain
@@ -672,7 +676,15 @@
                 panelBorder: el.dataset.propPanelBorder || '',
                 // Les badges à texte adaptatif n'ont pas d'échelle (leur police suit déjà le
                 // redimensionnement) — l'éditeur masque le champ.
-                scaleText: el.dataset.sceneScaleText !== undefined
+                scaleText: el.dataset.sceneScaleText !== undefined,
+                // Plateau clavier/souris ("keys") — voir exposeStyleProps() dans overlay-common.js.
+                layout: isCustom ? (el.dataset.propLayout || '') : undefined,
+                showFunctionRow: isCustom ? el.dataset.propShowFunctionRow === '1' : undefined,
+                showDigitRow: isCustom ? el.dataset.propShowDigitRow === '1' : undefined,
+                showMovement: isCustom ? el.dataset.propShowMovement === '1' : undefined,
+                showModifiers: isCustom ? el.dataset.propShowModifiers === '1' : undefined,
+                showArrows: isCustom ? el.dataset.propShowArrows === '1' : undefined,
+                showMouse: isCustom ? el.dataset.propShowMouse === '1' : undefined
             };
         });
 

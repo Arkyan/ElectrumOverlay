@@ -14,12 +14,15 @@ app.setName('ElectrumOverlay');
 process.env.ELECTRUM_CONFIG_DIR = path.join(app.getPath('userData'), 'config');
 
 const TwitchOverlayServer = require('../server.js');
+const config = require('../src/config/store');
+const inputCapture = require('./inputCapture');
 
 let mainWindow = null;
 let tray = null;
 let server = null;
 let isQuitting = false;
 let updaterState = { status: 'idle' };
+let inputDisplayPollInterval = null;
 
 const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) {
@@ -128,6 +131,7 @@ if (!gotLock) {
             {
                 label: 'Quitter', click: async () => {
                     isQuitting = true;
+                    inputCapture.stop();
                     try {
                         await server.eventSubManager.cleanupSubscriptions();
                     } catch (error) {
@@ -208,9 +212,25 @@ if (!gotLock) {
     }
 
     async function stopServer() {
+        inputCapture.stop();
         await server.stop();
         updateTrayMenu();
         mainWindow?.webContents.send('server-status-change', server.isRunning);
+    }
+
+    /**
+     * Démarre/arrête la capture clavier/souris (electron/inputCapture.js) selon
+     * config.inputDisplay.enabled — réglage modifiable depuis /integrations sans redémarrage.
+     * Un polling (comme startViewerCountPolling côté serveur) plutôt qu'un événement : tout tourne
+     * dans le même process, pas besoin de plomberie plus complexe pour un simple booléen.
+     */
+    function pollInputDisplay() {
+        const shouldRun = !!(server?.isRunning && config.inputDisplay.enabled);
+        if (shouldRun && !inputCapture.isRunning()) {
+            inputCapture.start((event) => server.broadcastEvent({ type: 'input-key', ...event }));
+        } else if (!shouldRun && inputCapture.isRunning()) {
+            inputCapture.stop();
+        }
     }
 
     function createTray() {
@@ -265,6 +285,8 @@ if (!gotLock) {
         createWindow();
         createTray();
         setupAutoUpdater();
+        pollInputDisplay();
+        inputDisplayPollInterval = setInterval(pollInputDisplay, 3000);
     });
 
     app.on('window-all-closed', () => {

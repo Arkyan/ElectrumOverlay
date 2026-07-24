@@ -290,7 +290,10 @@ function createProfilesRoutes(broadcastEvent) {
 
     router.patch('/api/profiles/:id/custom-text/:page/:elementId', (req, res) => {
         try {
-            const { text, url, color, top, left, width, height, size, font, glow, opacity, radius, scale } = req.body || {};
+            const {
+                text, url, color, top, left, width, height, size, font, glow, opacity, radius, scale,
+                layout, showFunctionRow, showDigitRow, showMovement, showModifiers, showArrows, showMouse
+            } = req.body || {};
             const patch = {};
             if (typeof text === 'string') patch.text = text;
             if (typeof url === 'string') patch.url = url;
@@ -307,6 +310,15 @@ function createProfilesRoutes(broadcastEvent) {
             if (typeof opacity === 'number') patch.opacity = Math.max(0, Math.min(100, opacity));
             if (typeof radius === 'number') patch.radius = Math.max(0, Math.min(200, radius));
             if (typeof scale === 'number') patch.scale = Math.max(25, Math.min(400, scale));
+            // Plateau clavier/souris ("keys") : disposition affichée (voir buildKeysBlocks dans
+            // overlay-common.js) et blocs de touches activables indépendamment.
+            if (layout === 'qwerty' || layout === 'azerty') patch.layout = layout;
+            if (typeof showFunctionRow === 'boolean') patch.showFunctionRow = showFunctionRow;
+            if (typeof showDigitRow === 'boolean') patch.showDigitRow = showDigitRow;
+            if (typeof showMovement === 'boolean') patch.showMovement = showMovement;
+            if (typeof showModifiers === 'boolean') patch.showModifiers = showModifiers;
+            if (typeof showArrows === 'boolean') patch.showArrows = showArrows;
+            if (typeof showMouse === 'boolean') patch.showMouse = showMouse;
             config.updateProfileCustomText(req.params.id, req.params.page, req.params.elementId, patch);
             if (req.params.id === config.getActiveProfileId()) {
                 broadcastEvent({ type: 'config-updated', config: config.toFrontendConfig() });

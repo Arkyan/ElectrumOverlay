@@ -548,6 +548,113 @@ body {
     text-overflow: ellipsis;
 }
 
+/* ========== PLATEAU TOUCHES/SOURIS (élément de scène "keys", façon NohBoard) ==========
+ * overlay-common.js (KEYS_BOARD_ROWS/buildKeysRows) / electron/inputCapture.js. Contrairement au
+ * widget Spotify, ce plateau est un HUD PERMANENT : toutes les touches suivies sont dessinées en
+ * continu (état "relâché" par défaut), et setKeyState() ne fait que basculer .active quand la
+ * touche est réellement maintenue — jamais de disparition/réapparition d'éléments. */
+/* inline-flex (pas flex) : c'est un élément position:fixed SANS largeur explicite (contrairement
+ * à .spotify-widget/.chat-panel, qui posent toujours un width par défaut) — la taille "auto" d'un
+ * conteneur flex position:fixed/absolute est une zone du spec où les moteurs Chromium ne sont
+ * historiquement pas tous d'accord (shrink-to-fit vs pleine largeur du viewport), ce qui a produit
+ * un rendu correct dans l'éditeur (Chromium récent d'Electron) mais la souris qui finissait
+ * superposée au clavier dans OBS (CEF embarqué, souvent une version bien plus ancienne).
+ * inline-flex retombe sur un dimensionnement shrink-to-fit non ambigu dans les deux cas. */
+.keys-widget {
+    display: inline-flex;
+    align-items: flex-end;
+    gap: 10px;
+}
+
+.keys-rows {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.keys-row {
+    display: flex;
+    gap: 3px;
+}
+
+/* Base commune touche/espaceur : même empreinte (l'espaceur garde l'alignement des rangées sans
+ * rien afficher) — --keys-accent posée en JS (item.color) sur .keys-widget, héritée ici. Hauteur
+ * légèrement sous KEYS_UNIT_PX (26px, overlay-common.js) : garde des touches carrées malgré le
+ * gap, pour un plateau compact façon NohBoard plutôt que le "clavier pleine taille" de la v1. */
+.keys-box {
+    height: 24px;
+    box-sizing: border-box;
+    border-radius: 5px;
+}
+
+.keys-key {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'Inter', sans-serif;
+    font-weight: 700;
+    font-size: 9px;
+    color: rgba(255, 255, 255, 0.75);
+    background: rgba(0, 0, 0, 0.35);
+    border: 1.5px solid rgba(255, 255, 255, 0.25);
+    transition: background 0.08s ease, color 0.08s ease, border-color 0.08s ease, transform 0.08s ease;
+}
+
+.keys-key.active {
+    color: #0b0d12;
+    background: var(--keys-accent, #f59e0b);
+    border-color: var(--keys-accent, #f59e0b);
+    transform: scale(0.94);
+}
+
+.keys-spacer {
+    background: transparent;
+    border: none;
+}
+
+.keys-mouse {
+    display: flex;
+}
+
+.mouse-body {
+    position: relative;
+    display: flex;
+    width: 48px;
+    height: 72px;
+    overflow: hidden;
+    border: 1.5px solid rgba(255, 255, 255, 0.25);
+    border-radius: 24px 24px 15px 15px;
+    background: rgba(0, 0, 0, 0.35);
+}
+
+.mouse-btn {
+    flex: 1;
+    height: 36px;
+    border-right: 1px solid rgba(255, 255, 255, 0.15);
+    transition: background 0.08s ease;
+}
+
+.mouse-btn:last-child {
+    border-right: none;
+}
+
+.mouse-wheel {
+    position: absolute;
+    top: 6px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 8px;
+    height: 16px;
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.25);
+    transition: background 0.08s ease;
+}
+
+.mouse-btn.active,
+.mouse-wheel.active {
+    background: var(--keys-accent, #f59e0b);
+}
+
 /* ========== BARRE DU BAS ========== */
 .bottom-bar {
     position: absolute;
