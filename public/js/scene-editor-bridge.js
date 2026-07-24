@@ -44,6 +44,7 @@
         box: 'Boîte',
         clock: 'Horloge',
         chat: 'Chat',
+        chatTicker: 'Chat défilant',
         alerts: 'Alertes',
         spotify: 'Spotify',
         keys: 'Touches'
@@ -635,6 +636,21 @@
                 }
             }
         }
+        if (el.dataset.customType === 'chatTicker') {
+            // Bandeau FIGÉ en édition (advanceTicker respecte ce dataset) : sinon les messages
+            // d'exemple défileraient hors du cadre en quelques secondes, laissant un bandeau vide
+            // impossible à positionner.
+            el.dataset.tickerPaused = '1';
+            const track = el.querySelector('[data-ticker-track]');
+            if (track && track.children.length === 0) {
+                track.innerHTML = [
+                    ['Viewer1', 'Salut le stream !'],
+                    ['Viewer2', 'GG pour la livraison'],
+                    ['Viewer3', 'Exemple de message du chat']
+                ].map(([name, msg]) => '<span class="ticker-item"><span class="ticker-user">' + name
+                    + '</span><span class="ticker-text">' + msg + '</span></span>').join('');
+            }
+        }
         // Pas de cas 'keys' ici : contrairement au chat/à Spotify, le plateau clavier/souris est
         // un HUD permanent entièrement dessiné dès sa création (voir buildKeysRows() dans
         // overlay-common.js) — rien à peupler pour rester visible/positionnable en édition.
@@ -701,6 +717,10 @@
                 // Échelle + couleurs de thème par élément (posées par applyLayoutFromConfig pour
                 // les intégrés, exposeStyleProps pour les customs).
                 scale: el.dataset.propScale ? parseFloat(el.dataset.propScale) : undefined,
+                // Taille du texte des widgets composites (chat, Spotify) — multiplicateur en %.
+                textScale: isCustom && el.dataset.propTextScale ? parseFloat(el.dataset.propTextScale) : undefined,
+                // Vitesse de défilement du bandeau de chat (chatTicker), en px/s.
+                speed: isCustom && el.dataset.propSpeed ? parseFloat(el.dataset.propSpeed) : undefined,
                 primary: el.dataset.propPrimary || '',
                 secondary: el.dataset.propSecondary || '',
                 themeText: el.dataset.propText || '',
@@ -726,7 +746,17 @@
         // fichier) : on aplatit les espaces/retours à la ligne pour un champ éditable propre.
         const texts = Array.from(document.querySelectorAll('[data-scene-text]:not([data-scene-custom-text])')).map((el) => {
             const textId = el.dataset.sceneText;
-            return { textId, label: TEXT_LABELS[textId] || textId, value: el.textContent.trim().replace(/\s+/g, ' ') };
+            return {
+                textId,
+                label: TEXT_LABELS[textId] || textId,
+                value: el.textContent.trim().replace(/\s+/g, ' '),
+                // Taille/police enregistrées (applyTextStylesFromConfig, overlay-common.js) : la
+                // liste des textes est resynchronisée depuis l'aperçu à CHAQUE sauvegarde, la
+                // sienne comprise — sans ces valeurs, les champs se videraient juste après avoir
+                // été saisis (même piège que les cases à cocher du plateau clavier).
+                size: el.dataset.propTextSize ? parseFloat(el.dataset.propTextSize) : undefined,
+                font: el.dataset.propTextFont || ''
+            };
         });
 
         window.parent.postMessage({ type: 'scene-editor-ready', elements, texts }, '*');

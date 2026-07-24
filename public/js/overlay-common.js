@@ -346,6 +346,34 @@ function applyTextOverridesFromConfig() {
     });
 }
 
+/** Familles CSS des deux polices proposées partout dans l'éditeur (textes custom, horloge,
+ * textes intégrés, widgets) — une seule définition pour que les intitulés restent cohérents. */
+function fontFamilyFor(font) {
+    return font === 'inter' ? 'Inter, sans-serif' : "'Baron Neue Black', Inter, sans-serif";
+}
+
+/**
+ * Taille (vh) et police des textes statiques data-scene-text — cfg.textStyles[page] =
+ * { textId: {size?, font?} }, stocké à part du contenu (voir setProfileTextStyle dans store.js).
+ * Entièrement déclaratif comme applyTextOverridesFromConfig() : sans override, la propriété inline
+ * est RETIRÉE (retour au CSS de la page), sinon réinitialiser un texte depuis l'éditeur laisserait
+ * l'ancienne taille collée à l'élément. Les datasets prop* sont lus par reportReady()
+ * (scene-editor-bridge.js) pour que le panneau affiche les valeurs réellement enregistrées.
+ */
+function applyTextStylesFromConfig() {
+    const cfg = getOverlayConfig();
+    const pageKey = getThemeKeyFromLocation();
+    const styles = cfg.textStyles?.[pageKey] || {};
+    document.querySelectorAll('[data-scene-text]:not([data-scene-custom-text])').forEach((el) => {
+        const style = styles[el.dataset.sceneText] || {};
+        const hasSize = typeof style.size === 'number' && style.size > 0;
+        el.style.fontSize = hasSize ? (style.size + 'vh') : '';
+        el.style.fontFamily = style.font ? fontFamilyFor(style.font) : '';
+        el.dataset.propTextSize = hasSize ? String(style.size) : '';
+        el.dataset.propTextFont = style.font || '';
+    });
+}
+
 /**
  * Éléments ajoutés librement depuis l'éditeur de scène (pas dans le HTML de base) —
  * cfg.customTexts[page] = { id: {type, top, left, ...} }, type ∈ text/image/box/clock (absent =
@@ -371,7 +399,7 @@ function renderCustomTextsFromConfig() {
     // Style texte partagé par les types text et clock : taille (vh), couleur, police, néon.
     function applyTextStyle(el, item, defaultSize) {
         const size = (typeof item.size === 'number' && item.size > 0) ? item.size : defaultSize;
-        const family = item.font === 'inter' ? "Inter, sans-serif" : "'Baron Neue Black', Inter, sans-serif";
+        const family = fontFamilyFor(item.font);
         const color = item.color || '#ffffff';
         el.style.color = color;
         el.style.font = '600 ' + size + 'vh ' + family;
@@ -379,6 +407,26 @@ function renderCustomTextsFromConfig() {
             ? '0 0 10px ' + color + ', 0 0 32px ' + color + ', 0 2px 8px rgba(0, 0, 0, 0.6)'
             : '0 2px 8px rgba(0, 0, 0, 0.6)';
         el.dataset.colorValue = item.color || '';
+    }
+
+    // Style de texte des WIDGETS composites (chat, Spotify) : contrairement aux types text/clock
+    // (un seul texte, taille absolue en vh), ces widgets empilent plusieurs niveaux de texte aux
+    // tailles CSS liées entre elles (en-tête/pseudo/message, titre/artiste). On expose donc un
+    // MULTIPLICATEUR consommé en calc() par leur CSS, qui préserve leurs proportions internes,
+    // plutôt qu'une taille absolue qui les écraserait toutes à la même valeur. Distinct de
+    // `scale` (zoom du widget entier, cadre et images compris) : ici seul le texte change.
+    function applyWidgetTextStyle(el, item) {
+        const mult = (typeof item.textScale === 'number' && item.textScale > 0) ? item.textScale / 100 : 1;
+        if (mult !== 1) {
+            el.style.setProperty('--widget-text-scale', String(mult));
+        } else {
+            el.style.removeProperty('--widget-text-scale');
+        }
+        if (item.font) {
+            el.style.setProperty('--widget-font', fontFamilyFor(item.font));
+        } else {
+            el.style.removeProperty('--widget-font');
+        }
     }
 
     // Valeurs de style brutes exposées à l'éditeur de scène : le panneau de propriétés n'a pas
@@ -391,6 +439,8 @@ function renderCustomTextsFromConfig() {
         el.dataset.propRadius = (typeof item.radius === 'number') ? String(item.radius) : '';
         el.dataset.propOpacity = (typeof item.opacity === 'number') ? String(item.opacity) : '';
         el.dataset.propScale = (typeof item.scale === 'number') ? String(item.scale) : '';
+        el.dataset.propTextScale = (typeof item.textScale === 'number') ? String(item.textScale) : '';
+        el.dataset.propSpeed = (typeof item.speed === 'number') ? String(item.speed) : '';
         // Plateau clavier/souris ("keys") : sans ces datasets, l'éditeur de scène ne peut pas
         // savoir quelle disposition/quels blocs sont réellement enregistrés — reportReady() dans
         // scene-editor-bridge.js les relit à chaque resynchro (déclenchée par CHAQUE sauvegarde,
@@ -515,6 +565,7 @@ function renderCustomTextsFromConfig() {
             // overlay-common.css fonctionnent tels quels. Unicité par scène garantie côté store
             // (SINGLETON_ELEMENT_TYPES). item.text = titre de l'en-tête.
             el.dataset.textValue = item.text || 'CHAT';
+            applyWidgetTextStyle(el, item);
             el.className = 'chat-panel';
             if (!el.style.width) el.style.width = '15vw';
             if (!el.style.height) el.style.height = '40vh';
@@ -528,6 +579,23 @@ function renderCustomTextsFromConfig() {
             if (previousChatMessages) container.innerHTML = previousChatMessages;
             el.appendChild(header);
             el.appendChild(container);
+        } else if (type === 'chatTicker') {
+            // Bandeau horizontal défilant : même flux que le panneau vertical, mais chaque message
+            // sur UNE ligne (pseudo + texte côte à côte) dans une piste translatée en continu.
+            // Retrouvé par CLASSE et non par id (contrairement à #chatContainer) : plusieurs
+            // bandeaux peuvent coexister, y compris avec un panneau vertical — voir addChatMessage.
+            el.className = 'chat-ticker';
+            applyWidgetTextStyle(el, item);
+            el.dataset.tickerSpeed = String((typeof item.speed === 'number' && item.speed > 0) ? item.speed : 60);
+            if (typeof item.opacity === 'number') {
+                el.style.setProperty('--ticker-bg-opacity', String(item.opacity / 100));
+            }
+            if (!el.style.width) el.style.width = '60vw';
+            const track = document.createElement('div');
+            track.className = 'chat-ticker-track';
+            track.dataset.tickerTrack = '1';
+            el.appendChild(track);
+            ensureChatTickerLoop();
         } else if (type === 'alerts') {
             // ZONE d'alertes (follow/sub/raid/bits...) : mêmes ids et structure zone/boîte
             // qu'index.html, donc showAlert()/fitAlertBox() la pilotent tels quels — l'alerte
@@ -558,6 +626,7 @@ function renderCustomTextsFromConfig() {
             el.className = 'spotify-widget';
             el.dataset.colorValue = item.color || '#1db954';
             el.style.setProperty('--spotify-accent', item.color || '#1db954');
+            applyWidgetTextStyle(el, item);
             if (!el.style.width) el.style.width = '22vw';
             el.innerHTML = '<img class="spotify-art" data-spotify-art alt="">'
                 + '<div class="spotify-info">'
@@ -1110,24 +1179,116 @@ function renderChatMessageHTML(message, fragments) {
 
 function addChatMessage(username, message, color, badgeUrls, fragments) {
     const cfg = getOverlayConfig();
-    const container = document.getElementById('chatContainer');
-    if (!container) return;
+    const nameColor = color || cfg.chat?.defaultColor || '#3b82f6';
+    const badgesHTML = badgeUrls
+        ? Object.entries(badgeUrls).map(([key, url]) => `<img src="${url}" alt="${key} badge" class="chat-badge">`).join('')
+        : '';
+    const textHTML = renderChatMessageHTML(message, fragments);
 
-    const messageElement = document.createElement('div');
-    messageElement.className = 'chat-message';
-    messageElement.innerHTML = `
-        <div class="chat-username" style="color: ${color || cfg.chat?.defaultColor || '#3b82f6'};">
-            ${badgeUrls ? Object.entries(badgeUrls).map(([key, url]) => `<img src="${url}" alt="${key} badge" class="chat-badge">`).join('') : ''}
-            ${escapeHtml(username || 'Anonymous')}
-        </div>
-        <div class="chat-text">${renderChatMessageHTML(message, fragments)}</div>
-    `;
-    container.appendChild(messageElement);
-    if (cfg.chat?.scrollBehavior === 'smooth') {
-        container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
-    } else {
-        container.scrollTop = container.scrollHeight;
+    // Panneau vertical (id DOM unique) : peut être absent d'une scène qui n'a qu'un bandeau —
+    // ce n'est plus une raison de sortir, les bandeaux ci-dessous doivent être servis quand même.
+    const container = document.getElementById('chatContainer');
+    if (container) {
+        const messageElement = document.createElement('div');
+        messageElement.className = 'chat-message';
+        messageElement.innerHTML = `
+            <div class="chat-username" style="color: ${nameColor};">
+                ${badgesHTML}
+                ${escapeHtml(username || 'Anonymous')}
+            </div>
+            <div class="chat-text">${textHTML}</div>
+        `;
+        container.appendChild(messageElement);
+        if (cfg.chat?.scrollBehavior === 'smooth') {
+            container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
+        } else {
+            container.scrollTop = container.scrollHeight;
+        }
     }
+
+    // Bandeaux défilants (autant qu'on veut sur la page, cf. store.js) : même contenu, mais
+    // pseudo et message sur une seule ligne.
+    document.querySelectorAll('.chat-ticker').forEach((ticker) => {
+        const item = document.createElement('span');
+        item.className = 'ticker-item';
+        item.innerHTML = `<span class="ticker-user" style="color: ${nameColor};">${badgesHTML}${escapeHtml(username || 'Anonymous')}</span>`
+            + `<span class="ticker-text">${textHTML}</span>`;
+        appendTickerItem(ticker, item);
+    });
+}
+
+/**
+ * Ajoute un message à un bandeau en garantissant qu'il ENTRE PAR LE BORD DROIT : si le contenu
+ * déjà présent se termine avant ce bord (chat calme, piste presque vide), un espaceur comble la
+ * différence — sans lui, un message arrivant après un silence apparaîtrait brutalement au milieu
+ * du bandeau, là où s'était arrêté le précédent.
+ */
+function appendTickerItem(ticker, item) {
+    const track = ticker.querySelector('[data-ticker-track]');
+    if (!track) return;
+    const offset = parseFloat(track.dataset.offset || '0');
+    const contentRight = offset + track.scrollWidth;
+    const gap = ticker.clientWidth - contentRight;
+    if (gap > 0) {
+        const spacer = document.createElement('span');
+        spacer.className = 'ticker-spacer';
+        spacer.style.width = gap + 'px';
+        track.appendChild(spacer);
+    }
+    track.appendChild(item);
+}
+
+/**
+ * Boucle d'animation partagée par TOUS les bandeaux de la page (une seule rAF, pas une par
+ * widget). Le défilement est piloté en JS plutôt que par une animation CSS : le contenu est un
+ * flux vivant (messages ajoutés/retirés en permanence), alors qu'une keyframe CSS suppose une
+ * distance connue à l'avance et repartirait de zéro à chaque changement de contenu.
+ */
+let chatTickerRaf = null;
+
+function ensureChatTickerLoop() {
+    if (chatTickerRaf !== null) return;
+    let last = performance.now();
+    const step = (now) => {
+        // dt borné : quand l'onglet/la source OBS repasse au premier plan après une pause, `now`
+        // a fait un bond de plusieurs secondes — sans borne, tout le contenu défilerait d'un coup.
+        const dt = Math.min(100, now - last);
+        last = now;
+        document.querySelectorAll('.chat-ticker').forEach((ticker) => advanceTicker(ticker, dt));
+        chatTickerRaf = requestAnimationFrame(step);
+    };
+    chatTickerRaf = requestAnimationFrame(step);
+}
+
+function advanceTicker(ticker, dt) {
+    // Figé en mode édition (posé par scene-editor-bridge.js) : les messages d'exemple doivent
+    // rester à l'écran pour pouvoir positionner le bandeau.
+    if (ticker.dataset.tickerPaused) return;
+    const track = ticker.querySelector('[data-ticker-track]');
+    if (!track) return;
+    if (!track.firstElementChild) {
+        // Piste vide : on repart de zéro, sinon l'offset accumulé décalerait le prochain message.
+        track.dataset.offset = '0';
+        track.style.transform = '';
+        return;
+    }
+
+    const speed = parseFloat(ticker.dataset.tickerSpeed) || 60;
+    let offset = parseFloat(track.dataset.offset || '0') - (speed * dt) / 1000;
+
+    // Retire ce qui est entièrement sorti à gauche, en recréditant l'offset d'autant pour que le
+    // reste de la piste ne saute pas visuellement.
+    let first = track.firstElementChild;
+    while (first) {
+        const width = first.offsetWidth + parseFloat(getComputedStyle(first).marginRight || '0');
+        if (offset + width > 0) break;
+        offset += width;
+        first.remove();
+        first = track.firstElementChild;
+    }
+
+    track.dataset.offset = String(offset);
+    track.style.transform = 'translateX(' + offset + 'px)';
 }
 
 // ========== GESTION DES BADGES ==========
@@ -1196,6 +1357,7 @@ function initWebSocket() {
             applyChatVisibilityFromConfig();
             applyLayoutFromConfig();
             applyTextOverridesFromConfig();
+            applyTextStylesFromConfig();
             renderCustomTextsFromConfig();
             return;
         }
@@ -1461,6 +1623,7 @@ function initCommonOverlay() {
     applyLayoutFromConfig();
     captureDefaultTexts(); // avant le premier appel, sinon un texte déjà remplacé serait pris pour le défaut
     applyTextOverridesFromConfig();
+    applyTextStylesFromConfig();
     renderCustomTextsFromConfig();
 
     // État initial d'un éventuel widget Spotify — avant le premier message WebSocket, sans quoi

@@ -403,8 +403,13 @@ body {
     }
 }
 
-/* ========== PANNEAU DE CHAT ========== */
+/* ========== PANNEAU DE CHAT ==========
+ * --widget-font / --widget-text-scale : posées en JS par applyWidgetTextStyle()
+ * (overlay-common.js) depuis les propriétés "Police" et "Taille du texte (%)" du widget. La
+ * police est déclarée ici pour être héritée par l'en-tête, les pseudos et les messages ; les
+ * tailles restent définies rangée par rangée (calc), ce qui conserve leurs proportions. */
 .chat-panel {
+    font-family: var(--widget-font, inherit);
     display: flex;
     flex-direction: column;
     position: absolute;
@@ -423,7 +428,7 @@ body {
 .chat-header {
     flex-shrink: 0;
     color: var(--theme-primary, #a855f7);
-    font-size: 1.4vh;
+    font-size: calc(1.4vh * var(--widget-text-scale, 1));
     font-weight: 700;
     margin-bottom: 1.5vh;
     text-transform: uppercase;
@@ -487,14 +492,83 @@ body {
 .chat-username {
     color: var(--chat-default-color, #a855f7);
     font-weight: 600;
-    font-size: 1.2vh;
+    font-size: calc(1.2vh * var(--widget-text-scale, 1));
     margin-bottom: 0.3vh;
 }
 
 .chat-text {
     color: var(--theme-text, #e2e8f0);
-    font-size: 1.1vh;
+    font-size: calc(1.1vh * var(--widget-text-scale, 1));
     line-height: 1.3;
+}
+
+/* ========== BANDEAU DE CHAT DÉFILANT (élément de scène "chatTicker") ==========
+ * Même flux que le panneau vertical, sur une seule ligne qui défile (voir advanceTicker dans
+ * overlay-common.js, qui translate .chat-ticker-track). overflow:hidden fait le masquage aux deux
+ * bords ; la piste est en largeur de contenu (max-content) pour que les messages s'alignent en
+ * ligne sans jamais passer à la ligne suivante. Hauteur laissée au contenu : le bandeau reste
+ * fin, c'est tout son intérêt face au panneau vertical. */
+.chat-ticker {
+    font-family: var(--widget-font, inherit);
+    display: flex;
+    align-items: center;
+    overflow: hidden;
+    box-sizing: border-box;
+    padding: 0.8vh 0;
+    background: rgba(var(--theme-panel-bg-rgb, 15, 23, 42), var(--ticker-bg-opacity, 0.6));
+    border-top: 2px solid var(--theme-panel-border, var(--theme-secondary, #8b45f6));
+    border-bottom: 2px solid var(--theme-panel-border, var(--theme-secondary, #8b45f6));
+}
+
+/* Gabarit invisible (largeur nulle) qui impose au bandeau la hauteur qu'il aurait avec des
+ * messages : sans lui, un bandeau vide — chat calme, ou messages tous sortis par la gauche —
+ * s'aplatit à la hauteur de ses seules marges, puis "saute" à sa taille réelle à l'arrivée du
+ * message suivant. Dans OBS, ce serait un cadre qui change de taille tout seul en direct.
+ * max() car la hauteur d'un message est dictée soit par ses badges (--chat-badge-size, qui ne
+ * suit pas la taille du texte), soit par le texte lui-même quand il est agrandi. */
+.chat-ticker::before {
+    content: '';
+    flex: 0 0 auto;
+    width: 0;
+    height: max(var(--chat-badge-size, 2vh), calc(1.4vh * var(--widget-text-scale, 1) * 1.2));
+}
+
+.chat-ticker-track {
+    display: flex;
+    align-items: center;
+    width: max-content;
+    /* Prévient le moteur que seul le transform change : évite un repaint complet du bandeau à
+       chaque frame (la boucle tourne en continu, contrairement aux autres animations d'overlay). */
+    will-change: transform;
+}
+
+.ticker-item {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 0.5vw;
+    /* La marge fait l'écart entre messages ET entre dans le calcul de retrait d'advanceTicker
+       (offsetWidth + marginRight) — un `gap` sur la piste, lui, n'est pas mesurable ainsi. */
+    margin-right: 2vw;
+    white-space: nowrap;
+}
+
+.ticker-spacer {
+    display: inline-block;
+    flex: 0 0 auto;
+}
+
+.ticker-user {
+    font-weight: 700;
+    font-size: calc(1.4vh * var(--widget-text-scale, 1));
+}
+
+.ticker-user::after {
+    content: ' :';
+}
+
+.ticker-text {
+    color: var(--theme-text, #e2e8f0);
+    font-size: calc(1.3vh * var(--widget-text-scale, 1));
 }
 
 /* ========== WIDGET SPOTIFY (élément de scène "spotify", overlay-common.js) ==========
@@ -528,10 +602,14 @@ body {
     min-width: 0;
 }
 
+/* --widget-text-scale / --widget-font : posées en JS par applyWidgetTextStyle()
+ * (overlay-common.js) depuis les propriétés "Taille du texte (%)" et "Police" du widget. Le
+ * multiplicateur préserve le rapport titre/artiste ; les valeurs de repli reproduisent le style
+ * d'origine (aucun réglage = rendu inchangé). */
 .spotify-title {
-    font-family: 'Baron Neue Black', 'Inter', sans-serif;
+    font-family: var(--widget-font, 'Baron Neue Black', 'Inter', sans-serif);
     color: var(--spotify-accent, #1db954);
-    font-size: 16px;
+    font-size: calc(16px * var(--widget-text-scale, 1));
     line-height: 1.2;
     margin-bottom: 3px;
     white-space: nowrap;
@@ -540,9 +618,9 @@ body {
 }
 
 .spotify-artist {
-    font-family: 'Inter', sans-serif;
+    font-family: var(--widget-font, 'Inter', sans-serif);
     color: var(--theme-text, #e2e8f0);
-    font-size: 13px;
+    font-size: calc(13px * var(--widget-text-scale, 1));
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;

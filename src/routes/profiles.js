@@ -264,6 +264,30 @@ function createProfilesRoutes(broadcastEvent) {
     router.delete('/api/profiles/:id/text/:page/:textId', (req, res) => {
         try {
             config.resetProfileText(req.params.id, req.params.page, req.params.textId);
+            config.resetProfileTextStyle(req.params.id, req.params.page, req.params.textId);
+            if (req.params.id === config.getActiveProfileId()) {
+                broadcastEvent({ type: 'config-updated', config: config.toFrontendConfig() });
+            }
+            res.json({ ok: true });
+        } catch (error) {
+            res.status(400).json({ error: error.message });
+        }
+    });
+
+    // Style (taille en vh, police) du même texte statique — endpoint séparé de son contenu, car
+    // stocké séparément (voir setProfileTextStyle dans store.js). Patch partiel : n'envoyer que
+    // le champ modifié suffit. La réinitialisation passe par le DELETE de /text/... ci-dessus,
+    // qui remet contenu ET style à leur valeur d'origine (un seul bouton ↺ dans l'éditeur).
+    router.post('/api/profiles/:id/text-style/:page/:textId', (req, res) => {
+        try {
+            const { size, font } = req.body || {};
+            const patch = {};
+            // `undefined` (et non "absent du patch") est ce qui EFFACE un réglage : le champ vidé
+            // dans l'éditeur envoie size:0 / font:"" pour revenir au style CSS de la page, alors
+            // qu'une clé absente doit, elle, laisser le réglage existant intact (patch partiel).
+            if (typeof size === 'number') patch.size = size > 0 ? Math.min(30, size) : undefined;
+            if (typeof font === 'string') patch.font = (font === 'baron' || font === 'inter') ? font : undefined;
+            config.setProfileTextStyle(req.params.id, req.params.page, req.params.textId, patch);
             if (req.params.id === config.getActiveProfileId()) {
                 broadcastEvent({ type: 'config-updated', config: config.toFrontendConfig() });
             }
@@ -292,6 +316,7 @@ function createProfilesRoutes(broadcastEvent) {
         try {
             const {
                 text, url, color, top, left, width, height, size, font, glow, opacity, radius, scale,
+                textScale, speed,
                 layout, showFunctionRow, showDigitRow, showMovement, showModifiers, showArrows, showMouse
             } = req.body || {};
             const patch = {};
@@ -310,6 +335,12 @@ function createProfilesRoutes(broadcastEvent) {
             if (typeof opacity === 'number') patch.opacity = Math.max(0, Math.min(100, opacity));
             if (typeof radius === 'number') patch.radius = Math.max(0, Math.min(200, radius));
             if (typeof scale === 'number') patch.scale = Math.max(25, Math.min(400, scale));
+            // Taille du TEXTE des widgets (chat, Spotify) en % — distincte de `size` (en vh, bornée
+            // à 30 pour texte/horloge) et de `scale` (zoom de tout le widget, contenant compris) :
+            // ici seules les polices internes grossissent, le cadre du widget ne bouge pas.
+            if (typeof textScale === 'number') patch.textScale = Math.max(25, Math.min(400, textScale));
+            // Vitesse de défilement du bandeau de chat (chatTicker), en px/s.
+            if (typeof speed === 'number') patch.speed = Math.max(10, Math.min(400, speed));
             // Plateau clavier/souris ("keys") : disposition affichée (voir buildKeysBlocks dans
             // overlay-common.js) et blocs de touches activables indépendamment.
             if (layout === 'qwerty' || layout === 'azerty') patch.layout = layout;

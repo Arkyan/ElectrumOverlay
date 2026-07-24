@@ -281,6 +281,11 @@ const SCENE_EDITOR_HTML = ({ activeId, themes, pause, scenes, animDefaults }) =>
         .se-text-row label { font-size: 11px; color: var(--text-muted); display: block; margin-bottom: var(--space-1); }
         .se-text-row .field-row { gap: var(--space-2); align-items: center; flex-wrap: nowrap; }
         .se-text-row input[type="text"] { flex: 1; min-width: 0; }
+        /* Ligne taille/police, sous le champ de contenu : volontairement plus discrète (petits
+           champs) — c'est un réglage secondaire par rapport au texte lui-même. */
+        .se-text-style-row { margin-top: var(--space-1); }
+        .se-text-style-row input[type="number"] { width: 72px; flex: 0 0 auto; }
+        .se-text-style-row select { flex: 1; min-width: 0; }
 
         .se-color-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--space-2); }
         .se-color-grid .field { margin-bottom: 0; }
@@ -375,6 +380,7 @@ const SCENE_EDITOR_HTML = ({ activeId, themes, pause, scenes, animDefaults }) =>
                             <button type="button" data-type="box">■&nbsp;&nbsp;Boîte de couleur</button>
                             <button type="button" data-type="clock">◷&nbsp;&nbsp;Horloge</button>
                             <button type="button" data-type="chat">💬&nbsp;&nbsp;Chat Twitch</button>
+                            <button type="button" data-type="chatTicker">🎞️&nbsp;&nbsp;Chat défilant</button>
                             <button type="button" data-type="alerts">🔔&nbsp;&nbsp;Alertes</button>
                             <button type="button" data-type="spotify">🎵&nbsp;&nbsp;Spotify</button>
                             <button type="button" data-type="keys">⌨️&nbsp;&nbsp;Touches</button>
@@ -604,7 +610,7 @@ const SCENE_EDITOR_HTML = ({ activeId, themes, pause, scenes, animDefaults }) =>
         });
 
         // ---------- Sources ----------
-        const TYPE_ICONS = { text: 'T', image: '▨', box: '■', clock: '◷', chat: '💬', alerts: '🔔', spotify: '🎵', keys: '⌨️' };
+        const TYPE_ICONS = { text: 'T', image: '▨', box: '■', clock: '◷', chat: '💬', chatTicker: '🎞️', alerts: '🔔', spotify: '🎵', keys: '⌨️' };
 
         function renderSources() {
             const el = document.getElementById('sourcesList');
@@ -726,14 +732,24 @@ const SCENE_EDITOR_HTML = ({ activeId, themes, pause, scenes, animDefaults }) =>
             ],
             chat: [
                 { prop: 'text', label: 'Titre du panneau', kind: 'text' },
-                { prop: 'scale', label: 'Échelle (%)', kind: 'number', def: 100, step: 5, min: 25, max: 400 }
+                { prop: 'scale', label: 'Échelle (%)', kind: 'number', def: 100, step: 5, min: 25, max: 400 },
+                { prop: 'textScale', label: 'Taille du texte (%)', kind: 'number', def: 100, step: 5, min: 25, max: 400 },
+                { prop: 'font', label: 'Police', kind: 'font' }
+            ],
+            chatTicker: [
+                { prop: 'speed', label: 'Vitesse (px/s)', kind: 'number', def: 60, step: 5, min: 10, max: 400 },
+                { prop: 'textScale', label: 'Taille du texte (%)', kind: 'number', def: 100, step: 5, min: 25, max: 400 },
+                { prop: 'font', label: 'Police', kind: 'font' },
+                { prop: 'opacity', label: 'Opacité du fond (%)', kind: 'number', def: 60, step: 5, min: 0, max: 100 }
             ],
             // Zone d'alertes : pas d'échelle — sa taille EST le réglage (l'alerte s'ajuste au
             // plus grand format qui tient dans le cadre).
             alerts: [],
             spotify: [
                 { prop: 'color', label: "Couleur d'accent", kind: 'color', def: '#1db954' },
-                { prop: 'scale', label: 'Échelle (%)', kind: 'number', def: 100, step: 5, min: 25, max: 400 }
+                { prop: 'scale', label: 'Échelle (%)', kind: 'number', def: 100, step: 5, min: 25, max: 400 },
+                { prop: 'textScale', label: 'Taille du texte (%)', kind: 'number', def: 100, step: 5, min: 25, max: 400 },
+                { prop: 'font', label: 'Police', kind: 'font' }
             ],
             keys: [
                 { prop: 'color', label: "Couleur d'accent", kind: 'color', def: '#f59e0b' },
@@ -810,8 +826,11 @@ const SCENE_EDITOR_HTML = ({ activeId, themes, pause, scenes, animDefaults }) =>
             let note = '';
             if (item.isCustom) {
                 fields = (PROP_SPECS[item.customType] || []).map((spec) => propFieldHtml(spec, item)).join('');
-                if (item.customType === 'chat' || item.customType === 'alerts') {
+                if (item.customType === 'chat' || item.customType === 'chatTicker' || item.customType === 'alerts') {
                     note = '<p class="hint">Reprend les couleurs du thème de la scène (onglet Scène).</p>';
+                }
+                if (item.customType === 'chatTicker') {
+                    note += '<p class="hint">Les messages défilent de droite à gauche en continu. Redimensionne le bandeau en largeur pour couvrir l\\'écran ; sa hauteur suit la taille du texte. L\\'aperçu est figé ici, le défilement ne joue que sur l\\'overlay réel.</p>';
                 }
                 if (item.customType === 'alerts') {
                     note += '<p class="hint">Le cadre définit où les alertes peuvent apparaître : chaque alerte s\\'affiche au plus grand format qui y tient, média (image/GIF) en entier. Teste le rendu avec la barre "Aperçu" en haut.</p>';
@@ -920,15 +939,41 @@ const SCENE_EDITOR_HTML = ({ activeId, themes, pause, scenes, animDefaults }) =>
                     : 'Aucun texte intégré sur cette scène.') + '</p>';
                 return;
             }
+            // Taille/police laissées VIDES quand aucun réglage n'est enregistré (placeholder
+            // "auto" / option "(par défaut)") : un texte sans override doit suivre le CSS de la
+            // page, et revider le champ est ce qui l'y ramène (voir la route text-style).
             el.innerHTML = texts.map((item) => \`
                 <div class="se-text-row" data-text="\${item.textId}">
                     <label>\${esc(item.label)}</label>
                     <div class="field-row">
                         <input type="text" class="se-static-text" data-text="\${item.textId}" value="\${esc(item.value)}">
-                        <button type="button" class="btn btn-ghost btn-sm se-static-text-reset" data-text="\${item.textId}" title="Revenir au texte par défaut">↺</button>
+                        <button type="button" class="btn btn-ghost btn-sm se-static-text-reset" data-text="\${item.textId}" title="Revenir au texte et au style par défaut">↺</button>
+                    </div>
+                    <div class="field-row se-text-style-row">
+                        <input type="number" class="se-text-style" data-text="\${item.textId}" data-prop="size"
+                            value="\${typeof item.size === 'number' ? item.size : ''}" placeholder="auto"
+                            step="0.1" min="0.5" max="30" title="Taille en vh (vide = taille par défaut de la page)">
+                        <select class="se-text-style" data-text="\${item.textId}" data-prop="font" title="Police">
+                            <option value=""\${!item.font ? ' selected' : ''}>(par défaut)</option>
+                            <option value="baron"\${item.font === 'baron' ? ' selected' : ''}>Baron Neue</option>
+                            <option value="inter"\${item.font === 'inter' ? ' selected' : ''}>Inter</option>
+                        </select>
                     </div>
                 </div>\`).join('');
         }
+
+        // Taille/police d'un texte intégré : endpoint distinct du contenu (stockage séparé, voir
+        // setProfileTextStyle dans store.js). 'change' et non 'focusout' : couvre aussi le select.
+        document.getElementById('textsList').addEventListener('change', async (e) => {
+            const input = e.target.closest('.se-text-style');
+            if (!input) return;
+            const prop = input.dataset.prop;
+            // Champ vidé => 0 / "" : la route interprète ces valeurs comme "revenir au défaut".
+            const value = (prop === 'size') ? (parseFloat(input.value) || 0) : input.value;
+            const res = await callApi('/api/profiles/' + ACTIVE_PROFILE_ID + '/text-style/' + currentKey + '/' + input.dataset.text,
+                jsonBody('POST', { [prop]: value }));
+            if (res) toast('Style enregistré.');
+        });
 
         document.getElementById('textsList').addEventListener('focusout', async (e) => {
             const input = e.target.closest('.se-static-text');

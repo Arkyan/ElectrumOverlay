@@ -480,20 +480,59 @@ function resetProfileText(id, page, textId) {
 }
 
 /**
+ * Style (taille en vh, police) d'un texte statique data-scene-text — volontairement stocké à part
+ * de `display.texts`, qui reste une simple table id → chaîne : y glisser un objet obligerait à
+ * gérer les deux formes partout où un override de texte est lu (rendu, éditeur, profils déjà
+ * enregistrés). `patch` est fusionné, pour pouvoir changer la taille sans toucher à la police.
+ */
+function setProfileTextStyle(id, page, textId, patch) {
+    const profile = getProfileFull(id);
+    profile.display = profile.display || {};
+    profile.display.textStyles = profile.display.textStyles || {};
+    profile.display.textStyles[page] = profile.display.textStyles[page] || {};
+    profile.display.textStyles[page][textId] = {
+        ...(profile.display.textStyles[page][textId] || {}),
+        ...patch
+    };
+
+    profile.updatedAt = new Date().toISOString();
+    writeProfileFile(profile);
+    if (id === getActiveProfileId()) {
+        recomputeDisplay();
+    }
+}
+
+/** Retire le style — le texte revient à la taille/police définies par le CSS de la page. */
+function resetProfileTextStyle(id, page, textId) {
+    const profile = getProfileFull(id);
+    if (profile.display && profile.display.textStyles && profile.display.textStyles[page]) {
+        delete profile.display.textStyles[page][textId];
+    }
+    profile.updatedAt = new Date().toISOString();
+    writeProfileFile(profile);
+    if (id === getActiveProfileId()) {
+        recomputeDisplay();
+    }
+}
+
+/**
  * Éléments ajoutés librement par l'utilisateur depuis l'éditeur de scène (pas présents dans
  * le HTML de base) — stockés par id généré, un objet (pas un tableau) pour patch/suppression
  * directs par id sans avoir à retrouver leur index. Historiquement limités au texte (d'où le
  * nom de la clé `customTexts`, conservé pour ne pas invalider les profils existants), ils
  * portent depuis un `type` : text (défaut, pour compat), image (URL), box (aplat de couleur),
- * clock (horloge en direct), chat (panneau de chat Twitch en direct), alerts (conteneur
- * d'alertes follow/sub/raid...), spotify (morceau en cours de lecture, voir SpotifyAuth) ou keys
- * (touches clavier/souris pressées, voir electron/inputCapture.js — capture Electron-only, gérée
- * par le toggle `inputDisplay.enabled`) — voir renderCustomTextsFromConfig() dans overlay-common.js.
+ * clock (horloge en direct), chat (panneau de chat Twitch en direct), chatTicker (les mêmes
+ * messages en bandeau défilant horizontal), alerts (conteneur d'alertes follow/sub/raid...),
+ * spotify (morceau en cours de lecture, voir SpotifyAuth) ou keys (touches clavier/souris
+ * pressées, voir electron/inputCapture.js — capture Electron-only, gérée par le toggle
+ * `inputDisplay.enabled`) — voir renderCustomTextsFromConfig() dans overlay-common.js.
  */
-const CUSTOM_ELEMENT_TYPES = ['text', 'image', 'box', 'clock', 'chat', 'alerts', 'spotify', 'keys'];
+const CUSTOM_ELEMENT_TYPES = ['text', 'image', 'box', 'clock', 'chat', 'chatTicker', 'alerts', 'spotify', 'keys'];
 
 // Les widgets à id DOM unique (#chatContainer, #alertContainer — cf. addChatMessage()/showAlert()
-// qui les retrouvent par getElementById) ne supportent qu'une instance par page.
+// qui les retrouvent par getElementById) ne supportent qu'une instance par page. chatTicker n'en
+// fait PAS partie bien qu'il affiche le même flux : ses conteneurs sont retrouvés par classe
+// (.chat-ticker), donc plusieurs bandeaux peuvent coexister, y compris avec un panneau vertical.
 const SINGLETON_ELEMENT_TYPES = ['chat', 'alerts'];
 
 function addProfileCustomText(id, page, { type, text, url, color, top, left }) {
@@ -514,6 +553,7 @@ function addProfileCustomText(id, page, { type, text, url, color, top, left }) {
     }
     if (entry.type === 'text') entry.text = text || 'Nouveau texte';
     if (entry.type === 'chat') entry.text = text || 'CHAT'; // titre du panneau
+    if (entry.type === 'chatTicker') entry.speed = 60; // px/s — défilement lisible sans fatiguer l'œil
     if (entry.type === 'image') entry.url = typeof url === 'string' ? url : '';
     if (entry.type === 'box') entry.color = typeof color === 'string' ? color : '#a855f7';
     if (entry.type === 'spotify') entry.color = typeof color === 'string' ? color : '#1db954'; // vert Spotify
@@ -929,6 +969,8 @@ module.exports.updateProfileElementLayout = updateProfileElementLayout;
 module.exports.resetProfileElementLayout = resetProfileElementLayout;
 module.exports.setProfileText = setProfileText;
 module.exports.resetProfileText = resetProfileText;
+module.exports.setProfileTextStyle = setProfileTextStyle;
+module.exports.resetProfileTextStyle = resetProfileTextStyle;
 module.exports.addProfileCustomText = addProfileCustomText;
 module.exports.updateProfileCustomText = updateProfileCustomText;
 module.exports.removeProfileCustomText = removeProfileCustomText;
