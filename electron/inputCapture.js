@@ -60,11 +60,15 @@ const ALLOWED_KEYS = {
     [UiohookKey[9]]: '9'
 };
 
-// Convention uiohook-napi (héritée de libuiohook) pour le champ `button` des événements souris.
+// Convention uiohook-napi (héritée de libuiohook) pour le champ `button` des événements souris —
+// 4/5 = boutons latéraux ("pouce"), confirmés côté Windows (libuiohook/src/windows/input_hook.c) :
+// XBUTTON1 (arrière) → MOUSE_BUTTON4, XBUTTON2 (avant) → MOUSE_BUTTON5.
 const MOUSE_BUTTON_LABELS = {
     1: 'Clic gauche',
     2: 'Clic droit',
-    3: 'Clic molette'
+    3: 'Clic molette',
+    4: 'Bouton arrière',
+    5: 'Bouton avant'
 };
 
 // Keycodes/boutons actuellement enfoncés au niveau matériel : le hook renvoie un `keydown` à

@@ -595,7 +595,10 @@ body {
     font-weight: 700;
     font-size: 9px;
     color: rgba(255, 255, 255, 0.75);
-    background: rgba(0, 0, 0, 0.35);
+    /* --keys-bg-opacity posée en JS (item.bgOpacity, voir renderCustomTextsFromConfig) — l'état
+     * .active (touche enfoncée) reste un aplat plein de la couleur d'accent, non affecté : c'est
+     * la lisibilité de l'état "relâché" que ce réglage ajuste, pas le retour visuel d'appui. */
+    background: rgba(0, 0, 0, var(--keys-bg-opacity, 0.35));
     border: 1.5px solid rgba(255, 255, 255, 0.25);
     transition: background 0.08s ease, color 0.08s ease, border-color 0.08s ease, transform 0.08s ease;
 }
@@ -612,7 +615,12 @@ body {
     border: none;
 }
 
+/* position:relative (pas de overflow) : ancre les boutons de pouce (position:absolute) sur le
+ * bord gauche de .mouse-body sans les rogner — contrairement à .mouse-body lui-même, qui a besoin
+ * de son overflow:hidden pour que les coins des zones clic/molette restent coupés par son propre
+ * border-radius. */
 .keys-mouse {
+    position: relative;
     display: flex;
 }
 
@@ -624,8 +632,25 @@ body {
     overflow: hidden;
     border: 1.5px solid rgba(255, 255, 255, 0.25);
     border-radius: 24px 24px 15px 15px;
-    background: rgba(0, 0, 0, 0.35);
+    background: rgba(0, 0, 0, var(--keys-bg-opacity, 0.35));
 }
+
+/* Boutons de pouce (Précédent/Suivant) intégrés au corps de la souris : légèrement en saillie sur
+ * le bord gauche (left négatif) plutôt qu'un bloc séparé à côté. Avant en haut, arrière en bas. */
+.mouse-thumb-btn {
+    position: absolute;
+    left: -4px;
+    width: 9px;
+    height: 13px;
+    box-sizing: border-box;
+    border-radius: 3px 0 0 3px;
+    border: 1.5px solid rgba(255, 255, 255, 0.25);
+    background: rgba(0, 0, 0, var(--keys-bg-opacity, 0.35));
+    transition: background 0.08s ease;
+}
+
+.mouse-thumb-top { top: 20px; }
+.mouse-thumb-bottom { top: 37px; }
 
 .mouse-btn {
     flex: 1;
@@ -651,7 +676,8 @@ body {
 }
 
 .mouse-btn.active,
-.mouse-wheel.active {
+.mouse-wheel.active,
+.mouse-thumb-btn.active {
     background: var(--keys-accent, #f59e0b);
 }
 

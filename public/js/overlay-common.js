@@ -546,6 +546,11 @@ function renderCustomTextsFromConfig() {
             el.className = 'keys-widget';
             el.dataset.colorValue = item.color || '#f59e0b';
             el.style.setProperty('--keys-accent', item.color || '#f59e0b');
+            // Réutilise le champ générique `opacity` (déjà géré par exposeStyleProps/PATCH pour
+            // image/box) plutôt qu'un champ dédié — évite de repasser par toute la plomberie
+            // (exposeStyleProps + reportReady + whitelist PATCH) pour un simple pourcentage.
+            const bgOpacity = (typeof item.opacity === 'number' ? item.opacity : 35) / 100;
+            el.style.setProperty('--keys-bg-opacity', String(bgOpacity));
 
             const blocks = buildKeysBlocks(item.layout === 'qwerty' ? 'qwerty' : 'azerty');
             const mainRows = [];
@@ -568,11 +573,19 @@ function renderCustomTextsFromConfig() {
             if (item.showMouse !== false) {
                 const mouse = document.createElement('div');
                 mouse.className = 'keys-mouse';
+                // Boutons de pouce en frères de .mouse-body (pas enfants) : .mouse-body garde son
+                // overflow:hidden (nécessaire pour que les coins des zones clic/molette restent
+                // coupés par le border-radius du corps) — .keys-mouse, sans overflow, les laisse
+                // dépasser légèrement sur le côté gauche pour un rendu intégré au corps de la
+                // souris plutôt qu'un bloc séparé à côté (positionnement en CSS, voir .mouse-thumb-*).
+                // Avant (bouton 5) en haut, arrière (bouton 4) en bas.
                 mouse.innerHTML = '<div class="mouse-body">'
                     + '<div class="mouse-btn" data-key-label="Clic gauche"></div>'
                     + '<div class="mouse-wheel" data-key-label="Clic molette"></div>'
                     + '<div class="mouse-btn" data-key-label="Clic droit"></div>'
-                    + '</div>';
+                    + '</div>'
+                    + '<div class="mouse-thumb-btn mouse-thumb-top" data-key-label="Bouton avant"></div>'
+                    + '<div class="mouse-thumb-btn mouse-thumb-bottom" data-key-label="Bouton arrière"></div>';
                 el.appendChild(mouse);
             }
         }

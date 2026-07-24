@@ -738,6 +738,7 @@ const SCENE_EDITOR_HTML = ({ activeId, themes, pause, scenes, animDefaults }) =>
             keys: [
                 { prop: 'color', label: "Couleur d'accent", kind: 'color', def: '#f59e0b' },
                 { prop: 'scale', label: 'Échelle (%)', kind: 'number', def: 100, step: 5, min: 25, max: 400 },
+                { prop: 'opacity', label: 'Opacité du fond (%)', kind: 'number', def: 35, step: 5, min: 0, max: 100 },
                 {
                     prop: 'layout', label: 'Disposition clavier', kind: 'select', def: 'azerty',
                     options: [{ value: 'azerty', label: 'AZERTY (ZQSD)' }, { value: 'qwerty', label: 'QWERTY (WASD)' }]
