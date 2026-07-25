@@ -1226,6 +1226,9 @@ function addChatMessage(username, message, color, badgeUrls, fragments) {
 function appendTickerItem(ticker, item) {
     const track = ticker.querySelector('[data-ticker-track]');
     if (!track) return;
+    // N'apparaît que s'il y a un message : voir la règle .chat-ticker:not(.has-messages) dans
+    // overlay-common.css, retirée symétriquement dans advanceTicker quand la piste se vide.
+    ticker.classList.add('has-messages');
     const offset = parseFloat(track.dataset.offset || '0');
     const contentRight = offset + track.scrollWidth;
     const gap = ticker.clientWidth - contentRight;
@@ -1270,6 +1273,7 @@ function advanceTicker(ticker, dt) {
         // Piste vide : on repart de zéro, sinon l'offset accumulé décalerait le prochain message.
         track.dataset.offset = '0';
         track.style.transform = '';
+        ticker.classList.remove('has-messages');
         return;
     }
 

@@ -107,6 +107,12 @@
                (voir applySpotifyTrackTo dans overlay-common.js) — en édition il doit rester
                visible/positionnable même à l'arrêt, fillWidgetPreview() y affiche alors un exemple. */
             [data-custom-type="spotify"] { display: flex !important; }
+            /* Bandeau de chat défilant : masqué en usage normal tant qu'aucun message n'est passé
+               dedans (voir .chat-ticker:not(.has-messages) dans overlay-common.css) — en édition
+               il doit rester visible/positionnable, scene-editor-bridge.js y injecte alors des
+               messages d'exemple directement dans la piste (voir plus bas), sans passer par
+               appendTickerItem qui pose la classe .has-messages. */
+            [data-custom-type="chatTicker"] { visibility: visible !important; }
             [data-scene-alert-zone]:not(.show) .alert-box { display: none !important; }
             [data-scene-alert-zone]:not(.show)::after {
                 content: "Zone d'alerte — l'alerte s'y ajuste au plus grand";

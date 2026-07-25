@@ -520,6 +520,16 @@ body {
     border-bottom: 2px solid var(--theme-panel-border, var(--theme-secondary, #8b45f6));
 }
 
+/* Invisible tant qu'aucun message n'est passé dedans (classe posée/retirée par
+ * appendTickerItem/advanceTicker dans overlay-common.js) : sans ça, le fond et les bordures du
+ * bandeau restent affichés en permanence même chat calme, ce qui n'est pas souhaité pour cet
+ * élément (contrairement au panneau vertical, pensé pour rester visible en continu).
+ * visibility (pas display) : la boîte garde ses dimensions, donc clientWidth/scrollWidth restent
+ * mesurables — appendTickerItem s'en sert pour faire entrer le premier message par le bord droit. */
+.chat-ticker:not(.has-messages) {
+    visibility: hidden;
+}
+
 /* Gabarit invisible (largeur nulle) qui impose au bandeau la hauteur qu'il aurait avec des
  * messages : sans lui, un bandeau vide — chat calme, ou messages tous sortis par la gauche —
  * s'aplatit à la hauteur de ses seules marges, puis "saute" à sa taille réelle à l'arrivée du
