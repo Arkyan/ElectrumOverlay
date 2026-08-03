@@ -26,6 +26,17 @@
 }
 
 /* ========== STYLES DE BASE ========== */
+/* Le cadre capturé par OBS fait exactement la taille de la source navigateur (1920x1080) et ne doit
+ * jamais grandir : l'éditeur de scène autorise à faire dépasser un élément hors cadre par n'importe
+ * quel bord (positions négatives comprises, voir clampLayoutPercent dans overlay-common.js), et ce
+ * dépassement doit être ROGNÉ, pas révélé par un défilement. Les éléments concernés sont en
+ * position:fixed (donc déjà hors du flux de défilement du document), l'overflow:hidden ici couvre le
+ * reste — posé aussi sur html : quand html est en overflow:visible, c'est celui du body qui est
+ * propagé à la zone d'affichage, une règle html plus spécifique ailleurs suffirait à le réactiver. */
+html {
+    overflow: hidden;
+}
+
 body {
     margin: 0;
     font-family: 'Inter', Arial, sans-serif;

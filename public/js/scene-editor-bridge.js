@@ -788,8 +788,10 @@
     }
 
     /**
-     * Centrage rapide (boutons "Centrer horiz./vert." de la barre d'outils) : demandé par le
-     * parent avec seulement un id d'élément + un axe ('x' ou 'y'), calculé ici car seule cette
+     * Centrage rapide (boutons "Centrer horiz./vert." de la barre d'outils, et "Recentrer" du
+     * panneau de propriétés qui demande les deux axes à la fois pour rattraper un élément sorti du
+     * cadre) : demandé par le parent avec seulement un id d'élément + un axe ('x', 'y' ou
+     * 'both' — même convention que le redimensionnement), calculé ici car seule cette
      * page connaît la taille réellement rendue de l'élément (zoom, contenu variable...). Réutilise
      * le même chemin d'enregistrement qu'un drag classique (postMessage 'scene-element-moved') —
      * aucune route API dédiée nécessaire.
@@ -813,11 +815,11 @@
         // soit le mécanisme de centrage CSS de l'élément.
         let left = ref.left;
         let top = ref.top;
-        if (axis === 'x') {
+        if (axis === 'x' || axis === 'both') {
             const targetLeft = window.innerWidth / 2 - rect.width / 2;
             left = ref.left + (targetLeft - rect.left);
         }
-        if (axis === 'y') {
+        if (axis === 'y' || axis === 'both') {
             const targetTop = window.innerHeight / 2 - rect.height / 2;
             top = ref.top + (targetTop - rect.top);
         }

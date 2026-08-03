@@ -206,10 +206,17 @@ function createProfilesRoutes(broadcastEvent) {
     // l'élément, voir applyLayoutFromConfig) + échelle visuelle (zoom, en %).
     const ELEMENT_STYLE_COLOR_KEYS = ['primary', 'secondary', 'text', 'panelBg', 'panelBorder'];
 
-    // Positions bornées à [0,100] (% de la hauteur/largeur d'écran) : une position hors écran ne
-    // peut être qu'une erreur (drag interrompu, ancien bug de compensation) et rend l'élément
-    // introuvable — le rendu borne aussi de son côté pour réparer les données déjà enregistrées.
-    const clampPercent = (v) => Math.min(100, Math.max(0, v));
+    // Positions bornées à [-100,200] (% de la hauteur/largeur d'écran). top/left désignent le coin
+    // HAUT-GAUCHE : borner à 0 rendait impossible de faire dépasser un élément par le haut ou par la
+    // gauche (alors que left:100 le sortait déjà entièrement à droite) — d'où ces bornes
+    // symétriques, larges d'un écran de chaque côté, de quoi sortir complètement n'importe quel
+    // élément par n'importe quel bord. Ce qui dépasse est simplement rogné : les éléments sont en
+    // position:fixed dans un body 100vw/100vh en overflow:hidden, donc la page reste exactement à la
+    // taille de la source navigateur OBS (1920x1080), sans scroll ni agrandissement du cadre capturé.
+    // Les bornes restent là uniquement pour rejeter les valeurs aberrantes (ancien bug de
+    // compensation de drag, qui enregistrait des positions type 114vh) ; un élément volontairement
+    // sorti du cadre reste récupérable via le bouton « Recentrer » de l'éditeur de scène.
+    const clampPercent = (v) => Math.min(200, Math.max(-100, v));
 
     router.post('/api/profiles/:id/layout/:page/:elementId', (req, res) => {
         try {

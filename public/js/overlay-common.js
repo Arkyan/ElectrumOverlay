@@ -145,6 +145,21 @@ function setInverseZoomVar(el, zoom) {
 }
 
 /**
+ * Bornage des positions enregistrées, mêmes bornes que côté serveur (clampPercent dans
+ * src/routes/profiles.js) : garde-fou contre les valeurs aberrantes (ancien bug de compensation de
+ * drag, qui a pu enregistrer des top 114vh / left 119vw) sans empêcher de sortir volontairement un
+ * élément du cadre par n'importe quel bord — top/left désignant le coin haut-gauche, il faut du
+ * négatif pour dépasser en haut/à gauche. Sans effet sur la taille de la page capturée par OBS :
+ * ces éléments sont en position:fixed dans un body 100vw/100vh overflow:hidden, ce qui dépasse est
+ * rogné.
+ */
+const LAYOUT_MIN_PERCENT = -100;
+const LAYOUT_MAX_PERCENT = 200;
+function clampLayoutPercent(v) {
+    return Math.min(LAYOUT_MAX_PERCENT, Math.max(LAYOUT_MIN_PERCENT, v));
+}
+
+/**
  * Positions/visibilité custom posées depuis l'éditeur de scène (/scene-editor), par page —
  * cfg.layout[page] = { elementId: {top?, left?, hidden?} } (top/left en % de la hauteur/largeur).
  * Entièrement déclaratif : chaque élément déplaçable est reposé à partir de RIEN d'autre que la
@@ -201,14 +216,11 @@ function applyLayoutFromConfig() {
         el.dataset.propScale = (pos && typeof pos.scale === 'number') ? String(pos.scale) : '';
 
         if (pos && typeof pos.top === 'number' && typeof pos.left === 'number') {
-            // Ramené dans [0,100] : un ancien bug de l'éditeur (compensation de drag ignorant le
-            // scale() des animations d'alerte) a pu enregistrer des positions hors écran (ex:
-            // top 114vh / left 119vw constaté en vrai) — l'élément semblait alors avoir disparu.
-            // Le bornage au rendu répare ces données sans migration : l'élément réapparaît en
-            // bord d'écran, prêt à être repositionné.
+            // Bornage large (voir clampLayoutPercent) : le dépassement de cadre est volontairement
+            // permis dans les quatre directions, seules les valeurs aberrantes sont ramenées.
             el.style.position = 'fixed';
-            el.style.top = (Math.min(100, Math.max(0, pos.top)) / zoom) + 'vh';
-            el.style.left = (Math.min(100, Math.max(0, pos.left)) / zoom) + 'vw';
+            el.style.top = (clampLayoutPercent(pos.top) / zoom) + 'vh';
+            el.style.left = (clampLayoutPercent(pos.left) / zoom) + 'vw';
             el.style.right = 'auto';
             el.style.bottom = 'auto';
         } else {
@@ -481,10 +493,9 @@ function renderCustomTextsFromConfig() {
         if (zoom !== 1) el.style.zoom = String(zoom);
         setInverseZoomVar(el, zoom);
         el.style.position = 'fixed';
-        // Même bornage [0,100] que les éléments intégrés (applyLayoutFromConfig) : répare les
-        // positions hors écran enregistrées par l'ancien bug de drag.
-        el.style.top = (Math.min(100, Math.max(0, item.top ?? 40)) / zoom) + 'vh';
-        el.style.left = (Math.min(100, Math.max(0, item.left ?? 40)) / zoom) + 'vw';
+        // Même bornage large que les éléments intégrés (voir clampLayoutPercent).
+        el.style.top = (clampLayoutPercent(item.top ?? 40) / zoom) + 'vh';
+        el.style.left = (clampLayoutPercent(item.left ?? 40) / zoom) + 'vw';
         el.style.zIndex = '250';
         // De vraies dimensions CSS (pas transform:scale, qui déformerait le contenu) : l'élément
         // dispose de plus/moins d'espace et le texte wrappe normalement au lieu d'être étiré.

@@ -824,6 +824,11 @@ const SCENE_EDITOR_HTML = ({ activeId, themes, pause, scenes, animDefaults }) =>
             }
             let fields = '';
             let note = '';
+            // Filet de sécurité du dépassement de cadre : un élément peut être tiré entièrement hors
+            // de l'écran (positions négatives comprises, voir clampLayoutPercent) — il n'est alors
+            // plus attrapable à la souris dans l'aperçu, seulement sélectionnable dans la liste des
+            // sources. Ce bouton le ramène toujours à une position sûrement visible.
+            const recenterBtn = \`<button type="button" class="btn btn-ghost btn-sm" id="btnRecenterEl" title="Ramène l'élément au centre du cadre s'il a été sorti de l'écran">Recentrer</button>\`;
             if (item.isCustom) {
                 fields = (PROP_SPECS[item.customType] || []).map((spec) => propFieldHtml(spec, item)).join('');
                 if (item.customType === 'chat' || item.customType === 'chatTicker' || item.customType === 'alerts') {
@@ -841,6 +846,7 @@ const SCENE_EDITOR_HTML = ({ activeId, themes, pause, scenes, animDefaults }) =>
                 if (item.customType === 'keys') {
                     note += '<p class="hint">Affiche les touches clavier/souris pressées (WASD, flèches, Espace, modificateurs, F1-F12, chiffres, clics) — active la capture depuis la page <a href="/integrations" target="_blank">Intégrations</a>.</p>';
                 }
+                fields += \`<div class="se-btn-row">\${recenterBtn}</div>\`;
             } else {
                 const theme = THEMES[currentKey] || {};
                 const fallbackFor = (key) => {
@@ -859,13 +865,25 @@ const SCENE_EDITOR_HTML = ({ activeId, themes, pause, scenes, animDefaults }) =>
                     fields += \`<div class="field" style="margin-top:var(--space-3);"><label>Échelle (%)</label>
                         <input type="number" class="se-bprop" data-prop="scale" data-kind="number" value="\${typeof item.scale === 'number' ? item.scale : 100}" step="5" min="25" max="400"></div>\`;
                 }
-                fields += \`<div class="se-btn-row"><button type="button" class="btn btn-ghost btn-sm" id="btnResetEl">Réinitialiser</button></div>\`;
+                fields += \`<div class="se-btn-row">\${recenterBtn}<button type="button" class="btn btn-ghost btn-sm" id="btnResetEl">Réinitialiser</button></div>\`;
                 note = '<p class="hint">Couleurs et échelle appliquées à cet élément uniquement (selon l\\'élément, certaines couleurs peuvent être sans effet). Réinitialiser efface position, taille et style. Les éléments intégrés ne se suppriment pas — masque-les avec l\\'œil.</p>';
                 if (item.id === 'alertContainer') {
                     note = '<p class="hint">Le cadre définit où les alertes peuvent apparaître : chaque alerte s\\'affiche au plus grand format qui y tient, média (image/GIF) en entier. Teste le rendu avec la barre "Aperçu" en haut.</p>' + note;
                 }
             }
             box.innerHTML = \`<h4>\${esc(item.label)}\${item.hidden ? ' (masqué)' : ''}</h4>\` + fields + note;
+
+            // Réutilise le centrage de la barre d'outils sur les DEUX axes (calculé dans l'iframe,
+            // seule à connaître la taille réellement rendue de l'élément et son mécanisme de
+            // centrage CSS) plutôt qu'une position en dur : l'enregistrement suit alors le même
+            // chemin qu'un drag classique, sans route dédiée.
+            const recenterEl = document.getElementById('btnRecenterEl');
+            if (recenterEl) {
+                recenterEl.addEventListener('click', () => {
+                    centerSelected('both');
+                    toast('Élément recentré.');
+                });
+            }
 
             const resetBtn = document.getElementById('btnResetEl');
             if (resetBtn) {
