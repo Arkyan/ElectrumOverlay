@@ -220,11 +220,16 @@ function createProfilesRoutes(broadcastEvent) {
 
     router.post('/api/profiles/:id/layout/:page/:elementId', (req, res) => {
         try {
-            const { top, left, hidden, width, height, scale, opacity } = req.body || {};
+            const { top, left, hidden, removed, width, height, scale, opacity } = req.body || {};
             const patch = {};
             if (typeof top === 'number') patch.top = clampPercent(top);
             if (typeof left === 'number') patch.left = clampPercent(left);
             if (typeof hidden === 'boolean') patch.hidden = hidden;
+            // `removed` va plus loin que `hidden` : l'élément intégré disparaît AUSSI de la liste
+            // des sources de l'éditeur, comme s'il n'avait jamais existé sur cette page — c'est ce
+            // qui permet de vider entièrement une page intégrée pour la reconstruire librement.
+            // Réversible : l'éditeur liste les éléments retirés et sait les rétablir.
+            if (typeof removed === 'boolean') patch.removed = removed;
             if (typeof width === 'number' && width > 0) patch.width = width;
             if (typeof height === 'number' && height > 0) patch.height = height;
             if (typeof scale === 'number') patch.scale = Math.max(25, Math.min(400, scale));
@@ -323,45 +328,70 @@ function createProfilesRoutes(broadcastEvent) {
         }
     });
 
+    // Whitelist + bornage des propriétés d'un élément custom : l'API n'accepte que des types
+    // stricts, et borne ici plutôt qu'au rendu pour que la config stockée reste saine quoi qu'il
+    // arrive.
+    function sanitizeCustomTextPatch(body) {
+        const {
+            text, url, color, top, left, width, height, size, font, glow, opacity, radius, scale,
+            textScale, speed,
+            layout, showFunctionRow, showDigitRow, showMovement, showModifiers, showArrows, showMouse,
+            source, icon, pulse, interval, title1, title2, title3,
+            showTrip, showStats, showCompany, autoShow, scrolling
+        } = body || {};
+        const patch = {};
+        if (typeof text === 'string') patch.text = text;
+        if (typeof url === 'string') patch.url = url;
+        if (typeof color === 'string') patch.color = color;
+        if (typeof top === 'number') patch.top = clampPercent(top);
+        if (typeof left === 'number') patch.left = clampPercent(left);
+        if (typeof width === 'number' && width > 0) patch.width = width;
+        if (typeof height === 'number' && height > 0) patch.height = height;
+        // Style (texte/horloge : taille en vh, police, effet néon — image/boîte : opacité %,
+        // arrondi px). Bornés ici plutôt que côté rendu, pour que la config stockée reste saine.
+        if (typeof size === 'number' && size > 0) patch.size = Math.min(30, size);
+        if (font === 'baron' || font === 'inter') patch.font = font;
+        if (typeof glow === 'boolean') patch.glow = glow;
+        if (typeof opacity === 'number') patch.opacity = Math.max(0, Math.min(100, opacity));
+        if (typeof radius === 'number') patch.radius = Math.max(0, Math.min(200, radius));
+        if (typeof scale === 'number') patch.scale = Math.max(25, Math.min(400, scale));
+        // Taille du TEXTE des widgets (chat, Spotify) en % — distincte de `size` (en vh, bornée
+        // à 30 pour texte/horloge) et de `scale` (zoom de tout le widget, contenant compris) :
+        // ici seules les polices internes grossissent, le cadre du widget ne bouge pas.
+        if (typeof textScale === 'number') patch.textScale = Math.max(25, Math.min(400, textScale));
+        // Vitesse de défilement du bandeau de chat (chatTicker), en px/s.
+        if (typeof speed === 'number') patch.speed = Math.max(10, Math.min(400, speed));
+        // Plateau clavier/souris ("keys") : disposition affichée (voir buildKeysBlocks dans
+        // overlay-common.js) et blocs de touches activables indépendamment.
+        if (layout === 'qwerty' || layout === 'azerty') patch.layout = layout;
+        if (typeof showFunctionRow === 'boolean') patch.showFunctionRow = showFunctionRow;
+        if (typeof showDigitRow === 'boolean') patch.showDigitRow = showDigitRow;
+        if (typeof showMovement === 'boolean') patch.showMovement = showMovement;
+        if (typeof showModifiers === 'boolean') patch.showModifiers = showModifiers;
+        if (typeof showArrows === 'boolean') patch.showArrows = showArrows;
+        if (typeof showMouse === 'boolean') patch.showMouse = showMouse;
+        // Widgets de scène génériques. `source` et `icon` sont des CLÉS validées contre les
+        // listes du rendu (overlay-common.js : formatStreamStat, SCENE_ICONS) — pas du texte
+        // libre : une clé inconnue afficherait un widget vide sans que rien ne le signale.
+        if (config.STAT_SOURCES.includes(source)) patch.source = source;
+        if (config.SCENE_ICON_KEYS.includes(icon)) patch.icon = icon;
+        if (typeof pulse === 'boolean') patch.pulse = pulse;
+        if (typeof interval === 'number') patch.interval = Math.max(1, Math.min(120, interval));
+        if (typeof title1 === 'string') patch.title1 = title1;
+        if (typeof title2 === 'string') patch.title2 = title2;
+        if (typeof title3 === 'string') patch.title3 = title3;
+        if (typeof showTrip === 'boolean') patch.showTrip = showTrip;
+        if (typeof showStats === 'boolean') patch.showStats = showStats;
+        if (typeof showCompany === 'boolean') patch.showCompany = showCompany;
+        if (typeof autoShow === 'boolean') patch.autoShow = autoShow;
+        if (typeof scrolling === 'string') patch.scrolling = scrolling;
+        return patch;
+    }
+
     router.patch('/api/profiles/:id/custom-text/:page/:elementId', (req, res) => {
         try {
-            const {
-                text, url, color, top, left, width, height, size, font, glow, opacity, radius, scale,
-                textScale, speed,
-                layout, showFunctionRow, showDigitRow, showMovement, showModifiers, showArrows, showMouse
-            } = req.body || {};
-            const patch = {};
-            if (typeof text === 'string') patch.text = text;
-            if (typeof url === 'string') patch.url = url;
-            if (typeof color === 'string') patch.color = color;
-            if (typeof top === 'number') patch.top = clampPercent(top);
-            if (typeof left === 'number') patch.left = clampPercent(left);
-            if (typeof width === 'number' && width > 0) patch.width = width;
-            if (typeof height === 'number' && height > 0) patch.height = height;
-            // Style (texte/horloge : taille en vh, police, effet néon — image/boîte : opacité %,
-            // arrondi px). Bornés ici plutôt que côté rendu, pour que la config stockée reste saine.
-            if (typeof size === 'number' && size > 0) patch.size = Math.min(30, size);
-            if (font === 'baron' || font === 'inter') patch.font = font;
-            if (typeof glow === 'boolean') patch.glow = glow;
-            if (typeof opacity === 'number') patch.opacity = Math.max(0, Math.min(100, opacity));
-            if (typeof radius === 'number') patch.radius = Math.max(0, Math.min(200, radius));
-            if (typeof scale === 'number') patch.scale = Math.max(25, Math.min(400, scale));
-            // Taille du TEXTE des widgets (chat, Spotify) en % — distincte de `size` (en vh, bornée
-            // à 30 pour texte/horloge) et de `scale` (zoom de tout le widget, contenant compris) :
-            // ici seules les polices internes grossissent, le cadre du widget ne bouge pas.
-            if (typeof textScale === 'number') patch.textScale = Math.max(25, Math.min(400, textScale));
-            // Vitesse de défilement du bandeau de chat (chatTicker), en px/s.
-            if (typeof speed === 'number') patch.speed = Math.max(10, Math.min(400, speed));
-            // Plateau clavier/souris ("keys") : disposition affichée (voir buildKeysBlocks dans
-            // overlay-common.js) et blocs de touches activables indépendamment.
-            if (layout === 'qwerty' || layout === 'azerty') patch.layout = layout;
-            if (typeof showFunctionRow === 'boolean') patch.showFunctionRow = showFunctionRow;
-            if (typeof showDigitRow === 'boolean') patch.showDigitRow = showDigitRow;
-            if (typeof showMovement === 'boolean') patch.showMovement = showMovement;
-            if (typeof showModifiers === 'boolean') patch.showModifiers = showModifiers;
-            if (typeof showArrows === 'boolean') patch.showArrows = showArrows;
-            if (typeof showMouse === 'boolean') patch.showMouse = showMouse;
-            config.updateProfileCustomText(req.params.id, req.params.page, req.params.elementId, patch);
+            config.updateProfileCustomText(req.params.id, req.params.page, req.params.elementId,
+                sanitizeCustomTextPatch(req.body));
             if (req.params.id === config.getActiveProfileId()) {
                 broadcastEvent({ type: 'config-updated', config: config.toFrontendConfig() });
             }

@@ -996,3 +996,173 @@ p {
     margin-bottom: 1em;
     animation: fadeInUp 1s ease-out 0.5s both;
 }
+
+/* ========== WIDGETS DE SCÈNE GÉNÉRIQUES ==========
+ * Équivalents libres des blocs jusque-là figés dans le HTML des 4 pages intégrées (badge de
+ * donnée live, badge icône+libellé, messages rotatifs, panneau d'infos, bandeau bas), rendus par
+ * renderCustomTextsFromConfig() dans overlay-common.js. Tout est dimensionné en `em` : la seule
+ * propriété "Taille (vh)" du panneau de propriétés pose une font-size, et le widget entier
+ * (marges, icône, bordure, arrondi) suit — pas besoin d'un zoom qui flouterait le texte.
+ * --widget-accent (couleur choisie) et --widget-bg-opacity (opacité du fond) sont posées en JS. */
+
+/* Masqué par le cycle d'apparition (ou faute de données) : par CLASSE et jamais en style inline,
+ * pour ne pas écraser le display:none !important de l'œil "masquer" de l'éditeur (même raison que
+ * .spotify-idle). En mode édition, scene-editor-bridge.js force l'affichage. */
+.scene-auto-hidden {
+    display: none;
+}
+
+.stat-badge,
+.scene-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--widget-font, 'Baron Neue Black', 'Inter', sans-serif);
+    gap: 0.5em;
+    padding: 0.45em 0.9em;
+    border-radius: 0.55em;
+    background: rgba(var(--theme-panel-bg-rgb, 15, 23, 42), var(--widget-bg-opacity, 0.85));
+    border: 0.08em solid var(--theme-panel-border, var(--theme-secondary, #8b45f6));
+    color: var(--theme-text, #e2e8f0);
+    font-weight: 700;
+    line-height: 1.2;
+    white-space: nowrap;
+    box-shadow: 0 0.2em 0.8em rgba(0, 0, 0, min(0.35, var(--widget-bg-opacity, 0.85)));
+}
+
+.stat-badge i,
+.scene-badge i,
+.stat-badge .stat-value {
+    color: var(--widget-accent, var(--theme-primary, #a855f7));
+}
+
+/* Pulsation optionnelle (case "Pulsation") : reproduit l'effet des indicateurs PAUSE / EN ATTENTE
+ * des pages intégrées. transform:scale et non width/height, pour ne rien reflower. */
+.scene-badge.scene-badge-pulse {
+    animation: sceneBadgePulse 2s ease-in-out infinite;
+}
+
+@keyframes sceneBadgePulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.05); }
+}
+
+/* Messages rotatifs : le texte est remplacé en JS entre deux transitions d'opacité — la durée
+ * ici doit rester alignée sur le délai de fondu de rotateSceneTexts() (overlay-common.js). */
+.rotating-text {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--widget-font, 'Baron Neue Black', 'Inter', sans-serif);
+    text-align: center;
+    line-height: 1.35;
+    transition: opacity 0.4s ease;
+}
+
+.rotating-text.rotating-fade {
+    opacity: 0;
+}
+
+/* Panneau d'infos (équivalent de .left-panel) : sections titre + lignes libellé/valeur, alimenté
+ * par /api/info-panel (Trucky). Colonne à largeur libre : c'est le redimensionnement de l'élément
+ * dans l'éditeur qui fixe sa largeur, le contenu s'y adapte. */
+.info-panel-widget {
+    display: flex;
+    flex-direction: column;
+    font-family: var(--widget-font, 'Inter', sans-serif);
+    gap: 1em;
+    padding: 1em 1.2em;
+    border-radius: 0.8em;
+    background: rgba(var(--theme-panel-bg-rgb, 15, 23, 42), var(--widget-bg-opacity, 0.9));
+    border: 0.1em solid var(--theme-panel-border, var(--theme-secondary, #8b45f6));
+    color: var(--theme-text, #e2e8f0);
+    box-shadow: 0 0.3em 1em rgba(0, 0, 0, min(0.35, var(--widget-bg-opacity, 0.9)));
+    overflow: hidden;
+}
+
+.ipw-title {
+    display: flex;
+    align-items: center;
+    gap: 0.5em;
+    color: var(--widget-accent, var(--theme-primary, #a855f7));
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    border-bottom: 0.12em solid var(--theme-panel-border, var(--theme-secondary, #8b45f6));
+    padding-bottom: 0.35em;
+    margin-bottom: 0.5em;
+}
+
+.ipw-row {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 1em;
+    padding: 0.15em 0;
+}
+
+.ipw-label {
+    opacity: 0.75;
+}
+
+.ipw-value {
+    font-weight: 700;
+    text-align: right;
+}
+
+/* Bandeau bas (équivalent de .bottom-bar) : items icône + texte, plus un texte défilant optionnel.
+ * Largeur par défaut posée en JS (60vw) mais librement redimensionnable dans l'éditeur. */
+.bottom-bar-widget {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-family: var(--widget-font, 'Inter', sans-serif);
+    gap: 1.5em;
+    padding: 0.6em 1.2em;
+    border-radius: 0.8em;
+    background: rgba(var(--theme-panel-bg-rgb, 15, 23, 42), var(--widget-bg-opacity, 0.9));
+    border: 0.1em solid var(--theme-panel-border, var(--theme-secondary, #8b45f6));
+    color: var(--theme-text, #e2e8f0);
+    box-shadow: 0 0.3em 1em rgba(0, 0, 0, min(0.35, var(--widget-bg-opacity, 0.9)));
+    overflow: hidden;
+}
+
+.bbw-items {
+    display: flex;
+    align-items: center;
+    gap: 1.6em;
+    flex-shrink: 0;
+}
+
+.bbw-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5em;
+    white-space: nowrap;
+}
+
+.bbw-item i {
+    color: var(--widget-accent, var(--theme-primary, #a855f7));
+}
+
+/* Texte défilant du bandeau : simple animation CSS (contrairement à .chat-ticker, dont la piste
+ * est translatée en JS parce que son contenu s'allonge à chaque message reçu — ici le texte est
+ * fixe, aucune raison de payer une boucle requestAnimationFrame). overflow:hidden fait le masquage
+ * aux deux extrémités. */
+.bbw-scroll {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+}
+
+.bbw-scroll-track {
+    display: inline-block;
+    white-space: nowrap;
+    will-change: transform;
+    animation: bbwScroll 18s linear infinite;
+}
+
+@keyframes bbwScroll {
+    from { transform: translateX(100%); }
+    to { transform: translateX(-100%); }
+}

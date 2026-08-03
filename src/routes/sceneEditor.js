@@ -204,6 +204,17 @@ const SCENE_EDITOR_HTML = ({ activeId, themes, pause, scenes, animDefaults }) =>
         }
         .se-row .se-row-eye:hover { background: rgba(255, 255, 255, 0.12); }
         .se-row .se-row-eye.off { opacity: 0.35; }
+        /* Éléments intégrés retirés de la scène : présentés en retrait (ce ne sont plus des
+           sources), avec le seul bouton qui les concerne encore — le rétablissement. */
+        .se-removed-block { margin-top: var(--space-3); border-top: 1px solid var(--border); padding-top: var(--space-2); }
+        .se-removed-block .hint { margin: 0 0 var(--space-1) 10px; }
+        .se-row-removed { cursor: default; opacity: 0.55; }
+        .se-row-removed:hover { background: none; color: var(--text-muted); }
+        .se-row .se-row-restore {
+            flex: 0 0 auto; background: none; border: none; cursor: pointer; padding: 2px 6px;
+            font-size: 14px; color: inherit; border-radius: 4px;
+        }
+        .se-row .se-row-restore:hover { background: rgba(255, 255, 255, 0.12); color: var(--text); }
         .se-list-sep {
             font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
             color: var(--text-faint); padding: var(--space-3) 10px var(--space-1);
@@ -384,9 +395,14 @@ const SCENE_EDITOR_HTML = ({ activeId, themes, pause, scenes, animDefaults }) =>
                             <button type="button" data-type="alerts">🔔&nbsp;&nbsp;Alertes</button>
                             <button type="button" data-type="spotify">🎵&nbsp;&nbsp;Spotify</button>
                             <button type="button" data-type="keys">⌨️&nbsp;&nbsp;Touches</button>
+                            <button type="button" data-type="statBadge">📈&nbsp;&nbsp;Donnée du stream</button>
+                            <button type="button" data-type="badge">🏷️&nbsp;&nbsp;Badge (icône + texte)</button>
+                            <button type="button" data-type="rotatingText">🔁&nbsp;&nbsp;Messages rotatifs</button>
+                            <button type="button" data-type="infoPanel">📋&nbsp;&nbsp;Panneau Trucky</button>
+                            <button type="button" data-type="bottomBar">📢&nbsp;&nbsp;Bandeau bas</button>
                         </div>
                         <button type="button" class="se-icon-btn" id="btnAddElement" title="Ajouter un élément">+</button>
-                        <button type="button" class="se-icon-btn" id="btnDeleteElement" title="Supprimer l'élément sélectionné">−</button>
+                        <button type="button" class="se-icon-btn" id="btnDeleteElement" title="Supprimer l'élément sélectionné (un élément intégré est retiré de la scène, rétablissable)">−</button>
                     </div>
                     <div class="se-props" id="elProps"><p class="se-empty">Sélectionne une source pour voir ses propriétés.</p></div>
                 </div>
@@ -430,6 +446,9 @@ const SCENE_EDITOR_HTML = ({ activeId, themes, pause, scenes, animDefaults }) =>
         let currentKey = 'starting';
         let elements = [];
         let texts = [];
+        // Éléments intégrés retirés de la page courante (remontés par le bridge) : ils ne sont plus
+        // des sources, mais restent rétablissables depuis la liste dédiée du panneau Sources.
+        let removedBuiltins = [];
         let selectedId = null;
 
         const frame = document.getElementById('sceneFrame');
@@ -588,6 +607,7 @@ const SCENE_EDITOR_HTML = ({ activeId, themes, pause, scenes, animDefaults }) =>
             if (data.type === 'scene-editor-ready') {
                 elements = data.elements;
                 texts = data.texts;
+                removedBuiltins = data.removedBuiltins || [];
                 // Si la sélection a disparu (élément supprimé), on la retire ; sinon on la garde
                 // à travers les resynchronisations (drag, édition, config-updated...).
                 if (selectedId && !elements.some((el) => el.id === selectedId)) selectedId = null;
@@ -610,7 +630,11 @@ const SCENE_EDITOR_HTML = ({ activeId, themes, pause, scenes, animDefaults }) =>
         });
 
         // ---------- Sources ----------
-        const TYPE_ICONS = { text: 'T', image: '▨', box: '■', clock: '◷', chat: '💬', chatTicker: '🎞️', alerts: '🔔', spotify: '🎵', keys: '⌨️' };
+        const TYPE_ICONS = {
+            text: 'T', image: '▨', box: '■', clock: '◷', chat: '💬', chatTicker: '🎞️',
+            alerts: '🔔', spotify: '🎵', keys: '⌨️',
+            statBadge: '📈', badge: '🏷️', rotatingText: '🔁', infoPanel: '📋', bottomBar: '📢'
+        };
 
         function renderSources() {
             const el = document.getElementById('sourcesList');
@@ -624,14 +648,36 @@ const SCENE_EDITOR_HTML = ({ activeId, themes, pause, scenes, animDefaults }) =>
                         <button type="button" class="se-row-eye\${item.hidden ? ' off' : ''}" data-el="\${item.id}" title="\${item.hidden ? 'Afficher' : 'Masquer'}">\${item.hidden ? '⊘' : '👁'}</button>
                     </div>\`).join('');
             }
+            // Éléments intégrés retirés : listés à part, avec un bouton de rétablissement — sans
+            // quoi le retrait serait un aller simple (l'élément n'est plus sélectionnable).
+            if (removedBuiltins.length > 0) {
+                el.innerHTML += '<div class="se-removed-block"><p class="hint">Éléments retirés de cette scène</p>'
+                    + removedBuiltins.map((item) => \`
+                        <div class="se-row se-row-removed">
+                            <span class="se-row-icon">◇</span>
+                            <span class="se-row-name">\${esc(item.label)}</span>
+                            <button type="button" class="se-row-restore" data-restore="\${esc(item.id)}" title="Rétablir sur cette scène">↺</button>
+                        </div>\`).join('')
+                    + '</div>';
+            }
             const selected = elements.find((it) => it.id === selectedId);
-            document.getElementById('btnDeleteElement').disabled = !(selected && selected.isCustom);
+            // Actif aussi pour les éléments intégrés : le bouton les RETIRE de la scène (voir le
+            // handler), au lieu de les supprimer définitivement comme un élément custom.
+            document.getElementById('btnDeleteElement').disabled = !selected;
             // Centrage : n'a de sens que sur un élément réellement sélectionné.
             document.getElementById('btnCenterH').disabled = !selected;
             document.getElementById('btnCenterV').disabled = !selected;
         }
 
         document.getElementById('sourcesList').addEventListener('click', async (e) => {
+            const restore = e.target.closest('.se-row-restore');
+            if (restore) {
+                e.stopPropagation();
+                const res = await callApi('/api/profiles/' + ACTIVE_PROFILE_ID + '/layout/' + currentKey + '/' + restore.dataset.restore,
+                    jsonBody('POST', { removed: false }));
+                if (res) toast('Élément rétabli.');
+                return;
+            }
             const eye = e.target.closest('.se-row-eye');
             if (eye) {
                 e.stopPropagation();
@@ -663,13 +709,18 @@ const SCENE_EDITOR_HTML = ({ activeId, themes, pause, scenes, animDefaults }) =>
         document.getElementById('btnAddElement').addEventListener('click', (e) => {
             e.stopPropagation();
             // Chat et alertes : ids DOM uniques (#chatContainer, #alertContainer) — une seule
-            // instance par scène, et la page "En direct" a déjà les siens en dur.
+            // instance par scène. Le blocage tient compte du bloc INTÉGRÉ équivalent encore présent
+            // sur la page (les pages intégrées ont le leur en dur) : dès qu'il est retiré ou
+            // converti, l'ajout redevient possible. Testé sur la liste des sources réelle plutôt
+            // que sur le nom de la page, qui ne dit plus rien de ce qu'elle contient.
+            const BUILTIN_EQUIVALENT = { chat: 'chatPanel', alerts: 'alertContainer' };
             ['chat', 'alerts'].forEach((type) => {
                 const btn = addMenu.querySelector('button[data-type="' + type + '"]');
                 const already = elements.some((it) => it.customType === type);
-                btn.disabled = already || currentKey === 'index';
+                const builtinPresent = elements.some((it) => it.id === BUILTIN_EQUIVALENT[type]);
+                btn.disabled = already || builtinPresent;
                 btn.title = btn.disabled
-                    ? (currentKey === 'index' ? 'Déjà présent sur la page En direct' : 'Un seul par scène')
+                    ? (builtinPresent ? 'Déjà présent sur cette page (élément intégré)' : 'Un seul par scène')
                     : '';
             });
             addMenu.classList.toggle('open');
@@ -695,7 +746,19 @@ const SCENE_EDITOR_HTML = ({ activeId, themes, pause, scenes, animDefaults }) =>
 
         armButton(document.getElementById('btnDeleteElement'), async () => {
             const item = elements.find((it) => it.id === selectedId);
-            if (!item || !item.isCustom) return;
+            if (!item) return;
+            // Élément INTÉGRÉ : il vit dans le HTML de la page, on ne peut pas le supprimer pour de
+            // bon — on le retire de la scène (drapeau "removed"), ce qui le fait disparaître de
+            // l'aperçu ET de la liste des sources. Réversible depuis « Éléments retirés ».
+            if (!item.isCustom) {
+                const res = await callApi('/api/profiles/' + ACTIVE_PROFILE_ID + '/layout/' + currentKey + '/' + item.id,
+                    jsonBody('POST', { removed: true }));
+                if (res) {
+                    selectedId = null;
+                    toast('Élément retiré de la scène.');
+                }
+                return;
+            }
             const rawId = item.id.replace(/^custom:/, '');
             const res = await callApi('/api/profiles/' + ACTIVE_PROFILE_ID + '/custom-text/' + currentKey + '/' + rawId, { method: 'DELETE' });
             if (res) toast('Élément supprimé.');
@@ -706,6 +769,33 @@ const SCENE_EDITOR_HTML = ({ activeId, themes, pause, scenes, animDefaults }) =>
         // sauvegarde (l'API n'accepte que des types stricts : nombre pour size/opacity/radius,
         // booléen pour glow...). def = valeur affichée quand aucun override n'est enregistré,
         // alignée sur les défauts du rendu (renderCustomTextsFromConfig, overlay-common.js).
+        // Sources de données et icônes des widgets génériques. Doivent rester alignées sur
+        // STAT_SOURCES / SCENE_ICON_KEYS (store.js, qui valide les patchs) et sur SCENE_ICONS
+        // (overlay-common.js, qui les traduit en classes FontAwesome) — une clé en trop ici serait
+        // silencieusement refusée par l'API, une clé en moins deviendrait inatteignable.
+        const STAT_SOURCE_OPTIONS = [
+            { value: 'viewers', label: 'Viewers en direct' },
+            { value: 'followers', label: 'Nouveaux followers' },
+            { value: 'subs', label: 'Nouveaux subs' },
+            { value: 'messages', label: 'Messages de chat' },
+            { value: 'duration', label: 'Durée du stream' },
+            { value: 'game', label: 'Jeu en cours' },
+            { value: 'title', label: 'Titre du stream' }
+        ];
+        const ICON_OPTIONS = [
+            { value: 'none', label: '(aucune)' }, { value: 'users', label: 'Utilisateurs' },
+            { value: 'heart', label: 'Cœur' }, { value: 'star', label: 'Étoile' },
+            { value: 'comments', label: 'Bulles de chat' }, { value: 'clock', label: 'Horloge' },
+            { value: 'hourglass', label: 'Sablier' }, { value: 'pause', label: 'Pause' },
+            { value: 'play', label: 'Lecture' }, { value: 'gamepad', label: 'Manette' },
+            { value: 'truck', label: 'Camion' }, { value: 'chart', label: 'Graphique' },
+            { value: 'bell', label: 'Cloche' }, { value: 'arrow', label: 'Flèche' },
+            { value: 'coffee', label: 'Café' }, { value: 'wrench', label: 'Clé à molette' },
+            { value: 'twitch', label: 'Twitch' }, { value: 'discord', label: 'Discord' },
+            { value: 'youtube', label: 'YouTube' }, { value: 'globe', label: 'Site web' },
+            { value: 'instagram', label: 'Instagram' }, { value: 'tiktok', label: 'TikTok' }
+        ];
+
         const PROP_SPECS = {
             text: [
                 { prop: 'text', label: 'Texte', kind: 'text' },
@@ -770,6 +860,58 @@ const SCENE_EDITOR_HTML = ({ activeId, themes, pause, scenes, animDefaults }) =>
                 { prop: 'showModifiers', label: 'Shift/Ctrl/Alt/Espace/Entrée', kind: 'check', def: true },
                 { prop: 'showArrows', label: 'Flèches directionnelles', kind: 'check', def: true },
                 { prop: 'showMouse', label: 'Souris', kind: 'check', def: true }
+            ],
+            // Widgets génériques : leur taille se règle par la POLICE (tout leur CSS est en em,
+            // voir applySceneWidgetStyle) — d'où "Taille (vh)" plutôt qu'une échelle en %.
+            statBadge: [
+                { prop: 'source', label: 'Donnée affichée', kind: 'select', def: 'viewers', options: STAT_SOURCE_OPTIONS },
+                { prop: 'text', label: 'Libellé (après la valeur)', kind: 'text', placeholder: 'ex: en attente' },
+                { prop: 'icon', label: 'Icône', kind: 'select', def: 'users', options: ICON_OPTIONS },
+                { prop: 'size', label: 'Taille (vh)', kind: 'number', def: 2.6, step: 0.1, min: 0.5, max: 30 },
+                { prop: 'color', label: "Couleur d'accent", kind: 'color', def: '#a855f7' },
+                { prop: 'font', label: 'Police', kind: 'font' },
+                { prop: 'glow', label: 'Effet néon', kind: 'check' },
+                { prop: 'opacity', label: 'Opacité du fond (%)', kind: 'number', def: 85, step: 5, min: 0, max: 100 }
+            ],
+            badge: [
+                { prop: 'text', label: 'Libellé', kind: 'text' },
+                { prop: 'icon', label: 'Icône', kind: 'select', def: 'pause', options: ICON_OPTIONS },
+                { prop: 'size', label: 'Taille (vh)', kind: 'number', def: 2.6, step: 0.1, min: 0.5, max: 30 },
+                { prop: 'color', label: "Couleur d'accent", kind: 'color', def: '#a855f7' },
+                { prop: 'font', label: 'Police', kind: 'font' },
+                { prop: 'glow', label: 'Effet néon', kind: 'check' },
+                { prop: 'pulse', label: 'Pulsation', kind: 'check', def: true },
+                { prop: 'opacity', label: 'Opacité du fond (%)', kind: 'number', def: 85, step: 5, min: 0, max: 100 }
+            ],
+            rotatingText: [
+                { prop: 'text', label: 'Messages (un par ligne)', kind: 'textarea', placeholder: 'Un message par ligne' },
+                { prop: 'interval', label: 'Intervalle (s)', kind: 'number', def: 4, step: 1, min: 1, max: 120 },
+                { prop: 'size', label: 'Taille (vh)', kind: 'number', def: 2.2, step: 0.1, min: 0.5, max: 30 },
+                { prop: 'color', label: 'Couleur', kind: 'color', def: '#ffffff' },
+                { prop: 'font', label: 'Police', kind: 'font' },
+                { prop: 'glow', label: 'Effet néon', kind: 'check' }
+            ],
+            infoPanel: [
+                { prop: 'showTrip', label: 'Section « trajet »', kind: 'check', def: true },
+                { prop: 'title1', label: 'Titre section 1', kind: 'text', placeholder: 'TRAJET ACTUEL' },
+                { prop: 'showStats', label: 'Section « stats »', kind: 'check', def: true },
+                { prop: 'title2', label: 'Titre section 2', kind: 'text', placeholder: 'STATS' },
+                { prop: 'showCompany', label: 'Section « VTC »', kind: 'check', def: true },
+                { prop: 'title3', label: 'Titre section 3', kind: 'text', placeholder: 'VTC' },
+                { prop: 'size', label: 'Taille (vh)', kind: 'number', def: 1.5, step: 0.1, min: 0.5, max: 30 },
+                { prop: 'color', label: "Couleur d'accent", kind: 'color', def: '#a855f7' },
+                { prop: 'font', label: 'Police', kind: 'font' },
+                { prop: 'opacity', label: 'Opacité du fond (%)', kind: 'number', def: 90, step: 5, min: 0, max: 100 },
+                { prop: 'autoShow', label: 'Apparition périodique', kind: 'check', def: true }
+            ],
+            bottomBar: [
+                { prop: 'text', label: 'Items (un par ligne, « icone|texte »)', kind: 'textarea', placeholder: 'twitch|MonPseudo' },
+                { prop: 'scrolling', label: 'Texte défilant (optionnel)', kind: 'text' },
+                { prop: 'size', label: 'Taille (vh)', kind: 'number', def: 1.6, step: 0.1, min: 0.5, max: 30 },
+                { prop: 'color', label: "Couleur d'accent", kind: 'color', def: '#a855f7' },
+                { prop: 'font', label: 'Police', kind: 'font' },
+                { prop: 'opacity', label: 'Opacité du fond (%)', kind: 'number', def: 90, step: 5, min: 0, max: 100 },
+                { prop: 'autoShow', label: 'Apparition périodique', kind: 'check', def: true }
             ]
         };
 
@@ -816,6 +958,13 @@ const SCENE_EDITOR_HTML = ({ activeId, themes, pause, scenes, animDefaults }) =>
             if (spec.kind === 'check') {
                 return \`<div class="field"><label class="checkbox-row"><input type="checkbox" class="se-prop" data-prop="\${spec.prop}" data-kind="check"\${raw ? ' checked' : ''}> \${esc(spec.label)}</label></div>\`;
             }
+            // Multiligne (messages rotatifs, items du bandeau) : porte se-prop-text comme les
+            // champs texte, donc sauvegardé au blur et non à chaque frappe — indispensable ici, une
+            // sauvegarde par touche recréerait tout le widget à chaque caractère.
+            if (spec.kind === 'textarea') {
+                return \`<div class="field"><label>\${esc(spec.label)}</label>
+                    <textarea class="se-prop se-prop-text" data-prop="\${spec.prop}" data-kind="text" rows="4" placeholder="\${esc(spec.placeholder || '')}">\${esc(raw || '')}</textarea></div>\`;
+            }
             return \`<div class="field"><label>\${esc(spec.label)}</label>
                 <input type="text" class="se-prop se-prop-text" data-prop="\${spec.prop}" data-kind="text" value="\${esc(raw || '')}" placeholder="\${esc(spec.placeholder || '')}"></div>\`;
         }
@@ -848,6 +997,9 @@ const SCENE_EDITOR_HTML = ({ activeId, themes, pause, scenes, animDefaults }) =>
                 if (item.customType === 'spotify') {
                     note += '<p class="hint">Affiche le morceau en cours de lecture sur le compte Spotify connecté — configure la connexion depuis la page <a href="/integrations" target="_blank">Intégrations</a>.</p>';
                 }
+                if (item.customType === 'infoPanel') {
+                    note += '<p class="hint">Trajet en cours et statistiques VTC du compte Trucky configuré — active l\\'intégration depuis la page <a href="/integrations" target="_blank">Intégrations</a>.</p>';
+                }
                 if (item.customType === 'keys') {
                     note += '<p class="hint">Affiche les touches clavier/souris pressées (WASD, flèches, Espace, modificateurs, F1-F12, chiffres, clics) — active la capture depuis la page <a href="/integrations" target="_blank">Intégrations</a>.</p>';
                 }
@@ -878,7 +1030,7 @@ const SCENE_EDITOR_HTML = ({ activeId, themes, pause, scenes, animDefaults }) =>
                         <input type="number" class="se-bprop" data-prop="opacity" data-kind="number" value="\${typeof item.opacity === 'number' ? item.opacity : 92}" step="5" min="0" max="100"></div>\`;
                 }
                 fields += \`<div class="se-btn-row">\${recenterBtn}<button type="button" class="btn btn-ghost btn-sm" id="btnResetEl">Réinitialiser</button></div>\`;
-                note = '<p class="hint">Couleurs et échelle appliquées à cet élément uniquement (selon l\\'élément, certaines couleurs peuvent être sans effet). Réinitialiser efface position, taille et style. Les éléments intégrés ne se suppriment pas — masque-les avec l\\'œil.</p>';
+                note = '<p class="hint">Couleurs et échelle appliquées à cet élément uniquement (selon l\\'élément, certaines couleurs peuvent être sans effet). Réinitialiser efface position, taille et style. L\\'œil le masque ; le bouton − le retire complètement de la scène (rétablissable en bas de la liste des sources).</p>';
                 if (item.id === 'alertContainer') {
                     note = '<p class="hint">Le cadre définit où les alertes peuvent apparaître : chaque alerte s\\'affiche au plus grand format qui y tient, média (image/GIF) en entier. Teste le rendu avec la barre "Aperçu" en haut.</p>' + note;
                 }
@@ -1101,6 +1253,7 @@ const SCENE_EDITOR_HTML = ({ activeId, themes, pause, scenes, animDefaults }) =>
                 html += msgListHtml('progressMessages', 'Messages de la barre de progression', PAUSE.progressMessages);
                 html += '<p class="hint">Une liste vidée revient aux messages par défaut.</p>';
             }
+
             box.innerHTML = html;
 
             document.getElementById('btnCopyUrl').addEventListener('click', () => {

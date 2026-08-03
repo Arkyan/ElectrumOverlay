@@ -204,6 +204,26 @@ function applyLayoutFromConfig() {
         if (elementId.startsWith('custom:')) return; // gérés par renderCustomTextsFromConfig()
         const pos = layout[elementId];
 
+        // "Supprimé" depuis l'éditeur : l'élément intégré est retiré de la page comme s'il n'y
+        // avait jamais figuré (il disparaît aussi de la liste des sources, voir data-scene-removed
+        // dans scene-editor-bridge.js) — c'est ce qui permet de vider une page intégrée pour la
+        // reconstruire entièrement avec des éléments libres. On MASQUE au lieu de retirer le nœud
+        // du DOM : le rétablissement doit pouvoir se faire en direct au prochain config-updated,
+        // ce qu'un nœud détruit interdirait (il faudrait recharger la source OBS). Posé avec
+        // 'important' pour la même raison que `hidden` (voir plus bas).
+        const wasRemoved = el.dataset.sceneRemoved === '1';
+        const removed = !!(pos && pos.removed);
+        el.dataset.sceneRemoved = removed ? '1' : '';
+        if (removed) {
+            el.style.setProperty('display', 'none', 'important');
+            return;
+        }
+        // Rétablissement : on ne libère `display` que si c'est bien NOUS qui l'avions verrouillé.
+        // Le nettoyer inconditionnellement écraserait le display:none légitime posé juste avant par
+        // applyChatVisibilityFromConfig()/applyBottomBarVisibilityFromConfig() (bascules de
+        // /settings) — le chat désactivé dans les réglages réapparaîtrait.
+        if (wasRemoved) el.style.removeProperty('display');
+
         // Échelle visuelle par élément via CSS zoom : contrairement au redimensionnement
         // width/height (qui donne plus d'espace au contenu à taille de texte constante), le zoom
         // agrandit tout — texte, icônes, paddings — comme l'échelle d'une source dans OBS, sans
@@ -499,6 +519,21 @@ function renderCustomTextsFromConfig() {
         el.dataset.propShowModifiers = item.showModifiers === false ? '0' : '1';
         el.dataset.propShowArrows = item.showArrows === false ? '0' : '1';
         el.dataset.propShowMouse = item.showMouse === false ? '0' : '1';
+        // Widgets de scène génériques (statBadge, badge, rotatingText, infoPanel, bottomBar) —
+        // même rôle que les datasets "keys" ci-dessus : ce sont eux que l'éditeur relit pour
+        // afficher les valeurs réellement enregistrées après chaque resynchro.
+        el.dataset.propSource = item.source || '';
+        el.dataset.propIcon = item.icon || '';
+        el.dataset.propPulse = item.pulse ? '1' : '';
+        el.dataset.propInterval = (typeof item.interval === 'number') ? String(item.interval) : '';
+        el.dataset.propTitle1 = item.title1 || '';
+        el.dataset.propTitle2 = item.title2 || '';
+        el.dataset.propTitle3 = item.title3 || '';
+        el.dataset.propShowTrip = item.showTrip === false ? '0' : '1';
+        el.dataset.propShowStats = item.showStats === false ? '0' : '1';
+        el.dataset.propShowCompany = item.showCompany === false ? '0' : '1';
+        el.dataset.propAutoShow = item.autoShow === false ? '0' : '1';
+        el.dataset.propScrolling = item.scrolling || '';
     }
 
     for (const [id, item] of Object.entries(customTexts)) {
@@ -733,6 +768,100 @@ function renderCustomTextsFromConfig() {
                     + '<div class="mouse-thumb-btn mouse-thumb-bottom" data-key-label="Bouton arrière"></div>';
                 el.appendChild(mouse);
             }
+        } else if (type === 'statBadge') {
+            // Badge de donnée live (viewers, follows, subs, messages, durée...) : l'équivalent
+            // libre de .viewers-waiting (page Pause) et des compteurs de .stream-stats (page Fin),
+            // mais posable sur n'importe quelle scène. La valeur est remplie par le sondage partagé
+            // /stream-stats (ensureStreamStatsPolling) — data-stat-source est ce qui rattache le
+            // widget à sa donnée.
+            el.className = 'stat-badge';
+            el.dataset.statSource = item.source || 'viewers';
+            applySceneWidgetStyle(el, item, 2.6);
+            el.innerHTML = sceneIconHtml(item.icon || 'users')
+                + '<span class="stat-value" data-stat-value>---</span>'
+                + '<span data-stat-label></span>';
+            el.querySelector('[data-stat-label]').textContent = item.text || '';
+            el.dataset.textValue = item.text || '';
+            applyStreamStatsToWidgets();
+            ensureStreamStatsPolling();
+        } else if (type === 'badge') {
+            // Badge icône + libellé (équivalent de .waiting-indicator / .pause-indicator /
+            // .back-soon-banner) : purement décoratif, aucune donnée derrière.
+            el.className = 'scene-badge' + (item.pulse ? ' scene-badge-pulse' : '');
+            applySceneWidgetStyle(el, item, 2.6);
+            el.innerHTML = sceneIconHtml(item.icon || 'pause') + '<span data-badge-label></span>';
+            el.querySelector('[data-badge-label]').textContent = item.text || '';
+            el.dataset.textValue = item.text || '';
+        } else if (type === 'rotatingText') {
+            // Messages affichés en rotation avec fondu (équivalent des messages de pause) — un
+            // message par ligne dans la propriété "Messages". Le premier est posé tout de suite
+            // pour ne pas laisser un vide jusqu'à la première rotation.
+            el.className = 'rotating-text';
+            applySceneWidgetStyle(el, item, 2.2);
+            el.style.color = item.color || '#ffffff';
+            const messages = String(item.text || '').split('\n').filter((m) => m.trim());
+            el.dataset.messages = messages.join('\n');
+            el.dataset.rotateInterval = String((typeof item.interval === 'number' && item.interval > 0) ? item.interval : 4);
+            el.dataset.rotateIndex = '0';
+            el.dataset.rotateElapsed = '0';
+            el.dataset.textValue = item.text || '';
+            if (!el.style.width) el.style.width = '40vw';
+            el.innerHTML = '<span data-rotating-value></span>';
+            el.querySelector('[data-rotating-value]').textContent = messages[0] || '';
+            ensureSceneTextRotation();
+        } else if (type === 'infoPanel') {
+            // Panneau d'infos Trucky (équivalent de .left-panel) : sections activables une à une,
+            // titres libres. Les valeurs viennent de /api/info-panel, partagées par tous les
+            // panneaux de la page (applyInfoPanelDataToWidgets).
+            el.className = 'info-panel-widget';
+            applySceneWidgetStyle(el, item, 1.5);
+            if (!el.style.width) el.style.width = '22vw';
+            const section = (title, icon, rows) => '<div class="ipw-section">'
+                + '<div class="ipw-title">' + sceneIconHtml(icon) + '<span>' + escapeHtml(title) + '</span></div>'
+                + rows.map(([label, key]) => '<div class="ipw-row"><span class="ipw-label">' + escapeHtml(label)
+                    + '</span><span class="ipw-value" data-ipw="' + key + '">...</span></div>').join('')
+                + '</div>';
+            let html = '';
+            if (item.showTrip !== false) {
+                html += section(item.title1 || 'TRAJET ACTUEL', 'truck',
+                    [['Destination', 'destination'], ['Distance', 'distance'], ['Cargaison', 'cargo']]);
+            }
+            if (item.showStats !== false) {
+                html += section(item.title2 || 'STATS', 'chart',
+                    [['Rank VTC', 'rank'], ['Km parcourus', 'distanceVTC'], ['Trajets accomplis', 'completedTrips']]);
+            }
+            if (item.showCompany !== false) {
+                html += section(item.title3 || 'VTC', 'users',
+                    [['Chauffeurs', 'drivers'], ['Recrutements', 'recruitments']]);
+            }
+            el.innerHTML = html;
+            if (item.autoShow !== false) {
+                el.dataset.autoShow = '1';
+                el.classList.add('scene-auto-hidden');
+                ensureSceneAutoShow();
+            }
+            if (lastInfoPanelData) applyInfoPanelDataToWidgets();
+            else fetchInfoPanelData();
+        } else if (type === 'bottomBar') {
+            // Bandeau bas (équivalent de .bottom-bar) : un item par ligne, préfixe "icone|"
+            // optionnel (clés de SCENE_ICONS), plus un texte défilant facultatif.
+            el.className = 'bottom-bar-widget';
+            applySceneWidgetStyle(el, item, 1.6);
+            if (!el.style.width) el.style.width = '60vw';
+            const items = String(item.text || '').split('\n').filter((l) => l.trim()).map((line) => {
+                const sep = line.indexOf('|');
+                const iconKey = sep >= 0 ? line.slice(0, sep).trim() : '';
+                const label = sep >= 0 ? line.slice(sep + 1).trim() : line.trim();
+                return '<div class="bbw-item">' + sceneIconHtml(iconKey) + '<span>' + escapeHtml(label) + '</span></div>';
+            }).join('');
+            el.innerHTML = '<div class="bbw-items">' + items + '</div>'
+                + (item.scrolling ? '<div class="bbw-scroll"><div class="bbw-scroll-track">' + escapeHtml(item.scrolling) + '</div></div>' : '');
+            el.dataset.textValue = item.text || '';
+            if (item.autoShow !== false) {
+                el.dataset.autoShow = '1';
+                el.classList.add('scene-auto-hidden');
+                ensureSceneAutoShow();
+            }
         }
         exposeStyleProps(el, item);
         document.body.appendChild(el);
@@ -792,6 +921,216 @@ function ensureCustomClockTicker() {
             el.textContent = new Date().toLocaleTimeString('fr-FR');
         });
     }, 1000);
+}
+
+// ========== WIDGETS DE SCÈNE GÉNÉRIQUES ==========
+// Équivalents libres des blocs jusque-là figés dans le HTML des 4 pages intégrées : badge de
+// donnée live (viewers/follows/subs/messages/durée), badge icône+libellé, messages rotatifs,
+// panneau d'infos Trucky et bandeau bas. Ils rendent ces blocs posables sur N'IMPORTE quelle
+// scène — c'est ce qui permet de reconstruire une page intégrée entièrement en configuration.
+
+/** Icônes proposées dans l'éditeur (clé stable en config -> classe FontAwesome au rendu). */
+const SCENE_ICONS = {
+    none: '',
+    users: 'fas fa-users', heart: 'fas fa-heart', star: 'fas fa-star',
+    comments: 'fas fa-comments', clock: 'fas fa-clock', hourglass: 'fas fa-hourglass-half',
+    pause: 'fas fa-pause', play: 'fas fa-play', gamepad: 'fas fa-gamepad',
+    truck: 'fas fa-truck', chart: 'fas fa-chart-line', bell: 'fas fa-bell',
+    arrow: 'fas fa-arrow-right', coffee: 'fas fa-mug-hot', wrench: 'fas fa-wrench',
+    twitch: 'fab fa-twitch', discord: 'fab fa-discord', youtube: 'fab fa-youtube',
+    globe: 'fas fa-globe', instagram: 'fab fa-instagram', tiktok: 'fab fa-tiktok'
+};
+
+function sceneIconHtml(key) {
+    const cls = SCENE_ICONS[key];
+    return cls ? '<i class="' + cls + '"></i>' : '';
+}
+
+/**
+ * Style commun des widgets : tout leur CSS est en `em`, donc poser une font-size (la propriété
+ * "Taille (vh)") met à l'échelle le widget ENTIER — marges, icône, bordure, arrondi compris —
+ * sans le zoom CSS utilisé par le chat/Spotify (qui, lui, doit exister parce que leur contenu a
+ * des tailles fixes en px). --widget-accent porte la couleur choisie, consommée par les icônes et
+ * les valeurs ; l'opacité du fond passe par le mécanisme commun (applyPanelBgOpacity).
+ */
+function applySceneWidgetStyle(el, item, defaultSize) {
+    const size = (typeof item.size === 'number' && item.size > 0) ? item.size : defaultSize;
+    el.style.fontSize = size + 'vh';
+    // Police posée en VARIABLE et seulement si l'utilisateur en a choisi une : sans override,
+    // chaque widget garde le défaut de son CSS (Baron Neue pour les badges, comme les indicateurs
+    // des pages intégrées — Inter pour le panneau d'infos et le bandeau, dont le contenu est du
+    // texte de lecture que la casse forcée de Baron rendrait pénible).
+    if (item.font) el.style.setProperty('--widget-font', fontFamilyFor(item.font));
+    else el.style.removeProperty('--widget-font');
+    const color = item.color || '#a855f7';
+    el.style.setProperty('--widget-accent', color);
+    el.dataset.colorValue = item.color || '';
+    if (item.glow) {
+        el.style.textShadow = '0 0 0.25em ' + color + ', 0 0.05em 0.2em rgba(0, 0, 0, 0.6)';
+    } else {
+        el.style.textShadow = '';
+    }
+    applyPanelBgOpacity(el, '--widget-bg-opacity', item.opacity);
+}
+
+/**
+ * Dernières stats de stream connues (/stream-stats : viewers, follows, subs, messages, durée).
+ * Twitch ne pousse pas ces compteurs en continu — c'est le serveur qui les agrège (EventSub +
+ * polling viewers, voir StreamStatsManager) — d'où ce sondage périodique côté page. Le premier
+ * sondage part dès qu'un badge existe, pour ne pas laisser un "---" à l'écran en attendant.
+ */
+let lastStreamStats = null;
+let streamStatsPollingStarted = false;
+
+function formatStreamStat(source, stats) {
+    if (!stats) return '---';
+    if (source === 'duration') {
+        const totalSec = Math.floor((stats.streamDurationMs || 0) / 1000);
+        const h = Math.floor(totalSec / 3600);
+        const m = Math.floor((totalSec % 3600) / 60);
+        return h > 0 ? (h + 'h ' + m + 'm') : (m + 'm ' + (totalSec % 60) + 's');
+    }
+    if (source === 'game') return stats.game || '---';
+    if (source === 'title') return stats.title || '---';
+    const bySource = {
+        viewers: stats.viewerCount,
+        followers: stats.follows,
+        subs: stats.subscribers,
+        messages: stats.chatMessages
+    };
+    const value = bySource[source];
+    return (typeof value === 'number') ? String(value) : '---';
+}
+
+function applyStreamStatsToWidgets() {
+    document.querySelectorAll('[data-stat-source]').forEach((el) => {
+        const target = el.querySelector('[data-stat-value]');
+        if (target) target.textContent = formatStreamStat(el.dataset.statSource, lastStreamStats);
+    });
+}
+
+function ensureStreamStatsPolling() {
+    if (streamStatsPollingStarted) return;
+    streamStatsPollingStarted = true;
+    const poll = () => fetch('/stream-stats')
+        .then((r) => r.json())
+        .then((data) => { lastStreamStats = data; applyStreamStatsToWidgets(); })
+        .catch(() => { /* best-effort : un serveur momentanément indisponible laisse la valeur précédente */ });
+    poll();
+    // Plancher à 5s : le réglage vient de /settings (stats.updateInterval) et un utilisateur
+    // pourrait y saisir une valeur absurde, qui martèlerait le serveur à chaque page ouverte.
+    setInterval(poll, Math.max(5000, getOverlayConfig().stats?.updateInterval ?? 30000));
+}
+
+/**
+ * Rotation des messages (widget rotatingText). Un seul intervalle d'1s pour toute la page : chaque
+ * widget compte son propre temps écoulé dans un dataset, ce qui permet des intervalles différents
+ * par widget sans multiplier les timers, et survit à la recréation des éléments (le sélecteur est
+ * réévalué à chaque tick — voir ensureCustomClockTicker, même idiome).
+ */
+let sceneRotationStarted = false;
+function ensureSceneTextRotation() {
+    if (sceneRotationStarted) return;
+    sceneRotationStarted = true;
+    setInterval(() => {
+        document.querySelectorAll('.rotating-text').forEach((el) => {
+            const messages = (el.dataset.messages || '').split('\n').filter((m) => m.trim());
+            if (messages.length < 2) return;
+            const every = Math.max(1, parseFloat(el.dataset.rotateInterval) || 4);
+            const elapsed = (parseFloat(el.dataset.rotateElapsed) || 0) + 1;
+            if (elapsed < every) {
+                el.dataset.rotateElapsed = String(elapsed);
+                return;
+            }
+            el.dataset.rotateElapsed = '0';
+            const next = ((parseInt(el.dataset.rotateIndex, 10) || 0) + 1) % messages.length;
+            el.dataset.rotateIndex = String(next);
+            // Fondu sortant puis entrant : le délai doit rester aligné sur la transition CSS de
+            // .rotating-text (0.4s), sinon le texte change à l'écran avant d'avoir disparu.
+            el.classList.add('rotating-fade');
+            setTimeout(() => {
+                const target = el.querySelector('[data-rotating-value]');
+                if (target) target.textContent = messages[next];
+                el.classList.remove('rotating-fade');
+            }, 400);
+        });
+    }, 1000);
+}
+
+/**
+ * Panneau d'infos (Trucky) : mêmes données que le panneau intégré de la page Jeu, via
+ * /api/info-panel. Les valeurs sont posées sur tous les widgets de la page à la fois — plusieurs
+ * panneaux peuvent coexister (pas de singleton).
+ */
+let lastInfoPanelData = null;
+
+function applyInfoPanelDataToWidgets() {
+    const d = lastInfoPanelData;
+    if (!d) return;
+    const thousands = (v) => Math.round(Number(v) || 0).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+    const values = {
+        destination: (d.lastJob?.source_city_name || '?') + ' → ' + (d.lastJob?.destination_city_name || '?'),
+        distance: (d.lastJob?.planned_distance_km ?? '?') + ' km',
+        cargo: (d.lastJob?.cargo_name || '?') + ' (' + (d.lastJob?.cargo_mass_t ?? '?') + 't)',
+        rank: d.userData?.role?.name || 'Inconnu',
+        distanceVTC: thousands(d.companyStats?.distance_driven_on_job_km) + ' km',
+        completedTrips: thousands(d.companyStats?.jobs_delivered),
+        drivers: thousands(d.companyDetails?.members_count),
+        recruitments: d.companyDetails?.recruitment === 'open' ? '🟢 Ouverts' : '🔴 Fermés'
+    };
+    document.querySelectorAll('.info-panel-widget [data-ipw]').forEach((el) => {
+        const value = values[el.dataset.ipw];
+        if (value !== undefined) el.textContent = value;
+    });
+}
+
+function fetchInfoPanelData() {
+    return fetch('/api/info-panel')
+        .then((r) => r.json())
+        .then((data) => { lastInfoPanelData = data; applyInfoPanelDataToWidgets(); })
+        .catch(() => { /* Trucky indisponible/désactivé : le panneau garde ses valeurs de repli */ });
+}
+
+/**
+ * Cycle d'apparition périodique des widgets panneau/bandeau (case "Apparition périodique"),
+ * repris des réglages panels.left/panels.bottom déjà utilisés par les pages intégrées : le widget
+ * reste masqué, apparaît toutes les X minutes pendant Y secondes, puis disparaît.
+ * Masquage par CLASSE (jamais en style inline) pour ne pas écraser le `display:none !important`
+ * de l'œil "masquer" de l'éditeur — un widget masqué à l'œil le reste, cycle ou pas.
+ */
+function sceneAutoWidgets(type) {
+    return document.querySelectorAll('[data-custom-type="' + type + '"][data-auto-show="1"]');
+}
+
+function showSceneAutoWidget(type, force = false) {
+    const cfg = getOverlayConfig();
+    const panelCfg = type === 'infoPanel' ? cfg.panels?.left : cfg.panels?.bottom;
+    // `force` : déclenchement manuel (page /tests, plugin Stream Deck) — doit s'afficher même si
+    // le panneau est désactivé dans les réglages, comme pour les pages intégrées.
+    if (!force && panelCfg?.enabled === false) return;
+    const widgets = sceneAutoWidgets(type);
+    if (widgets.length === 0) return;
+    if (type === 'infoPanel') fetchInfoPanelData();
+    widgets.forEach((el) => el.classList.remove('scene-auto-hidden'));
+    const duration = panelCfg?.duration ?? (type === 'infoPanel' ? 15000 : 20000);
+    setTimeout(() => {
+        // Re-sélection (et pas la liste capturée) : un config-updated a pu recréer les éléments
+        // entre-temps — masquer les anciens ne servirait à rien, ils ne sont plus dans le DOM.
+        sceneAutoWidgets(type).forEach((el) => el.classList.add('scene-auto-hidden'));
+    }, duration);
+}
+
+let sceneAutoShowStarted = false;
+function ensureSceneAutoShow() {
+    if (sceneAutoShowStarted) return;
+    sceneAutoShowStarted = true;
+    const cfg = getOverlayConfig();
+    const plan = (type, panelCfg, defFirst, defInterval) => {
+        setTimeout(() => showSceneAutoWidget(type), panelCfg?.firstDelay ?? defFirst);
+        setInterval(() => showSceneAutoWidget(type), panelCfg?.interval ?? defInterval);
+    };
+    plan('infoPanel', cfg.panels?.left, 30000, 300000);
+    plan('bottomBar', cfg.panels?.bottom, 10000, 180000);
 }
 
 /**
@@ -1437,13 +1776,20 @@ function initWebSocket() {
             // désactivé dans les réglages (seul le cycle automatique respecte ce réglage).
             if (data.panel === 'left' && typeof showInfoPanel === 'function') showInfoPanel(true);
             if (data.panel === 'bottom' && typeof showBottomBar === 'function') showBottomBar(true);
+            // Équivalents en widget de scène (posables sur n'importe quelle page, y compris les
+            // scènes personnalisées où showInfoPanel/showBottomBar n'existent pas) : même
+            // déclenchement manuel, même contournement du réglage "désactivé".
+            showSceneAutoWidget(data.panel === 'left' ? 'infoPanel' : 'bottomBar', true);
             return;
         }
 
         if (data.type === 'message') {
             if (data.message.startsWith('!')) {
-                if (data.message === '!info' && typeof showInfoPanel === 'function') {
-                    showInfoPanel();
+                if (data.message === '!info') {
+                    if (typeof showInfoPanel === 'function') showInfoPanel();
+                    // Équivalent en widget de scène (page convertie ou scène personnalisée) : la
+                    // commande doit continuer de marcher là où le panneau intégré n'existe plus.
+                    showSceneAutoWidget('infoPanel');
                 }
                 return;
             } else {

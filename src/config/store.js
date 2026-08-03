@@ -526,8 +526,30 @@ function resetProfileTextStyle(id, page, textId) {
  * spotify (morceau en cours de lecture, voir SpotifyAuth) ou keys (touches clavier/souris
  * pressées, voir electron/inputCapture.js — capture Electron-only, gérée par le toggle
  * `inputDisplay.enabled`) — voir renderCustomTextsFromConfig() dans overlay-common.js.
+ *
+ * Les cinq derniers types sont les équivalents libres des blocs jusque-là figés dans le HTML des
+ * 4 pages intégrées, pour qu'une scène puisse les reproduire entièrement : statBadge (une donnée
+ * live du stream — viewers, follows, subs, messages, durée — comme .viewers-waiting/.stream-stats),
+ * badge (icône + libellé, comme .waiting-indicator/.pause-indicator/.back-soon-banner),
+ * rotatingText (messages qui défilent en fondu, comme les messages de pause), infoPanel (le
+ * panneau à sections alimenté par Trucky, comme .left-panel) et bottomBar (le bandeau bas à items
+ * icône + texte).
  */
-const CUSTOM_ELEMENT_TYPES = ['text', 'image', 'box', 'clock', 'chat', 'chatTicker', 'alerts', 'spotify', 'keys'];
+const CUSTOM_ELEMENT_TYPES = [
+    'text', 'image', 'box', 'clock', 'chat', 'chatTicker', 'alerts', 'spotify', 'keys',
+    'statBadge', 'badge', 'rotatingText', 'infoPanel', 'bottomBar'
+];
+
+// Clés validées des widgets génériques, partagées avec la route de patch (profiles.js) et
+// l'éditeur de scène : la source de données d'un statBadge et la palette d'icônes proposée. Elles
+// doivent rester alignées sur le rendu (formatStreamStat / SCENE_ICONS dans overlay-common.js) —
+// une clé inconnue produirait un widget vide sans aucun message d'erreur.
+const STAT_SOURCES = ['viewers', 'followers', 'subs', 'messages', 'duration', 'game', 'title'];
+const SCENE_ICON_KEYS = [
+    'none', 'users', 'heart', 'star', 'comments', 'clock', 'hourglass', 'pause', 'play',
+    'gamepad', 'truck', 'chart', 'bell', 'arrow', 'coffee', 'wrench',
+    'twitch', 'discord', 'youtube', 'globe', 'instagram', 'tiktok'
+];
 
 // Les widgets à id DOM unique (#chatContainer, #alertContainer — cf. addChatMessage()/showAlert()
 // qui les retrouvent par getElementById) ne supportent qu'une instance par page. chatTicker n'en
@@ -557,6 +579,50 @@ function addProfileCustomText(id, page, { type, text, url, color, top, left }) {
     if (entry.type === 'image') entry.url = typeof url === 'string' ? url : '';
     if (entry.type === 'box') entry.color = typeof color === 'string' ? color : '#a855f7';
     if (entry.type === 'spotify') entry.color = typeof color === 'string' ? color : '#1db954'; // vert Spotify
+    // Badge de donnée live : viewers par défaut (la donnée la plus universelle — les autres
+    // n'ont de sens qu'en fin de stream). Le libellé accompagne la valeur, comme "en attente"
+    // sur la page de pause intégrée.
+    if (entry.type === 'statBadge') {
+        entry.source = 'viewers';
+        entry.text = 'en attente';
+        entry.icon = 'users';
+        entry.size = 2.6;
+        entry.color = typeof color === 'string' ? color : '#a855f7';
+    }
+    if (entry.type === 'badge') {
+        entry.text = text || 'PAUSE';
+        entry.icon = 'pause';
+        entry.size = 2.6;
+        entry.color = typeof color === 'string' ? color : '#a855f7';
+        entry.pulse = true;
+    }
+    // Un message par ligne : le champ de l'éditeur est une zone de texte multiligne, ce qui évite
+    // d'inventer un séparateur (les messages contiennent virgules, tirets et emojis).
+    if (entry.type === 'rotatingText') {
+        entry.text = text || '🎮 Pause technique - On revient tout de suite !\n☕ Petite pause café - Restez connectés !';
+        entry.interval = 4;
+        entry.size = 2.2;
+        entry.color = typeof color === 'string' ? color : '#ffffff';
+    }
+    if (entry.type === 'infoPanel') {
+        entry.title1 = 'TRAJET ACTUEL';
+        entry.title2 = 'STATS';
+        entry.title3 = 'VTC';
+        entry.showTrip = true;
+        entry.showStats = true;
+        entry.showCompany = true;
+        entry.size = 1.5;
+        // Cycle d'apparition périodique repris des réglages panels.left (délai/intervalle/durée),
+        // comme le panneau intégré ; décoché = panneau affiché en permanence.
+        entry.autoShow = true;
+    }
+    // Chaque ligne = un item, préfixe "icone|" optionnel (voir BOTTOM_BAR_ICONS côté rendu).
+    if (entry.type === 'bottomBar') {
+        entry.text = 'twitch|Twitch\ndiscord|Discord\nglobe|Site web';
+        entry.scrolling = '';
+        entry.size = 1.6;
+        entry.autoShow = true;
+    }
     if (entry.type === 'keys') {
         entry.color = typeof color === 'string' ? color : '#f59e0b'; // ambre
         // azerty par défaut (app francophone) ; blocs tous visibles par défaut, l'utilisateur
@@ -975,6 +1041,8 @@ module.exports.addProfileCustomText = addProfileCustomText;
 module.exports.updateProfileCustomText = updateProfileCustomText;
 module.exports.removeProfileCustomText = removeProfileCustomText;
 module.exports.CUSTOM_ELEMENT_TYPES = CUSTOM_ELEMENT_TYPES;
+module.exports.STAT_SOURCES = STAT_SOURCES;
+module.exports.SCENE_ICON_KEYS = SCENE_ICON_KEYS;
 module.exports.BUILTIN_PAGE_KEYS = BUILTIN_PAGE_KEYS;
 module.exports.addProfileScene = addProfileScene;
 module.exports.updateProfileScene = updateProfileScene;

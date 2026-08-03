@@ -47,7 +47,12 @@
         chatTicker: 'Chat défilant',
         alerts: 'Alertes',
         spotify: 'Spotify',
-        keys: 'Touches'
+        keys: 'Touches',
+        statBadge: 'Donnée du stream',
+        badge: 'Badge',
+        rotatingText: 'Messages rotatifs',
+        infoPanel: 'Panneau Trucky',
+        bottomBar: 'Bandeau bas'
     };
 
     function customLabel(el) {
@@ -113,6 +118,13 @@
                messages d'exemple directement dans la piste (voir plus bas), sans passer par
                appendTickerItem qui pose la classe .has-messages. */
             [data-custom-type="chatTicker"] { visibility: visible !important; }
+            /* Panneau d'infos / bandeau bas en "apparition périodique" : masqués la plupart du
+               temps en usage normal (classe .scene-auto-hidden posée par showSceneAutoWidget) — en
+               édition ils doivent rester visibles/positionnables en permanence, sans quoi il
+               faudrait attendre le prochain cycle pour les voir. Ne masque PAS ce qui est masqué à
+               l'œil : celui-ci pose un display:none inline !important, prioritaire sur cette règle
+               (style attribute > feuille de style, à importance égale). */
+            .scene-auto-hidden { display: flex !important; }
             [data-scene-alert-zone]:not(.show) .alert-box { display: none !important; }
             [data-scene-alert-zone]:not(.show)::after {
                 content: "Zone d'alerte — l'alerte s'y ajuste au plus grand";
@@ -594,6 +606,10 @@
         document.querySelectorAll('[data-scene-el]').forEach((el) => {
             const id = el.dataset.sceneEl;
             if (id.startsWith('custom:')) return; // gérés par wireCustomTexts()
+            // Retiré de la page (voir applyLayoutFromConfig) : ni étiquette, ni drag, ni poignées —
+            // il ne doit plus exister du point de vue de l'éditeur. Le rétablir passe par la liste
+            // dédiée du panneau Sources, alimentée par removedBuiltins ci-dessous.
+            if (el.dataset.sceneRemoved === '1') return;
             if (el.hasAttribute('data-scene-alert-zone')) watchAlertZoneReset(el);
             addLabel(el, LABELS[id] || id);
             makeDraggable(el, id);
@@ -612,6 +628,32 @@
     // barre d'aperçu de l'éditeur. Uniquement en mode édition (tout ce script est un no-op sans
     // ?sceneEditor=1) : jamais visible dans OBS.
     function fillWidgetPreview(el) {
+        // Panneau d'infos : les vraies valeurs viennent de Trucky (/api/info-panel), souvent
+        // désactivé ou hors ligne pendant l'édition — sans exemple, le panneau n'afficherait qu'une
+        // colonne de "..." impossible à dimensionner correctement. Seules les valeurs encore à leur
+        // marqueur initial sont remplacées : si l'API a répondu, on ne masque pas le vrai contenu.
+        if (el.dataset.customType === 'infoPanel') {
+            const SAMPLES = {
+                destination: 'Paris → Lyon', distance: '463 km', cargo: 'Ciment (22t)',
+                rank: 'Chauffeur', distanceVTC: '128 400 km', completedTrips: '312',
+                drivers: '24', recruitments: '🟢 Ouverts'
+            };
+            el.querySelectorAll('[data-ipw]').forEach((cell) => {
+                if (cell.textContent === '...') cell.textContent = SAMPLES[cell.dataset.ipw] || '—';
+            });
+        }
+        // Donnée du stream : hors live, tous les compteurs valent 0 et la durée est vide — un
+        // exemple rend la taille réelle du badge lisible pendant le placement.
+        if (el.dataset.customType === 'statBadge') {
+            const SAMPLES = {
+                viewers: '128', followers: '12', subs: '3', messages: '842',
+                duration: '1h 24m', game: 'Euro Truck Simulator 2', title: 'Livraison de nuit'
+            };
+            const value = el.querySelector('[data-stat-value]');
+            if (value && (value.textContent === '---' || value.textContent === '0')) {
+                value.textContent = SAMPLES[el.dataset.statSource] || '128';
+            }
+        }
         if (el.dataset.customType === 'chat') {
             const container = el.querySelector('#chatContainer');
             if (container && container.children.length === 0) {
@@ -699,7 +741,11 @@
     }
 
     function reportReady() {
-        const elements = Array.from(document.querySelectorAll('[data-scene-el]')).map((el) => {
+        const elements = Array.from(document.querySelectorAll('[data-scene-el]'))
+            // Les éléments intégrés "supprimés" ne sont plus des sources de la scène : ils sont
+            // remontés à part (removedBuiltins), pour que le panneau propose de les rétablir.
+            .filter((el) => el.dataset.sceneRemoved !== '1')
+            .map((el) => {
             const id = el.dataset.sceneEl;
             const isCustom = id.startsWith('custom:');
             return {
@@ -729,6 +775,21 @@
                 textScale: isCustom && el.dataset.propTextScale ? parseFloat(el.dataset.propTextScale) : undefined,
                 // Vitesse de défilement du bandeau de chat (chatTicker), en px/s.
                 speed: isCustom && el.dataset.propSpeed ? parseFloat(el.dataset.propSpeed) : undefined,
+                // Widgets génériques (statBadge, badge, rotatingText, infoPanel, bottomBar) —
+                // mêmes règles que les datasets "keys" : relus à chaque resynchro, sans quoi le
+                // panneau de propriétés reviendrait à ses valeurs par défaut après chaque save.
+                source: isCustom ? (el.dataset.propSource || '') : undefined,
+                icon: isCustom ? (el.dataset.propIcon || '') : undefined,
+                pulse: isCustom ? el.dataset.propPulse === '1' : undefined,
+                interval: isCustom && el.dataset.propInterval ? parseFloat(el.dataset.propInterval) : undefined,
+                title1: isCustom ? (el.dataset.propTitle1 || '') : undefined,
+                title2: isCustom ? (el.dataset.propTitle2 || '') : undefined,
+                title3: isCustom ? (el.dataset.propTitle3 || '') : undefined,
+                showTrip: isCustom ? el.dataset.propShowTrip === '1' : undefined,
+                showStats: isCustom ? el.dataset.propShowStats === '1' : undefined,
+                showCompany: isCustom ? el.dataset.propShowCompany === '1' : undefined,
+                autoShow: isCustom ? el.dataset.propAutoShow === '1' : undefined,
+                scrolling: isCustom ? (el.dataset.propScrolling || '') : undefined,
                 primary: el.dataset.propPrimary || '',
                 secondary: el.dataset.propSecondary || '',
                 themeText: el.dataset.propText || '',
@@ -767,7 +828,12 @@
             };
         });
 
-        window.parent.postMessage({ type: 'scene-editor-ready', elements, texts }, '*');
+        // Éléments intégrés retirés de cette page : lus dans le DOM (marqués par
+        // applyLayoutFromConfig) plutôt que dans la config, pour rester la seule source de vérité —
+        // l'éditeur affiche exactement ce que l'aperçu applique.
+        const removedBuiltins = Array.from(document.querySelectorAll('[data-scene-removed="1"]'))
+            .map((el) => ({ id: el.dataset.sceneEl, label: LABELS[el.dataset.sceneEl] || el.dataset.sceneEl }));
+        window.parent.postMessage({ type: 'scene-editor-ready', elements, texts, removedBuiltins }, '*');
     }
 
     // Aperçus d'événements demandés par la barre d'outils de l'éditeur (parent) : injectés
