@@ -719,7 +719,9 @@
                 font: isCustom ? (el.dataset.propFont || '') : undefined,
                 glow: isCustom ? el.dataset.propGlow === '1' : undefined,
                 radius: isCustom && el.dataset.propRadius ? parseFloat(el.dataset.propRadius) : undefined,
-                opacity: isCustom && el.dataset.propOpacity ? parseFloat(el.dataset.propOpacity) : undefined,
+                // Non réservé aux customs (contrairement à size/radius) : le panneau de chat
+                // INTÉGRÉ expose aussi une opacité de fond, posée par applyLayoutFromConfig.
+                opacity: el.dataset.propOpacity ? parseFloat(el.dataset.propOpacity) : undefined,
                 // Échelle + couleurs de thème par élément (posées par applyLayoutFromConfig pour
                 // les intégrés, exposeStyleProps pour les customs).
                 scale: el.dataset.propScale ? parseFloat(el.dataset.propScale) : undefined,

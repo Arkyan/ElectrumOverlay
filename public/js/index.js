@@ -76,6 +76,12 @@ function showBottomBar(force = false) {
 
     const bottomBar = document.getElementById('bottomBar');
     if (!bottomBar) return;
+    // Masqué depuis l'éditeur de scène (œil des sources) : rien ne doit le faire réapparaître, pas
+    // même un événement Twitch. Sans ce garde-fou, le display posé ci-dessous écrasait le
+    // `display:none !important` de applyLayoutFromConfig() (un style inline sans priorité REMPLACE
+    // celui avec !important) — le bandeau ressortait au premier follow/sub et l'œil semblait
+    // n'avoir aucun effet.
+    if (getOverlayConfig().layout?.[getThemeKeyFromLocation()]?.bottomBar?.hidden) return;
     bottomBar.style.display = 'flex';
     bottomBar.style.animation = 'slide-in-up 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards';
 

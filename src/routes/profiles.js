@@ -220,7 +220,7 @@ function createProfilesRoutes(broadcastEvent) {
 
     router.post('/api/profiles/:id/layout/:page/:elementId', (req, res) => {
         try {
-            const { top, left, hidden, width, height, scale } = req.body || {};
+            const { top, left, hidden, width, height, scale, opacity } = req.body || {};
             const patch = {};
             if (typeof top === 'number') patch.top = clampPercent(top);
             if (typeof left === 'number') patch.left = clampPercent(left);
@@ -228,6 +228,10 @@ function createProfilesRoutes(broadcastEvent) {
             if (typeof width === 'number' && width > 0) patch.width = width;
             if (typeof height === 'number' && height > 0) patch.height = height;
             if (typeof scale === 'number') patch.scale = Math.max(25, Math.min(400, scale));
+            // Opacité du FOND (%) — seul le panneau de chat intégré l'expose côté éditeur (son CSS
+            // lit --chat-bg-opacity, voir applyLayoutFromConfig) ; accepté génériquement ici plutôt
+            // qu'au cas par cas, comme le reste du patch de layout.
+            if (typeof opacity === 'number') patch.opacity = Math.max(0, Math.min(100, opacity));
             for (const key of ELEMENT_STYLE_COLOR_KEYS) {
                 if (typeof (req.body || {})[key] === 'string') patch[key] = req.body[key];
             }

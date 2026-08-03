@@ -428,10 +428,19 @@ body {
     right: 2vw;
     width: 15vw;
     height: 40vh;
-    background: linear-gradient(135deg, rgba(var(--theme-panel-bg-rgb, 15, 23, 42), 0) 0%, rgba(var(--theme-panel-bg-rgb, 15, 23, 42), 0.92) 100%);
+    /* --chat-bg-opacity : opacité du fond, posée en JS depuis la propriété "Opacité du fond (%)"
+       de l'éditeur de scène — sur le panneau INTÉGRÉ via applyLayoutFromConfig() et sur le
+       panneau custom via renderCustomTextsFromConfig() (même classe, donc même règle).
+       Fond UNI et non plus dégradé (135°, de transparent à 0.92) : le dégradé laissait le coin
+       haut-gauche totalement transparent quelle que soit la valeur réglée, donc un panneau à
+       100 % n'était jamais opaque et le réglage semblait sans effet dans le haut du panneau. */
+    background: rgba(var(--theme-panel-bg-rgb, 15, 23, 42), var(--chat-bg-opacity, 0.92));
     border-radius: 15px;
     padding: 2vh 1.5vw;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    /* L'ombre portée suit l'opacité du fond (min() : jamais plus marquée qu'à l'origine) — sinon,
+       fond rendu transparent, elle laisserait une tache sombre flottante. Sur les pages
+       Démarrage/Fin, .neon-border écrase de toute façon cette ombre par son halo décoratif. */
+    box-shadow: 0 8px 32px rgba(0, 0, 0, min(0.3, var(--chat-bg-opacity, 0.92)));
     border: 2px solid var(--theme-panel-border, var(--theme-secondary, #8b45f6));
     z-index: 100;
 }
@@ -601,12 +610,24 @@ body {
     display: flex;
     align-items: center;
     gap: 14px;
-    background: rgba(var(--theme-panel-bg-rgb, 15, 23, 42), 0.85);
+    /* --spotify-bg-opacity : posée en JS depuis "Opacité du fond (%)" (éditeur de scène), même
+       mécanisme que --chat-bg-opacity / --keys-bg-opacity (le flou, lui, est coupé à 0 par
+       applyPanelBgOpacity : aucune couleur ne le porte, il resterait un voile visible). */
+    background: rgba(var(--theme-panel-bg-rgb, 15, 23, 42), var(--spotify-bg-opacity, 0.85));
     backdrop-filter: blur(16px);
     border: 1.5px solid var(--spotify-accent, #1db954);
     border-radius: 12px;
     padding: 12px 16px;
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+    /* Ombre indexée sur l'opacité du fond, même raison que .chat-panel. */
+    box-shadow: 0 8px 24px rgba(0, 0, 0, min(0.35, var(--spotify-bg-opacity, 0.85)));
+}
+
+/* Rien en cours de lecture : le widget disparaît (posé par applySpotifyTrackTo). Par classe et
+ * non en style inline, pour ne pas écraser le `display:none !important` de l'œil "masquer" de
+ * l'éditeur de scène. En mode édition, le CSS injecté par scene-editor-bridge.js repasse par-dessus
+ * (display:flex !important) pour garder le widget positionnable même à l'arrêt. */
+.spotify-widget.spotify-idle {
+    display: none;
 }
 
 .spotify-art {

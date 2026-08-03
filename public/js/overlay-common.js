@@ -160,6 +160,30 @@ function clampLayoutPercent(v) {
 }
 
 /**
+ * Opacité du FOND d'un panneau (chat, widget Spotify) : le pourcentage de l'éditeur de scène est
+ * posé comme variable CSS consommée par le rgba(...) du panneau (--chat-bg-opacity,
+ * --spotify-bg-opacity — même idiome que --keys-bg-opacity/--ticker-bg-opacity), plutôt que via
+ * `opacity` sur l'élément, qui atténuerait AUSSI le texte et les images du widget.
+ * `null`/undefined = aucun override : on retire la variable pour laisser jouer la valeur de repli
+ * du CSS. Les ombres portées suivent la même variable directement en CSS (un min() dans leur
+ * rgba) — surtout PAS neutralisées ici : sur les pages Démarrage/Fin, le panneau de chat porte
+ * aussi .neon-border, dont le halo est une décoration voulue qui n'a rien à voir avec l'opacité du
+ * fond. Seul le flou d'arrière-plan est coupé à 0 : il ne dépend d'aucune couleur et laisserait
+ * sinon un voile visible là où l'utilisateur a demandé un fond totalement transparent.
+ */
+function applyPanelBgOpacity(el, cssVar, percent) {
+    if (typeof percent !== 'number') {
+        el.style.removeProperty(cssVar);
+        el.style.removeProperty('backdrop-filter');
+        return;
+    }
+    const ratio = Math.max(0, Math.min(100, percent)) / 100;
+    el.style.setProperty(cssVar, String(ratio));
+    if (ratio === 0) el.style.setProperty('backdrop-filter', 'none');
+    else el.style.removeProperty('backdrop-filter');
+}
+
+/**
  * Positions/visibilité custom posées depuis l'éditeur de scène (/scene-editor), par page —
  * cfg.layout[page] = { elementId: {top?, left?, hidden?} } (top/left en % de la hauteur/largeur).
  * Entièrement déclaratif : chaque élément déplaçable est reposé à partir de RIEN d'autre que la
@@ -214,6 +238,16 @@ function applyLayoutFromConfig() {
             el.dataset['prop' + key.charAt(0).toUpperCase() + key.slice(1)] = value || '';
         });
         el.dataset.propScale = (pos && typeof pos.scale === 'number') ? String(pos.scale) : '';
+
+        // Opacité du fond du panneau de chat INTÉGRÉ (index.html) : même réglage que celui du
+        // panneau de chat ajouté depuis l'éditeur (les deux portent la classe .chat-panel, donc la
+        // même règle CSS lit --chat-bg-opacity) — l'éditeur ne propose d'ailleurs le champ que pour
+        // cet élément intégré. Réservé aux éléments qui consomment vraiment la variable : sur les
+        // autres, applyPanelBgOpacity toucherait inutilement à leur ombre portée.
+        if (el.classList.contains('chat-panel')) {
+            applyPanelBgOpacity(el, '--chat-bg-opacity', pos ? pos.opacity : undefined);
+        }
+        el.dataset.propOpacity = (pos && typeof pos.opacity === 'number') ? String(pos.opacity) : '';
 
         if (pos && typeof pos.top === 'number' && typeof pos.left === 'number') {
             // Bornage large (voir clampLayoutPercent) : le dépassement de cadre est volontairement
@@ -578,6 +612,7 @@ function renderCustomTextsFromConfig() {
             el.dataset.textValue = item.text || 'CHAT';
             applyWidgetTextStyle(el, item);
             el.className = 'chat-panel';
+            applyPanelBgOpacity(el, '--chat-bg-opacity', item.opacity);
             if (!el.style.width) el.style.width = '15vw';
             if (!el.style.height) el.style.height = '40vh';
             const header = document.createElement('div');
@@ -638,6 +673,7 @@ function renderCustomTextsFromConfig() {
             el.dataset.colorValue = item.color || '#1db954';
             el.style.setProperty('--spotify-accent', item.color || '#1db954');
             applyWidgetTextStyle(el, item);
+            applyPanelBgOpacity(el, '--spotify-bg-opacity', item.opacity);
             if (!el.style.width) el.style.width = '22vw';
             el.innerHTML = '<img class="spotify-art" data-spotify-art alt="">'
                 + '<div class="spotify-info">'
@@ -774,11 +810,18 @@ function applySpotifyTrackTo(el, track) {
     if (!art || !title || !artist) return;
 
     // N'affiche le widget QUE si une musique joue réellement (pas en pause, pas à l'arrêt) —
-    // display:none en usage normal ; forcé visible en mode édition (voir le CSS
+    // masqué en usage normal ; forcé visible en mode édition (voir le CSS
     // [data-custom-type="spotify"] injecté par scene-editor-bridge.js) pour rester positionnable
     // même quand rien ne joue, fillWidgetPreview() y affichant alors un exemple à la place.
+    //
+    // Par CLASSE et non par el.style.display : l'état "masqué" de l'éditeur de scène (œil) est un
+    // inline `display:none !important` posé par renderCustomTextsFromConfig(), et écrire
+    // el.style.display ici l'effaçait — le widget réapparaissait dès qu'une musique jouait, et en
+    // édition le `display:flex !important` du bridge reprenait le dessus sur le `none` sans
+    // priorité écrit ici, faisant "revenir" l'œil à visible juste après le clic. Une classe ne
+    // touche pas au style inline, qui reste donc toujours prioritaire.
+    el.classList.toggle('spotify-idle', !(track && track.isPlaying));
     if (track && track.isPlaying) {
-        el.style.display = '';
         title.textContent = track.title;
         artist.textContent = track.artist;
         if (track.albumArt) {
@@ -792,7 +835,6 @@ function applySpotifyTrackTo(el, track) {
             art.style.display = 'none';
         }
     } else {
-        el.style.display = 'none';
         title.textContent = 'Spotify';
         artist.textContent = 'Rien en cours de lecture';
         art.removeAttribute('src');

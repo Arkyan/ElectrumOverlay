@@ -734,7 +734,10 @@ const SCENE_EDITOR_HTML = ({ activeId, themes, pause, scenes, animDefaults }) =>
                 { prop: 'text', label: 'Titre du panneau', kind: 'text' },
                 { prop: 'scale', label: 'Échelle (%)', kind: 'number', def: 100, step: 5, min: 25, max: 400 },
                 { prop: 'textScale', label: 'Taille du texte (%)', kind: 'number', def: 100, step: 5, min: 25, max: 400 },
-                { prop: 'font', label: 'Police', kind: 'font' }
+                { prop: 'font', label: 'Police', kind: 'font' },
+                // 92 = l'opacité de repli du fond (.chat-panel), pas 100 : le champ affiche donc
+                // le rendu réel tant qu'aucun override n'est enregistré.
+                { prop: 'opacity', label: 'Opacité du fond (%)', kind: 'number', def: 92, step: 5, min: 0, max: 100 }
             ],
             chatTicker: [
                 { prop: 'speed', label: 'Vitesse (px/s)', kind: 'number', def: 60, step: 5, min: 10, max: 400 },
@@ -749,7 +752,9 @@ const SCENE_EDITOR_HTML = ({ activeId, themes, pause, scenes, animDefaults }) =>
                 { prop: 'color', label: "Couleur d'accent", kind: 'color', def: '#1db954' },
                 { prop: 'scale', label: 'Échelle (%)', kind: 'number', def: 100, step: 5, min: 25, max: 400 },
                 { prop: 'textScale', label: 'Taille du texte (%)', kind: 'number', def: 100, step: 5, min: 25, max: 400 },
-                { prop: 'font', label: 'Police', kind: 'font' }
+                { prop: 'font', label: 'Police', kind: 'font' },
+                // 85 = l'opacité d'origine du fond de .spotify-widget (voir le champ chat).
+                { prop: 'opacity', label: 'Opacité du fond (%)', kind: 'number', def: 85, step: 5, min: 0, max: 100 }
             ],
             keys: [
                 { prop: 'color', label: "Couleur d'accent", kind: 'color', def: '#f59e0b' },
@@ -864,6 +869,13 @@ const SCENE_EDITOR_HTML = ({ activeId, themes, pause, scenes, animDefaults }) =>
                 if (!item.scaleText && item.id !== 'alertContainer') {
                     fields += \`<div class="field" style="margin-top:var(--space-3);"><label>Échelle (%)</label>
                         <input type="number" class="se-bprop" data-prop="scale" data-kind="number" value="\${typeof item.scale === 'number' ? item.scale : 100}" step="5" min="25" max="400"></div>\`;
+                }
+                // Opacité du fond : proposée pour le seul élément intégré dont le CSS la consomme
+                // (le panneau de chat, présent sur les pages Démarrage/Jeu/Fin — voir
+                // --chat-bg-opacity). 92 = l'opacité de repli de son fond, donc "pas d'override".
+                if (item.id === 'chatPanel') {
+                    fields += \`<div class="field"><label>Opacité du fond (%)</label>
+                        <input type="number" class="se-bprop" data-prop="opacity" data-kind="number" value="\${typeof item.opacity === 'number' ? item.opacity : 92}" step="5" min="0" max="100"></div>\`;
                 }
                 fields += \`<div class="se-btn-row">\${recenterBtn}<button type="button" class="btn btn-ghost btn-sm" id="btnResetEl">Réinitialiser</button></div>\`;
                 note = '<p class="hint">Couleurs et échelle appliquées à cet élément uniquement (selon l\\'élément, certaines couleurs peuvent être sans effet). Réinitialiser efface position, taille et style. Les éléments intégrés ne se suppriment pas — masque-les avec l\\'œil.</p>';
