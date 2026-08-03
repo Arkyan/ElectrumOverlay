@@ -159,7 +159,7 @@ class TwitchOverlayServer {
                     </head>
                     <body>
                         <script src="/js/app-titlebar.js"></script>
-                        <div class="page in-app">
+                        <div class="page in-app page-home">
                             <h1>ElectrumOverlay</h1>
                             <div class="field-row">
                                 <div class="status-pill" id="serverStatusPill"><span class="dot"></span> Serveur actif</div>
@@ -173,53 +173,97 @@ class TwitchOverlayServer {
                                 <button type="button" class="btn btn-primary" id="btnInstallUpdate" style="display:none;">Installer et redémarrer</button>
                             </div>
 
-                            <h2 style="margin-top:var(--space-6);">Raccourcis</h2>
-                            <div class="link-grid">
-                                <a href="/settings" class="link-card">
-                                    <h3>Paramètres</h3>
-                                    <p>Couleurs, textes, alertes, animations</p>
+                            <!-- Deux destinations mises en avant : ce sont les seules qu'on ouvre
+                                 vraiment tous les jours. Le reste est regroupé par MOMENT d'usage
+                                 (avant/pendant le live, installation), et les sorties JSON de
+                                 diagnostic sont repliées — elles n'ont rien à faire au même niveau
+                                 visuel qu'un réglage quotidien. -->
+                            <div class="home-hero">
+                                <a href="/scene-editor" class="link-card link-card-lg">
+                                    <span class="link-card-icon">🎬</span>
+                                    <span class="link-card-body">
+                                        <h3>Éditeur de scène</h3>
+                                        <p>Placer les éléments, créer des scènes, récupérer les URLs pour OBS</p>
+                                    </span>
                                 </a>
-                                <a href="/scene-editor" class="link-card">
-                                    <h3>Éditeur de scène</h3>
-                                    <p>Positionner les éléments, créer des scènes...</p>
-                                </a>
-                                <a href="/integrations" class="link-card">
-                                    <h3>Intégrations</h3>
-                                    <p>Spotify, Trucky...</p>
-                                </a>
-                                <a href="/commands" class="link-card">
-                                    <h3>Commandes</h3>
-                                    <p>Commandes de chat personnalisées (!discord...)</p>
-                                </a>
-                                <a href="/logs" class="link-card">
-                                    <h3>Logs</h3>
-                                    <p>Journal du serveur en direct</p>
-                                </a>
-                                <a href="/tests" class="link-card">
-                                    <h3>Tests</h3>
-                                    <p>Simuler follow, sub, raid, alertes...</p>
-                                </a>
-                                <a href="/stream-stats-html" class="link-card">
-                                    <h3>Statistiques</h3>
-                                    <p>Stats du stream en temps réel</p>
-                                </a>
-                                <a href="/auth-url" class="link-card" target="_blank">
-                                    <h3>Autorisation Twitch</h3>
-                                    <p>Ouvre dans le navigateur</p>
-                                </a>
-                                <a href="/setup" class="link-card">
-                                    <h3>Assistant de configuration</h3>
-                                    <p>Identifiants Twitch, ngrok, Trucky</p>
-                                </a>
-                                <a href="/subscriptions" class="link-card" target="_blank">
-                                    <h3>Abonnements EventSub (JSON)</h3>
-                                    <p>Ouvre dans le navigateur</p>
-                                </a>
-                                <a href="/status" class="link-card" target="_blank">
-                                    <h3>Statut (JSON)</h3>
-                                    <p>Ouvre dans le navigateur</p>
+                                <a href="/settings" class="link-card link-card-lg">
+                                    <span class="link-card-icon">🎨</span>
+                                    <span class="link-card-body">
+                                        <h3>Paramètres</h3>
+                                        <p>Profils, couleurs, textes, alertes, animations</p>
+                                    </span>
                                 </a>
                             </div>
+
+                            <p class="section-label">Ajouter du contenu</p>
+                            <div class="link-grid">
+                                <a href="/integrations" class="link-card">
+                                    <span class="link-card-icon">🔌</span>
+                                    <span class="link-card-body">
+                                        <h3>Intégrations</h3>
+                                        <p>Spotify, Trucky, affichage des touches</p>
+                                    </span>
+                                </a>
+                                <a href="/commands" class="link-card">
+                                    <span class="link-card-icon">💬</span>
+                                    <span class="link-card-body">
+                                        <h3>Commandes de chat</h3>
+                                        <p>Réponses automatiques (!discord...)</p>
+                                    </span>
+                                </a>
+                            </div>
+
+                            <p class="section-label">Pendant le live</p>
+                            <div class="link-grid">
+                                <a href="/tests" class="link-card">
+                                    <span class="link-card-icon">🧪</span>
+                                    <span class="link-card-body">
+                                        <h3>Tests</h3>
+                                        <p>Simuler follow, sub, raid, alertes...</p>
+                                    </span>
+                                </a>
+                                <a href="/stream-stats-html" class="link-card">
+                                    <span class="link-card-icon">📊</span>
+                                    <span class="link-card-body">
+                                        <h3>Statistiques</h3>
+                                        <p>Viewers, follows, subs du live en cours</p>
+                                    </span>
+                                </a>
+                                <a href="/logs" class="link-card">
+                                    <span class="link-card-icon">📜</span>
+                                    <span class="link-card-body">
+                                        <h3>Logs</h3>
+                                        <p>Journal du serveur en direct</p>
+                                    </span>
+                                </a>
+                            </div>
+
+                            <p class="section-label">Configuration</p>
+                            <div class="link-grid">
+                                <a href="/setup" class="link-card">
+                                    <span class="link-card-icon">🧰</span>
+                                    <span class="link-card-body">
+                                        <h3>Assistant de configuration</h3>
+                                        <p>Identifiants Twitch, ngrok, image de marque</p>
+                                    </span>
+                                </a>
+                                <a href="/auth-url" class="link-card" target="_blank">
+                                    <span class="link-card-icon">🔑</span>
+                                    <span class="link-card-body">
+                                        <h3>Autorisation Twitch</h3>
+                                        <p>Renouveler l'accès au compte — ouvre le navigateur</p>
+                                    </span>
+                                </a>
+                            </div>
+
+                            <details class="adv">
+                                <summary>Diagnostic (avancé)</summary>
+                                <p class="hint">Sorties brutes du serveur, utiles pour comprendre un problème d'événements Twitch. S'ouvrent dans le navigateur.</p>
+                                <div class="adv-links">
+                                    <a href="/subscriptions" target="_blank">Abonnements EventSub (JSON)</a>
+                                    <a href="/status" target="_blank">Statut du serveur (JSON)</a>
+                                </div>
+                            </details>
                         </div>
 
                         <script>
