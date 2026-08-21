@@ -184,6 +184,47 @@ function applyPanelBgOpacity(el, cssVar, percent) {
 }
 
 /**
+ * Ordre d'empilement choisi dans l'éditeur (couche "Premier plan / Avancer / Reculer /
+ * Arrière-plan"), stocké dans l'entrée de layout de l'élément — intégré comme custom.
+ */
+// Empilement par défaut des éléments CUSTOM, dans la même unité que tout le reste : un z-index.
+// Une boîte sert de fond par nature, une zone d'alertes doit passer devant.
+const CUSTOM_BASE_Z = { box: 240, alerts: 300 };
+const CUSTOM_BASE_Z_DEFAULT = 250;
+
+/**
+ * Ordre d'empilement d'un élément de scène. L'ordre choisi dans l'éditeur est un z-index ABSOLU,
+ * exprimé sur la même échelle que les valeurs par défaut — celles du CSS pour les éléments
+ * intégrés (bloc titre 1, indicateurs 10, chat 100, panneau gauche 200, alertes 300) comme celles
+ * ci-dessus pour les éléments custom.
+ *
+ * C'est le point clé : une échelle SÉPARÉE (une "bande" réservée aux éléments classés) rendait le
+ * réglage inopérant dès qu'on le comparait à un élément jamais classé — mettre les alertes en
+ * arrière-plan les laissait devant le panneau de chat, qui gardait son 100 issu du CSS. Sur une
+ * échelle unique, "arrière-plan" = (le plus petit z de la scène) − 1, ce qui passe forcément
+ * dessous. Sans réglage, chaque élément garde exactement son empilement d'origine.
+ *
+ * @param {number|null} baseZ empilement de repli, ou null si inconnu (rien n'est alors posé).
+ */
+function applyStackOrder(el, entry, baseZ = null) {
+    const explicit = entry && typeof entry.z === 'number' ? entry.z : null;
+    const z = explicit !== null ? explicit : baseZ;
+    if (z !== null) {
+        el.style.zIndex = String(z);
+        // z-index n'a d'effet que sur un élément positionné. Les blocs intégrés jamais déplacés
+        // sont en position statique : sans ça, leurs boutons de couche n'auraient tout simplement
+        // aucun effet. `relative` sans décalage ne bouge rien à l'écran.
+        if (explicit !== null && getComputedStyle(el).position === 'static') {
+            el.style.position = 'relative';
+        }
+    }
+    // Empilement EFFECTIF (et pas seulement l'ordre enregistré) : l'éditeur s'en sert pour calculer
+    // "avancer/reculer d'un cran" par rapport aux voisins, y compris ceux qui n'ont jamais été
+    // classés à la main.
+    el.dataset.propZ = z !== null ? String(z) : '';
+}
+
+/**
  * Positions/visibilité custom posées depuis l'éditeur de scène (/scene-editor), par page —
  * cfg.layout[page] = { elementId: {top?, left?, hidden?} } (top/left en % de la hauteur/largeur).
  * Entièrement déclaratif : chaque élément déplaçable est reposé à partir de RIEN d'autre que la
@@ -258,6 +299,14 @@ function applyLayoutFromConfig() {
             el.dataset['prop' + key.charAt(0).toUpperCase() + key.slice(1)] = value || '';
         });
         el.dataset.propScale = (pos && typeof pos.scale === 'number') ? String(pos.scale) : '';
+        // Empilement de repli d'un élément intégré = celui de son CSS, capturé UNE fois : aux
+        // passages suivants (config-updated), le z-index calculé serait celui qu'on a nous-mêmes
+        // posé, et la valeur d'origine serait perdue.
+        if (el.dataset.baseZ === undefined) {
+            const cssZ = parseInt(getComputedStyle(el).zIndex, 10);
+            el.dataset.baseZ = String(Number.isFinite(cssZ) ? cssZ : 0);
+        }
+        applyStackOrder(el, pos, Number(el.dataset.baseZ));
 
         // Opacité du fond du panneau de chat INTÉGRÉ (index.html) : même réglage que celui du
         // panneau de chat ajouté depuis l'éditeur (les deux portent la classe .chat-panel, donc la
@@ -548,7 +597,8 @@ function renderCustomTextsFromConfig() {
         // tout : l'éditeur de scène doit continuer à lister l'élément pour pouvoir le réafficher.
         // Exception alerts : ce widget est déjà masqué par défaut en CSS (il n'apparaît que le
         // temps d'une alerte via .show) — on ne pose un display inline que pour le forcer caché.
-        const hiddenByLayout = !!cfg.layout?.[pageKey]?.['custom:' + id]?.hidden;
+        const layoutEntry = cfg.layout?.[pageKey]?.['custom:' + id];
+        const hiddenByLayout = !!layoutEntry?.hidden;
         // 'important' : en mode édition, le bridge force l'affichage des zones d'alertes en
         // pointillés via une règle !important — seul un inline important garde la main pour
         // qu'un élément masqué à l'œil reste réellement masqué (et remonté comme tel).
@@ -565,7 +615,6 @@ function renderCustomTextsFromConfig() {
         // Même bornage large que les éléments intégrés (voir clampLayoutPercent).
         el.style.top = (clampLayoutPercent(item.top ?? 40) / zoom) + 'vh';
         el.style.left = (clampLayoutPercent(item.left ?? 40) / zoom) + 'vw';
-        el.style.zIndex = '250';
         // De vraies dimensions CSS (pas transform:scale, qui déformerait le contenu) : l'élément
         // dispose de plus/moins d'espace et le texte wrappe normalement au lieu d'être étiré.
         //
@@ -625,10 +674,9 @@ function renderCustomTextsFromConfig() {
             el.style.background = item.color || '#a855f7';
             el.style.borderRadius = (typeof item.radius === 'number' ? item.radius : 8) + 'px';
             if (typeof item.opacity === 'number') el.style.opacity = String(item.opacity / 100);
-            // Une boîte sert de fond par nature : toujours sous les autres éléments custom
-            // (texte, image, horloge à 250), sinon une boîte ajoutée après eux les recouvrirait
-            // sans aucun moyen de changer l'ordre d'empilement depuis l'éditeur.
-            el.style.zIndex = '240';
+            // Une boîte sert de fond par nature : sous les autres éléments custom par défaut
+            // (voir CUSTOM_BASE_Z), sinon une boîte ajoutée après eux les recouvrirait. Ce
+            // n'est plus qu'un DÉFAUT : le réglage de couche de l'éditeur peut l'inverser.
         } else if (type === 'clock') {
             // Le temps vit dans un span enfant dédié : en mode édition, étiquette et poignées de
             // redimensionnement sont ajoutées comme enfants du même élément — écraser
@@ -697,7 +745,6 @@ function renderCustomTextsFromConfig() {
                 + '<div class="alert-amount" id="alertAmount" style="display: none;"></div>'
                 + '</div>'
                 + '</div>';
-            el.style.zIndex = '300';
         } else if (type === 'spotify') {
             // Morceau Spotify en cours de lecture — pas de singleton (contrairement à chat/alerts,
             // aucun id DOM partagé n'est nécessaire) : plusieurs widgets peuvent coexister sur une
@@ -863,6 +910,8 @@ function renderCustomTextsFromConfig() {
                 ensureSceneAutoShow();
             }
         }
+        // Après les branches par type, pour que l'ordre choisi dans l'éditeur ait le dernier mot.
+        applyStackOrder(el, layoutEntry, CUSTOM_BASE_Z[type] ?? CUSTOM_BASE_Z_DEFAULT);
         exposeStyleProps(el, item);
         document.body.appendChild(el);
     }

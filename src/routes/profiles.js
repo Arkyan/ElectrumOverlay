@@ -220,7 +220,7 @@ function createProfilesRoutes(broadcastEvent) {
 
     router.post('/api/profiles/:id/layout/:page/:elementId', (req, res) => {
         try {
-            const { top, left, hidden, removed, width, height, scale, opacity } = req.body || {};
+            const { top, left, hidden, removed, width, height, scale, opacity, z } = req.body || {};
             const patch = {};
             if (typeof top === 'number') patch.top = clampPercent(top);
             if (typeof left === 'number') patch.left = clampPercent(left);
@@ -237,6 +237,11 @@ function createProfilesRoutes(broadcastEvent) {
             // lit --chat-bg-opacity, voir applyLayoutFromConfig) ; accepté génériquement ici plutôt
             // qu'au cas par cas, comme le reste du patch de layout.
             if (typeof opacity === 'number') patch.opacity = Math.max(0, Math.min(100, opacity));
+            // Ordre d'empilement : un z-index absolu, sur la même échelle que les valeurs par
+            // défaut du CSS et des types d'éléments (voir applyStackOrder). Borné pour rester
+            // sous les décorations de l'éditeur (étiquettes, poignées, élément sélectionné), qui
+            // doivent rester au-dessus de tout quoi que l'utilisateur choisisse.
+            if (typeof z === 'number') patch.z = Math.round(Math.max(-999, Math.min(9999, z)));
             for (const key of ELEMENT_STYLE_COLOR_KEYS) {
                 if (typeof (req.body || {})[key] === 'string') patch[key] = req.body[key];
             }

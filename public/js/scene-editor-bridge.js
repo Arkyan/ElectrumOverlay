@@ -134,6 +134,16 @@
                 padding: 0 12px;
             }
             [data-scene-el].scene-dragging { outline-color: #22d3ee; outline-style: solid; }
+            /* Élément sélectionné dans le panneau Sources : liseré plein ET remonté au-dessus de
+               tout le reste, le temps de l'édition uniquement. C'est ce qui permet d'attraper à la
+               souris un élément entièrement recouvert par un plus grand — sans ça, le pointerdown
+               partait toujours sur celui du dessus et le petit élément restait inatteignable. Le
+               z-index n'est PAS enregistré : l'ordre réel reste celui du réglage de couche. */
+            [data-scene-el].scene-selected {
+                outline-color: #22d3ee;
+                outline-style: solid;
+                z-index: 900000 !important;
+            }
             /* Certains éléments (.alert-container) ont overflow:hidden pour l'usage normal (crop
                du média héro) — en mode édition uniquement, on force overflow:visible pour que les
                poignées de redimensionnement (qui dépassent volontairement de la boîte, voir
@@ -522,6 +532,7 @@
             // Sélection façon OBS : cliquer un élément sur l'aperçu le sélectionne aussi dans la
             // liste des sources du parent (qui affiche alors ses propriétés).
             window.parent.postMessage({ type: 'scene-element-selected', elementId: id }, '*');
+            markSelected(id);
             el.setPointerCapture(e.pointerId);
             el.classList.add('scene-dragging');
             // Fige une éventuelle animation CSS infinie (ex: .back-soon-banner/.waiting-indicator
@@ -740,6 +751,21 @@
         });
     }
 
+    /**
+     * Marque l'élément sélectionné dans l'aperçu (liseré plein + remontée au-dessus de tout, voir
+     * .scene-selected). Appelé sur demande du panneau (message 'scene-select-element') ET
+     * directement au pointerdown, pour que le retour visuel soit immédiat sans attendre l'aller-
+     * retour avec le parent. `null` désélectionne tout.
+     */
+    function markSelected(elementId) {
+        document.querySelectorAll('[data-scene-el].scene-selected').forEach((el) => {
+            el.classList.remove('scene-selected');
+        });
+        if (!elementId) return;
+        const el = document.querySelector('[data-scene-el="' + CSS.escape(elementId) + '"]');
+        if (el) el.classList.add('scene-selected');
+    }
+
     function reportReady() {
         const elements = Array.from(document.querySelectorAll('[data-scene-el]'))
             // Les éléments intégrés "supprimés" ne sont plus des sources de la scène : ils sont
@@ -771,6 +797,9 @@
                 // Échelle + couleurs de thème par élément (posées par applyLayoutFromConfig pour
                 // les intégrés, exposeStyleProps pour les customs).
                 scale: el.dataset.propScale ? parseFloat(el.dataset.propScale) : undefined,
+                // Ordre d'empilement (applyStackOrder) : '' = aucun ordre enregistré, l'éditeur le
+                // traite alors comme 0 pour calculer les déplacements de couche.
+                z: el.dataset.propZ ? parseFloat(el.dataset.propZ) : undefined,
                 // Taille du texte des widgets composites (chat, Spotify) — multiplicateur en %.
                 textScale: isCustom && el.dataset.propTextScale ? parseFloat(el.dataset.propTextScale) : undefined,
                 // Vitesse de défilement du bandeau de chat (chatTicker), en px/s.
@@ -919,6 +948,7 @@
             if (!data) return;
             if (data.type === 'scene-preview-event') handlePreviewEvent(data.kind);
             else if (data.type === 'scene-center-element') handleCenterElement(data.elementId, data.axis);
+            else if (data.type === 'scene-select-element') markSelected(data.elementId);
         });
     }
 

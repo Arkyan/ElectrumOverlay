@@ -45,6 +45,12 @@ body {
     overflow: hidden;
     background: var(--theme-bg, var(--theme-accent, #1e293b));
     position: relative;
+    /* Fait du body un contexte d'empilement à part entière. Sans ça, body étant positionné, son
+       FOND est peint dans la couche des éléments positionnés, donc au-dessus de tout descendant à
+       z-index négatif : un élément envoyé en arrière-plan depuis l'éditeur (le dernier cran passe
+       sous 0) disparaissait purement et simplement derrière le fond de la page. Avec un contexte
+       d'empilement, les z négatifs se peignent au-dessus du fond du body et restent visibles. */
+    z-index: 0;
     color: var(--theme-text, #e2e8f0);
 }
 

@@ -215,6 +215,15 @@ const SCENE_EDITOR_HTML = ({ activeId, themes, pause, scenes, animDefaults }) =>
             font-size: 14px; color: inherit; border-radius: 4px;
         }
         .se-row .se-row-restore:hover { background: rgba(255, 255, 255, 0.12); color: var(--text); }
+        /* Couche : quatre boutons symboles côte à côte, larges au clic mais discrets — c'est un
+           réglage occasionnel, il ne doit pas concurrencer les propriétés de l'élément. */
+        .se-layer-title {
+            margin: var(--space-4) 0 var(--space-1);
+            font-size: 11px; font-weight: 700; letter-spacing: 0.08em;
+            text-transform: uppercase; color: var(--text-faint);
+        }
+        .se-layer-row { gap: var(--space-1); }
+        .se-layer-row .btn { flex: 1 1 0; min-width: 0; font-size: 15px; line-height: 1; }
         .se-list-sep {
             font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
             color: var(--text-faint); padding: var(--space-3) 10px var(--space-1);
@@ -453,6 +462,17 @@ const SCENE_EDITOR_HTML = ({ activeId, themes, pause, scenes, animDefaults }) =>
 
         const frame = document.getElementById('sceneFrame');
 
+        /**
+         * Répercute la sélection dans l'aperçu : le bridge y pose un liseré plein et remonte
+         * l'élément au-dessus de tout, le temps de l'édition. C'est ce qui rend manipulable à la
+         * souris un élément entièrement recouvert par un autre — on le choisit dans la liste des
+         * sources, et il devient attrapable dans l'aperçu.
+         */
+        function syncPreviewSelection() {
+            if (!frame.contentWindow) return;
+            frame.contentWindow.postMessage({ type: 'scene-select-element', elementId: selectedId }, '*');
+        }
+
         function esc(value) {
             return String(value ?? '').replace(/[&<>"']/g, (c) => ({
                 '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
@@ -614,6 +634,9 @@ const SCENE_EDITOR_HTML = ({ activeId, themes, pause, scenes, animDefaults }) =>
                 renderSources();
                 renderProps();
                 renderTexts();
+                // Les éléments custom sont RECRÉÉS à chaque config-updated : la marque de sélection
+                // posée dans l'aperçu est perdue avec l'ancien nœud, il faut la remettre.
+                syncPreviewSelection();
             } else if (data.type === 'scene-element-selected') {
                 selectedId = data.elementId;
                 renderSources();
@@ -701,6 +724,7 @@ const SCENE_EDITOR_HTML = ({ activeId, themes, pause, scenes, animDefaults }) =>
                 selectedId = row.dataset.el;
                 renderSources();
                 renderProps();
+                syncPreviewSelection();
             }
         });
 
@@ -1035,7 +1059,17 @@ const SCENE_EDITOR_HTML = ({ activeId, themes, pause, scenes, animDefaults }) =>
                     note = '<p class="hint">Le cadre définit où les alertes peuvent apparaître : chaque alerte s\\'affiche au plus grand format qui y tient, média (image/GIF) en entier. Teste le rendu avec la barre "Aperçu" en haut.</p>' + note;
                 }
             }
-            box.innerHTML = \`<h4>\${esc(item.label)}\${item.hidden ? ' (masqué)' : ''}</h4>\` + fields + note;
+            // Couche : commun aux éléments intégrés ET custom (l'ordre vit dans l'entrée de layout
+            // dans les deux cas). Quatre actions plutôt qu'un champ numérique — personne ne veut
+            // choisir un numéro de couche, on veut "passe devant celui-là".
+            const layerRow = \`<p class="se-layer-title">Couche</p>
+                <div class="se-btn-row se-layer-row">
+                    <button type="button" class="btn btn-ghost btn-sm" data-layer="front" title="Premier plan">⤒</button>
+                    <button type="button" class="btn btn-ghost btn-sm" data-layer="up" title="Avancer d'un cran">↑</button>
+                    <button type="button" class="btn btn-ghost btn-sm" data-layer="down" title="Reculer d'un cran">↓</button>
+                    <button type="button" class="btn btn-ghost btn-sm" data-layer="back" title="Arrière-plan">⤓</button>
+                </div>\`;
+            box.innerHTML = \`<h4>\${esc(item.label)}\${item.hidden ? ' (masqué)' : ''}</h4>\` + fields + layerRow + note;
 
             // Réutilise le centrage de la barre d'outils sur les DEUX axes (calculé dans l'iframe,
             // seule à connaître la taille réellement rendue de l'élément et son mécanisme de
@@ -1057,6 +1091,33 @@ const SCENE_EDITOR_HTML = ({ activeId, themes, pause, scenes, animDefaults }) =>
                 });
             }
         }
+
+        // Changement de couche. L'ordre enregistré est un entier relatif : un élément sans ordre
+        // compte pour 0 (c'est son empilement historique). "Avancer" vise le premier voisin
+        // au-dessus et se place juste devant lui — un simple +1 aurait pu ne rien changer
+        // visuellement quand les ordres existants sont espacés.
+        document.getElementById('elProps').addEventListener('click', async (e) => {
+            const btn = e.target.closest('[data-layer]');
+            if (!btn) return;
+            const item = elements.find((it) => it.id === selectedId);
+            if (!item) return;
+            const zOf = (it) => (typeof it.z === 'number' ? it.z : 0);
+            const mine = zOf(item);
+            const others = elements.filter((it) => it.id !== item.id).map(zOf);
+            const above = others.filter((v) => v > mine);
+            const below = others.filter((v) => v < mine);
+            let target;
+            if (btn.dataset.layer === 'front') target = Math.max(mine, ...others) + 1;
+            else if (btn.dataset.layer === 'back') target = Math.min(mine, ...others) - 1;
+            else if (btn.dataset.layer === 'up') target = (above.length ? Math.min(...above) : mine) + 1;
+            else target = (below.length ? Math.max(...below) : mine) - 1;
+            const res = await callApi('/api/profiles/' + ACTIVE_PROFILE_ID + '/layout/' + currentKey + '/' + item.id,
+                jsonBody('POST', { z: target }));
+            if (res) {
+                item.z = target; // évite un flash de l'ancienne valeur avant la resynchro
+                toast('Couche modifiée.');
+            }
+        });
 
         // Champs texte : sauvegarde au blur (éviter un PATCH par frappe) ; le reste au change.
         document.getElementById('elProps').addEventListener('focusout', (e) => {
