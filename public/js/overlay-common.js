@@ -211,10 +211,17 @@ function applyStackOrder(el, entry, baseZ = null) {
     const z = explicit !== null ? explicit : baseZ;
     if (z !== null) {
         el.style.zIndex = String(z);
-        // z-index n'a d'effet que sur un élément positionné. Les blocs intégrés jamais déplacés
-        // sont en position statique : sans ça, leurs boutons de couche n'auraient tout simplement
-        // aucun effet. `relative` sans décalage ne bouge rien à l'écran.
-        if (explicit !== null && getComputedStyle(el).position === 'static') {
+        // z-index n'a d'effet que sur un élément positionné. Certains blocs intégrés (titleBlock,
+        // streamStats...) sont volontairement en position statique dans leur CSS (ex: streamStats,
+        // pour ne pas sortir du flex qui le centre) : SANS ce passage systématique en `relative`
+        // (même quand `explicit` est null, donc dès le premier rendu, pas seulement après un clic
+        // sur les boutons de couche), un tel élément reste hors du modèle d'empilement — son
+        // z-index posé juste au-dessus est inerte, `.scene-selected` (voir scene-editor-bridge.js,
+        // même mécanisme pour attraper un petit élément entièrement recouvert) ne peut jamais le
+        // remonter, et il restait alors perdu sous un plus grand sans aucun moyen de le récupérer
+        // depuis l'éditeur. `relative` sans décalage ne bouge rien à l'écran ni au flex qui le
+        // centre (seul `absolute`/`fixed` en sortirait).
+        if (getComputedStyle(el).position === 'static') {
             el.style.position = 'relative';
         }
     }
