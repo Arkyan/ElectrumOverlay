@@ -24,6 +24,16 @@ SmartScreen) : celui-là est payant et optionnel, et rien ne change de ce côté
 
 ## 2. Faire une release
 
+Prérequis sur le PC (une seule fois) : le CLI GitHub, connecté à ton compte.
+
+```bash
+winget install --id GitHub.cli
+```
+
+```bash
+gh auth login
+```
+
 Version : `version` de `[workspace.package]` dans `Cargo.toml` (ex. `3.0.0`, ou `3.0.0-beta.1`).
 
 ```bash

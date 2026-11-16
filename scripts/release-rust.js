@@ -66,7 +66,11 @@ function electronManifest({ version, installerName, bytes, date = new Date() }) 
 
 function run(command, args, options = {}) {
     console.log(`\n▶ ${command} ${args.join(' ')}`);
-    execFileSync(command, args, { stdio: 'inherit', cwd: ROOT, shell: process.platform === 'win32', ...options });
+    // Sous Windows, npm est un script .cmd : il faut passer par l'interpréteur de commandes. Mais
+    // celui-ci supprime les arguments vides et coupe ceux qui contiennent des espaces : on ne
+    // l'utilise donc QUE pour npm (cargo et gh sont de vrais exécutables).
+    const shell = process.platform === 'win32' && command === 'npm';
+    execFileSync(command, args, { stdio: 'inherit', cwd: ROOT, shell, ...options });
 }
 
 function main() {
@@ -112,8 +116,16 @@ function main() {
     if (plugin) assets.push(path.join(distDir, plugin));
     else console.warn('⚠️  Plugin Stream Deck introuvable dans dist/ : non joint à la release');
 
-    const args = ['release', 'create', `v${version}`, '--repo', REPO, '--draft', '--title', version, '--notes', ''];
+    const notes = prerelease
+        ? 'Pré-version de test de la version Rust (Tauri). Non proposée en mise à jour automatique.'
+        : 'Version Rust (Tauri) : voir docs/RELEASE-RUST.md.';
+    const args = ['release', 'create', `v${version}`, '--repo', REPO, '--draft', '--title', version, '--notes', notes];
     if (prerelease) args.push('--prerelease');
+    try {
+        execFileSync('gh', ['--version'], { stdio: 'ignore' });
+    } catch {
+        throw new Error('Le CLI GitHub (gh) est introuvable : winget install --id GitHub.cli, puis gh auth login (voir docs/RELEASE-RUST.md)');
+    }
     run('gh', [...args, ...assets]);
     console.log(`\n✅ Release v${version} créée en BROUILLON : vérifie-la sur GitHub puis publie-la.`);
 }
