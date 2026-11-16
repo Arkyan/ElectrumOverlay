@@ -10,12 +10,14 @@ pub mod commands;
 pub mod events;
 pub mod pages;
 pub mod routes;
+pub mod spotify;
 pub mod state;
 pub mod stats;
+pub mod trucky;
 pub mod twitch;
 pub mod ws;
 
-pub use state::{AppState, Assets};
+pub use state::{AppState, Assets, External};
 
 use axum::Router;
 use std::io;
@@ -32,6 +34,7 @@ pub fn http_router(state: AppState) -> Router {
         .merge(routes::pages::router())
         .merge(routes::twitch::router())
         .merge(routes::setup::router())
+        .merge(routes::integrations::router())
         .merge(routes::profiles::router())
         .merge(routes::settings::router())
         .merge(routes::testtools::router())
@@ -76,6 +79,7 @@ pub async fn start(state: AppState, http_port: u16, ws_port: u16) -> io::Result<
     });
     tokio::spawn(twitch::eventsub::run(state.clone(), twitch::eventsub::Options::default()));
     tokio::spawn(twitch::poll_viewer_count(state.clone()));
+    tokio::spawn(spotify::poll(state.clone(), std::time::Duration::from_secs(5)));
     let ws_app = ws::router(state);
     tokio::spawn(async move {
         if let Err(error) = axum::serve(ws_listener, ws_app).await {

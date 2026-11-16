@@ -17,6 +17,8 @@ const originalLoad = Module._load;
 Module._load = function (request, parent, isMain) {
     if (request === 'express') return fakeExpress;
     if (request === 'multer') return fakeMulter;
+    // Spotify/Trucky ne font aucun appel réseau pendant le rendu des pages : de simples doublures.
+    if (request === 'axios' || request === 'qs') return {};
     return originalLoad.call(this, request, parent, isMain);
 };
 
@@ -43,12 +45,19 @@ config.updateProfileScene(active, 'pause', { effects: { particles: false } });
 const other = config.createProfile("Profil d'été", null).id;
 config.createCommand({ trigger: '!discord', chatReply: { enabled: true, message: 'Merci {user} <3' }, cooldownSeconds: 12, permission: 'vip' });
 config.createCommand({ trigger: '!info', enabled: false, overlayAction: { enabled: true, panel: 'bottom' } });
+config.saveConfig({
+    spotify: { CLIENT_ID: 'spot<id>', CLIENT_SECRET: "s'cret", REDIRECT_URI: 'http://127.0.0.1:8080/api/spotify/callback' },
+    trucky: { enable: true, USER_ID: '12"3' },
+    inputDisplay: { enabled: true }
+});
 
 require(path.join(root, 'src', 'routes', 'sceneEditor.js'))();
 require(path.join(root, 'src', 'routes', 'settings.js'))(() => {});
 require(path.join(root, 'src', 'routes', 'testtools.js'))({});
 require(path.join(root, 'src', 'routes', 'logs.js'))();
 require(path.join(root, 'src', 'routes', 'commands.js'))({});
+const SpotifyAuth = require(path.join(root, 'src', 'services', 'SpotifyAuth'));
+require(path.join(root, 'src', 'routes', 'integrations.js'))(new SpotifyAuth());
 
 function render(route, query = {}) {
     let html = null;
@@ -64,6 +73,9 @@ const pages = {
     'tests': render('/tests'),
     'logs': render('/logs'),
     'commands': render('/commands'),
-    'stream-stats-html': new StreamStatsManager().generateHTMLStats()
+    'stream-stats-html': new StreamStatsManager().generateHTMLStats(),
+    'integrations': render('/integrations'),
+    'integrations?error=%C3%89chec%20%3Cx%3E': render('/integrations', { error: 'Échec <x>' }),
+    'integrations?connected=1': render('/integrations', { connected: '1' })
 };
 process.stdout.write(JSON.stringify({ other, pages }));

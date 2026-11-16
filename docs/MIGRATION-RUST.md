@@ -95,10 +95,10 @@ $env:ELECTRUM_CONFIG_DIR = "C:\chemin\vers\une\copie\config"
 | Redirection vers `/setup` tant que Twitch n'est pas configuré | ✅ |
 | `/status`, `/subscriptions`, badges, nombre de viewers | ✅ |
 | Liens externes (Twitch, Spotify...) ouverts dans le navigateur | ✅ |
-| Page `/integrations` | ⏳ (avec Spotify) |
 | Barre de titre de l'app, bouton « Arrêter le serveur » (API `window.electronAPI`) | ⏳ |
-| Spotify | ⏳ |
-| Trucky (contournement Cloudflare) | ⏳ |
+| Spotify : connexion du compte, renouvellement du token, morceau en cours | ✅ testé contre un faux Spotify (à valider avec un vrai compte) |
+| Page `/integrations` (Spotify, Trucky, affichage des touches) | ✅ HTML identique à Node (testé) |
+| Trucky `/api/info-panel` : HTTP direct, navigateur invisible si Cloudflare bloque | ✅ testé (faux Trucky + Chromium) |
 | Capture clavier (affichage des touches) | ⏳ |
 | Icône de la barre des tâches, mises à jour automatiques | ⏳ |
 | Reprise de la config par l'installateur, première release Rust | ⏳ |
@@ -112,6 +112,8 @@ $env:ELECTRUM_CONFIG_DIR = "C:\chemin\vers\une\copie\config"
 - Au démarrage, le token Twitch est vérifié : message clair s'il est expiré, s'il vient d'une
   autre application Twitch, ou s'il manque des autorisations (scopes).
 - L'assistant `/setup` ne redémarre plus l'app : la connexion Twitch est simplement relancée.
+- Trucky : un appel HTTP direct est tenté d'abord ; le Chrome/Edge installé n'est lancé (une
+  seule fois par mise à jour du panneau, au lieu d'une fois par appel) que si Cloudflare bloque.
 - L'image de marque saisie dans `/setup` est enregistrée dans le profil actif (côté Node, elle
   partait à la racine de la config et était perdue au redémarrage dès qu'un profil existait).
 

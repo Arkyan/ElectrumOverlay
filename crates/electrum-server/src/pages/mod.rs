@@ -486,3 +486,44 @@ pub fn commands(list: &[Value]) -> String {
     };
     fill(template!("commands"), &[new_card, cards])
 }
+
+// ---------------------------------------------------------------------------------------------
+// Intégrations
+// ---------------------------------------------------------------------------------------------
+
+/// Données de la page /integrations (mêmes champs que `INTEGRATIONS_PAGE_HTML` côté Node).
+pub struct IntegrationsContext<'a> {
+    pub config: &'a Value,
+    pub configured: bool,
+    pub connected: bool,
+    pub auth_url: Option<String>,
+    pub just_connected: bool,
+    pub error: Option<&'a str>,
+}
+
+/// `/integrations` : Spotify, Trucky, affichage des touches.
+pub fn integrations(ctx: &IntegrationsContext) -> String {
+    let spotify = &ctx.config["spotify"];
+    let trucky = &ctx.config["trucky"];
+    let account = if ctx.connected {
+        template!("integrations-connected").to_string()
+    } else if ctx.configured {
+        fill(template!("integrations-configured"), &[esc(ctx.auth_url.as_deref().unwrap_or_default())])
+    } else {
+        template!("integrations-unconfigured").to_string()
+    };
+    fill(
+        template!("integrations"),
+        &[
+            ctx.error.filter(|e| !e.is_empty()).map_or(String::new(), |e| format!("<p class=\"msg error\">{}</p>", esc(e))),
+            if ctx.just_connected { "<p class=\"msg success\">Compte Spotify connecté.</p>".into() } else { String::new() },
+            esc_v(spotify.get("REDIRECT_URI")),
+            esc_v(spotify.get("CLIENT_ID")),
+            esc_v(spotify.get("CLIENT_SECRET")),
+            account,
+            if_truthy(trucky.get("enable"), "checked"),
+            esc_or(trucky.get("USER_ID"), ""),
+            if_truthy(at(ctx.config, &["inputDisplay", "enabled"]), "checked"),
+        ],
+    )
+}

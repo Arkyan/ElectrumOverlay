@@ -152,7 +152,7 @@ fn new_state(endpoints: Endpoints, token: &str) -> (AppState, tempfile::TempDir)
         .unwrap();
     let repo = Path::new(env!("CARGO_MANIFEST_DIR")).join("..").join("..");
     let assets = Assets { public_dir: repo.join("public"), templates_dir: repo.join("src").join("templates") };
-    (AppState::with_endpoints(store, assets, endpoints), dir)
+    (AppState::with_external(store, assets, electrum_server::External { twitch: endpoints, ..Default::default() }), dir)
 }
 
 fn options() -> eventsub::Options {

@@ -16,6 +16,8 @@ tower-http = { version = "0.6", features = ["fs"] }
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls-webpki-roots", "rustls-tls-native-roots"] }
 tokio-tungstenite = { version = "0.27", features = ["rustls-tls-webpki-roots", "rustls-tls-native-roots"] }
 futures-util = "0.3"
+base64 = "0.22"
+chromiumoxide = { version = "0.7", default-features = false, features = ["tokio-runtime"] }
 
 [dev-dependencies]
 tempfile = "3"

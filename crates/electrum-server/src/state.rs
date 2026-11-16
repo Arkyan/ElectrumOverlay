@@ -2,7 +2,6 @@
 //! WebSocket vers les overlays.
 
 use crate::stats::StreamStats;
-use crate::twitch::api::Endpoints;
 use crate::twitch::TwitchState;
 use electrum_core::json::to_js_string;
 use electrum_core::Store;
@@ -32,6 +31,27 @@ pub struct Inner {
     pub(crate) command_cooldowns: Mutex<HashMap<String, Instant>>,
     pub assets: Assets,
     pub twitch: TwitchState,
+    pub spotify: crate::spotify::SpotifyState,
+    /// Base de l'API Trucky (`https://e.truckyapp.com/api/`).
+    pub trucky_base: String,
+}
+
+/// URLs des services externes, remplaçables par de faux serveurs dans les tests.
+#[derive(Debug, Clone)]
+pub struct External {
+    pub twitch: crate::twitch::api::Endpoints,
+    pub spotify: crate::spotify::Endpoints,
+    pub trucky: String,
+}
+
+impl Default for External {
+    fn default() -> Self {
+        External {
+            twitch: Default::default(),
+            spotify: Default::default(),
+            trucky: "https://e.truckyapp.com/api/".into(),
+        }
+    }
 }
 
 /// Nombre de lignes de logs conservées pour /logs (comme LogBuffer côté Node).
@@ -50,11 +70,11 @@ impl Deref for AppState {
 
 impl AppState {
     pub fn new(store: Store, assets: Assets) -> Self {
-        Self::with_endpoints(store, assets, Endpoints::default())
+        Self::with_external(store, assets, External::default())
     }
 
-    /// Comme `new`, avec des URLs Twitch au choix (faux serveur Twitch dans les tests).
-    pub fn with_endpoints(store: Store, assets: Assets, endpoints: Endpoints) -> Self {
+    /// Comme `new`, avec des URLs de services externes au choix (faux serveurs dans les tests).
+    pub fn with_external(store: Store, assets: Assets, external: External) -> Self {
         let (events, _) = broadcast::channel(256);
         AppState(Arc::new(Inner {
             store: Mutex::new(store),
@@ -63,7 +83,9 @@ impl AppState {
             logs: Mutex::new(VecDeque::new()),
             command_cooldowns: Mutex::new(HashMap::new()),
             assets,
-            twitch: TwitchState::new(endpoints),
+            twitch: TwitchState::new(external.twitch),
+            spotify: crate::spotify::SpotifyState::new(external.spotify),
+            trucky_base: external.trucky,
         }))
     }
 

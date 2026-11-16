@@ -11,7 +11,8 @@ const path = require('path');
 const ROOT = path.join(__dirname, '..', '..', '..');
 const OUT = path.join(__dirname, 'pages');
 
-// nom → [fichier source, texte qui précède le gabarit (la 1re backtick qui suit est l'ouvrante)]
+// nom → [fichier source, texte qui précède le gabarit, nombre de backticks à sauter (défaut 0)]
+// La backtick ouvrante est la première qui suit le texte repère (après celles à sauter).
 const PAGES = {
     'scene-editor': ['src/routes/sceneEditor.js', 'const SCENE_EDITOR_HTML'],
     'settings': ['src/routes/settings.js', 'const SETTINGS_PAGE_HTML'],
@@ -24,6 +25,9 @@ const PAGES = {
     'commands': ['src/routes/commands.js', 'const COMMANDS_PAGE_HTML'],
     'command-card': ['src/routes/commands.js', 'function commandCardHTML'],
     'integrations': ['src/routes/integrations.js', 'const INTEGRATIONS_PAGE_HTML'],
+    'integrations-connected': ['src/routes/integrations.js', 'connected ? `'],
+    'integrations-configured': ['src/routes/integrations.js', ': configured ? `'],
+    'integrations-unconfigured': ['src/routes/integrations.js', '` : `\n', 1],
     'setup': ['src/routes/setup.js', 'const SETUP_PAGE_HTML'],
     'app': ['server.js', "this.app.get('/app'"],
     'auth-url': ['src/routes/api.js', "router.get('/auth-url'"],
@@ -90,12 +94,14 @@ function parse(src, start) {
 
 fs.mkdirSync(OUT, { recursive: true });
 const manifest = {};
-for (const [name, [file, marker]] of Object.entries(PAGES)) {
+for (const [name, [file, marker, skip = 0]] of Object.entries(PAGES)) {
     // Fins de ligne Windows (\r\n) ramenées à \n, comme le fait JavaScript dans un gabarit.
     const src = fs.readFileSync(path.join(ROOT, file), 'utf-8').replace(/\r\n/g, '\n');
     const at = src.indexOf(marker);
     if (at < 0) throw new Error(`${name} : « ${marker} » introuvable dans ${file}`);
-    const segs = parse(src, src.indexOf('`', at));
+    let start = src.indexOf('`', at);
+    for (let i = 0; i < skip; i++) start = src.indexOf('`', start + 1);
+    const segs = parse(src, start);
     let html = '';
     const expressions = [];
     for (const seg of segs) {

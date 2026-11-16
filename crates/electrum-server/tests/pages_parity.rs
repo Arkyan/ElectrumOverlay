@@ -56,7 +56,7 @@ async fn memes_pages_que_la_version_node() {
     );
 
     let pages = node["pages"].as_object().unwrap();
-    assert_eq!(pages.len(), 8);
+    assert_eq!(pages.len(), 11);
     for (name, expected) in pages {
         let uri = format!("/{}", name.replace("?profile=other", &format!("?profile={other}")));
         let response = http_router(state.clone()).oneshot(Request::get(&uri).body(Body::empty()).unwrap()).await.unwrap();

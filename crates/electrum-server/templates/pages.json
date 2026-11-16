@@ -212,6 +212,20 @@
       "inputDisplayEnabled ? 'checked' : ''"
     ]
   },
+  "integrations-connected": {
+    "source": "src/routes/integrations.js",
+    "expressions": []
+  },
+  "integrations-configured": {
+    "source": "src/routes/integrations.js",
+    "expressions": [
+      "esc(authUrl)"
+    ]
+  },
+  "integrations-unconfigured": {
+    "source": "src/routes/integrations.js",
+    "expressions": []
+  },
   "setup": {
     "source": "src/routes/setup.js",
     "expressions": [
