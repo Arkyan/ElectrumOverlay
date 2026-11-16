@@ -1,9 +1,9 @@
 [workspace]
 resolver = "2"
-members = ["crates/electrum-core", "src-tauri"]
+members = ["crates/electrum-core", "crates/electrum-server", "src-tauri"]
 # `cargo test` / `cargo build` à la racine ne visent que le cœur (testable partout) ;
 # l'app se lance avec `cargo tauri dev`.
-default-members = ["crates/electrum-core"]
+default-members = ["crates/electrum-core", "crates/electrum-server"]
 
 [workspace.package]
 version = "3.0.0-alpha.0"

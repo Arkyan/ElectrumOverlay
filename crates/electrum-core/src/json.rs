@@ -5,7 +5,7 @@
 
 use serde::Serialize;
 use serde_json::ser::{Formatter, PrettyFormatter};
-use serde_json::{Map, Value};
+use serde_json::{json, Map, Value};
 use std::io;
 
 /// Équivalent de `isPlainObject` : un objet JSON, pas un tableau ni `null`.
@@ -68,6 +68,30 @@ pub fn js_string_or_empty(value: Option<&Value>) -> String {
             .collect::<Vec<_>>()
             .join(","),
         Some(Value::Object(_)) => "[object Object]".to_string(),
+    }
+}
+
+/// Équivalent de `Number(x)` pour les valeurs JSON (`undefined` → NaN, `null` → 0, `""` → 0...).
+pub fn js_number(value: Option<&Value>) -> f64 {
+    match value {
+        None => f64::NAN,
+        Some(Value::Null) => 0.0,
+        Some(Value::Bool(b)) => f64::from(u8::from(*b)),
+        Some(Value::Number(n)) => n.as_f64().unwrap_or(f64::NAN),
+        Some(Value::String(s)) => {
+            let s = s.trim();
+            if s.is_empty() { 0.0 } else { s.parse::<f64>().unwrap_or(f64::NAN) }
+        }
+        Some(Value::Array(_)) | Some(Value::Object(_)) => f64::NAN,
+    }
+}
+
+/// Nombre JSON écrit comme en JS (5 et non 5.0).
+pub fn number_value(n: f64) -> Value {
+    if n.fract() == 0.0 && n.abs() < 9.0e15 {
+        json!(n as i64)
+    } else {
+        json!(n)
     }
 }
 
@@ -150,6 +174,22 @@ impl Formatter for JsPrettyFormatter<'_> {
     }
 }
 
+/// Équivalent de `JSON.stringify(value)` (compact), pour les messages WebSocket.
+pub fn to_js_string(value: &Value) -> String {
+    let mut buf = Vec::new();
+    let mut ser = serde_json::Serializer::with_formatter(&mut buf, JsCompactFormatter);
+    value.serialize(&mut ser).expect("sérialiser une Value en mémoire ne peut pas échouer");
+    String::from_utf8(buf).expect("serde_json produit toujours de l'UTF-8")
+}
+
+struct JsCompactFormatter;
+
+impl Formatter for JsCompactFormatter {
+    fn write_f64<W: ?Sized + io::Write>(&mut self, writer: &mut W, value: f64) -> io::Result<()> {
+        writer.write_all(js_number_to_string(value).as_bytes())
+    }
+}
+
 /// Équivalent de `JSON.stringify(value, null, 2)`.
 pub fn to_js_pretty_string(value: &Value) -> String {
     let mut buf = Vec::new();
@@ -195,6 +235,11 @@ mod tests {
             to_js_pretty_string(&value),
             "{\n  \"entier\": 2,\n  \"flottant\": 0.8,\n  \"vide\": {},\n  \"liste\": [],\n  \"é\": \"🎮\"\n}"
         );
+    }
+
+    #[test]
+    fn stringify_compact_comme_js() {
+        assert_eq!(to_js_string(&json!({ "a": [1.0, 0.5], "b": "x" })), r#"{"a":[1,0.5],"b":"x"}"#);
     }
 
     #[test]

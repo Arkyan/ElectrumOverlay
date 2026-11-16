@@ -3,36 +3,12 @@
 //! fusionnés élément par élément, voir docs/FORMATS.md §3).
 
 use crate::error::{Error, Result};
-use crate::json::{is_truthy, js_string_or_empty};
+use crate::json::{is_truthy, js_number, js_string_or_empty, number_value};
 use crate::store::{new_uuid, Store};
 use crate::time::now_iso;
 use serde_json::{json, Map, Value};
 
 pub const COMMAND_PERMISSIONS: [&str; 4] = ["everyone", "vip", "moderator", "broadcaster"];
-
-/// Équivalent de `Number(x)` pour les valeurs JSON (`undefined` → NaN, `null` → 0, `""` → 0...).
-fn js_number(value: Option<&Value>) -> f64 {
-    match value {
-        None => f64::NAN,
-        Some(Value::Null) => 0.0,
-        Some(Value::Bool(b)) => f64::from(u8::from(*b)),
-        Some(Value::Number(n)) => n.as_f64().unwrap_or(f64::NAN),
-        Some(Value::String(s)) => {
-            let s = s.trim();
-            if s.is_empty() { 0.0 } else { s.parse::<f64>().unwrap_or(f64::NAN) }
-        }
-        Some(Value::Array(_)) | Some(Value::Object(_)) => f64::NAN,
-    }
-}
-
-/// Nombre JSON écrit comme en JS (5 et non 5.0).
-fn number_value(n: f64) -> Value {
-    if n.fract() == 0.0 && n.abs() < 9.0e15 {
-        json!(n as i64)
-    } else {
-        json!(n)
-    }
-}
 
 /// `!xxx` en minuscules, sans espace.
 fn normalize_trigger(trigger: Option<&Value>) -> Result<String> {
