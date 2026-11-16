@@ -12,7 +12,9 @@ Le contrat à respecter (fichiers sur disque, export de profil, API, WebSocket) 
 ```
 Cargo.toml                 # workspace Rust
 crates/electrum-core/      # cœur sans interface : config, profils, formats (testable partout)
-src-tauri/                 # application Tauri (fenêtre, plus tard serveur HTTP/WebSocket)
+crates/electrum-server/    # serveur HTTP + WebSocket des overlays (axum, testable partout)
+src-tauri/                 # application Tauri : lance le serveur et ouvre la fenêtre
+src/templates/             # modèles HTML partagés par les versions Node et Rust
 ```
 
 ## Lancer
@@ -25,13 +27,23 @@ cargo test
 cargo tauri dev
 ```
 
-`cargo test` lance aussi `crates/electrum-core/tests/node_parity.rs` : le même scénario est joué
-par la vraie version Node (`src/config/store.js`) et par la version Rust, puis les résultats et
-**tous les fichiers écrits** sont comparés octet pour octet (UUID et dates normalisés). Il faut
-`node` installé, sinon ce test est ignoré.
+`cargo test` lance aussi deux tests de parité avec la version Node (il faut `node` installé,
+sinon ils sont ignorés) :
+
+- `crates/electrum-core/tests/node_parity.rs` : le même scénario est joué par
+  `src/config/store.js` et par la version Rust, puis les résultats et **tous les fichiers écrits**
+  sont comparés octet pour octet (UUID et dates normalisés) ;
+- `crates/electrum-server/tests/routes_parity.rs` : les appels de `tests/node/calls.json` sont
+  joués sur les vrais handlers de `src/routes/profiles.js` / `settings.js` et sur le serveur Rust ;
+  réponses, diffusions WebSocket et config obtenue doivent être identiques.
 
 `cargo tauri dev` ouvre la config existante (`%APPDATA%\ElectrumOverlay\config`, la même que la
-version Electron) et affiche dans le terminal le dossier, le profil actif et l'état de la config.
+version Electron), démarre le serveur sur les ports configurés (8080 / 8081 par défaut) et ouvre
+la fenêtre dessus. **Ferme la version Electron avant** : les deux ne peuvent pas utiliser les
+mêmes ports en même temps (un message l'indique si c'est le cas).
+
+Les sources OBS existantes (`http://localhost:8080/...`) fonctionnent telles quelles avec la
+version Rust.
 
 ⚠️ La version Rust lit **et écrit** dans ce dossier (migration au premier lancement, comme la
 version Node). Fais une sauvegarde de `%APPDATA%\ElectrumOverlay\config` avant, ou fais pointer
@@ -51,11 +63,15 @@ $env:ELECTRUM_CONFIG_DIR = "C:\chemin\vers\une\copie\config"
 | Commandes de chat | ✅ porté, testé contre Node |
 | Sons / médias d'alerte, export / import de profil | ✅ porté, testé contre Node |
 | Config des overlays (`/js/config.js`, `config-updated`) | ✅ porté, testé contre Node |
-| Squelette de l'app Tauri | ✅ (à valider sous Windows) |
-| Serveur HTTP (overlays OBS, routes API, pages web) | ⏳ |
-| WebSocket vers les overlays | ⏳ |
+| App Tauri : lance le serveur, ouvre la fenêtre, message clair si un port est pris | ✅ |
+| Serveur HTTP : overlays OBS (`public/`), `/js/config.js`, scènes personnalisées | ✅ testé |
+| WebSocket vers les overlays (`connected`, `ping`/`pong`, diffusion) | ✅ testé |
+| API profils / sons / médias / export / import / éditeur de scène | ✅ testé contre Node |
+| API réglages (`POST /api/settings`) | ✅ testé contre Node |
+| Outils de test (`/api/tests/trigger`, `/api/panels/:panel/show`), stats du stream | ✅ testé |
+| Pages de l'app (`/app`, `/settings`, `/scene-editor`, `/setup`, `/tests`, `/logs`...) | ⏳ |
+| Commandes de chat (réponses dans le chat, actions overlay) | ⏳ |
 | Twitch : OAuth, EventSub **par WebSocket**, chat, badges, viewers | ⏳ |
-| Statistiques du stream | ⏳ |
 | Spotify | ⏳ |
 | Trucky (contournement Cloudflare) | ⏳ |
 | Capture clavier (affichage des touches) | ⏳ |
