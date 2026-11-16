@@ -1,0 +1,558 @@
+
+<html>
+<head>
+    <title>Paramètres - ElectrumOverlay</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="/css/app-ui.css">
+    <style>
+        .page { max-width: 900px; padding-bottom: 88px; }
+        .save-bar {
+            position: fixed; left: 0; right: 0; bottom: 0;
+            display: flex; align-items: center; gap: var(--space-3);
+            padding: var(--space-4) var(--space-5);
+            background: var(--surface);
+            border-top: 1px solid var(--border);
+            z-index: 20;
+        }
+        input[type="number"] { width: 90px; }
+        input[type="file"] { max-width: 220px; }
+    </style>
+</head>
+<body>
+    <script src="/js/app-titlebar.js"></script>
+    <div class="page in-app">
+        <a class="back-link" href="/app">← Retour</a>
+        <h1>Paramètres</h1>
+        <p>{{expr:0}}</p>
+
+        <div class="settings-layout">
+            <nav class="settings-nav" id="settingsNav">
+                <button type="button" class="settings-nav-btn active" data-target="section-profiles">Profils</button>
+                <button type="button" class="settings-nav-btn" data-target="section-themes">Thèmes</button>
+                <button type="button" class="settings-nav-btn" data-target="section-alerts">Alertes</button>
+                <button type="button" class="settings-nav-btn" data-target="section-leftpanel">Panneau gauche</button>
+                <button type="button" class="settings-nav-btn" data-target="section-bottombar">Bandeau bas</button>
+                <button type="button" class="settings-nav-btn" data-target="section-animations">Animations</button>
+                <button type="button" class="settings-nav-btn" data-target="section-chat">Chat</button>
+                <button type="button" class="settings-nav-btn" data-target="section-stats">Statistiques</button>
+            </nav>
+            <div class="settings-content">
+
+        <div class="settings-section card active" id="section-profiles">
+            <h2>Profils</h2>
+                <p class="hint">Choisis un profil pour voir/modifier ses réglages ci-dessous. Un seul profil est actif (visible sur les overlays) à la fois.</p>
+                <div class="field-row">
+                    <div class="field">
+                        <label for="profileSelect">Profil affiché</label>
+                        <select id="profileSelect">
+                            {{expr:1}}
+                        </select>
+                    </div>
+                </div>
+                <div class="field-row" style="margin-top:var(--space-3);">
+                    <button type="button" class="btn btn-primary" id="btnProfileActivate" {{expr:2}}>{{expr:3}}</button>
+                    <button type="button" class="btn" id="btnProfileNew">Nouveau (copie de celui-ci)</button>
+                    <button type="button" class="btn" id="btnProfileRename">Renommer</button>
+                    <button type="button" class="btn" id="btnProfileExport">Exporter</button>
+                    <button type="button" class="btn" id="btnProfileImport">Importer</button>
+                    <button type="button" class="btn" id="btnProfileSeedThemes">Ajouter les profils de thèmes</button>
+                    <button type="button" class="btn btn-danger" id="btnProfileDelete">Supprimer</button>
+                    <input type="file" id="profileImportFile" accept="application/json" style="display:none;">
+                </div>
+                <div class="field-row" id="profileNameForm" style="display:none; margin-top:var(--space-3);">
+                    <div class="field">
+                        <label for="profileNameInput" id="profileNameFormLabel">Nom</label>
+                        <input type="text" id="profileNameInput">
+                    </div>
+                    <button type="button" class="btn btn-primary" id="btnProfileNameConfirm">Valider</button>
+                    <button type="button" class="btn btn-ghost" id="btnProfileNameCancel">Annuler</button>
+                </div>
+                <p class="msg" id="profileMsg" role="status"></p>
+        </div>
+
+        <div class="settings-section card" id="section-themes">
+            <h2>Thèmes par page</h2>
+                {{expr:4}}
+        </div>
+
+        <div class="settings-section card" id="section-alerts">
+            <h2>Alertes</h2>
+                <div class="sub-block">
+                    <h4>Réglages globaux</h4>
+                    <div class="field-row">
+                        <div class="field"><label>&nbsp;</label><label class="checkbox-row"><input type="checkbox" id="alertsEnabled" {{expr:5}}> Activées</label></div>
+                        <div class="field"><label for="alertsDuration">Durée affichage (ms)</label><input type="number" id="alertsDuration" value="{{expr:6}}" min="500" step="500"></div>
+                        <div class="field"><label for="alertsQueueDelay">Délai entre alertes (ms)</label><input type="number" id="alertsQueueDelay" value="{{expr:7}}" min="0" step="100"></div>
+                        <div class="field"><label for="soundVolume">Volume des sons (%)</label><input type="number" id="soundVolume" value="{{expr:8}}" min="0" max="100" step="5"></div>
+                    </div>
+                    <div class="field-row" style="margin-top:var(--space-3);">
+                        <div class="field"><label>&nbsp;</label><label class="checkbox-row"><input type="checkbox" id="confettiEnabled" {{expr:9}}> Confettis</label></div>
+                        <div class="field"><label for="confettiParticles">Nombre</label><input type="number" id="confettiParticles" value="{{expr:10}}" min="0"></div>
+                        <div class="field"><label for="confettiSpread">Étendue</label><input type="number" id="confettiSpread" value="{{expr:11}}" min="0" max="360"></div>
+                        <div class="field"><label for="confettiVelocity">Vitesse</label><input type="number" id="confettiVelocity" value="{{expr:12}}" min="0"></div>
+                        <div class="field"><label for="confettiTicks">Durée</label><input type="number" id="confettiTicks" value="{{expr:13}}" min="0"></div>
+                    </div>
+                </div>
+                {{expr:14}}
+                <p class="hint">Sans média personnalisé, l'alerte garde son style compact avec icône. Avec une image/GIF, elle passe en grand format ("hero") au-dessus du texte. L'icône par défaut de chaque alerte reste réservée à l'édition manuelle de config/overlay-config.json.</p>
+                <p class="hint">Le bouton "Aperçu" déclenche l'alerte en vrai sur les overlays déjà ouverts (OBS ou un onglet sur <code>/</code>) — ouvre-en un pour voir le résultat.</p>
+        </div>
+
+        <div class="settings-section card" id="section-leftpanel">
+            <h2>Panneau gauche (index.html)</h2>
+                <label class="checkbox-row" style="margin-bottom:var(--space-4);"><input type="checkbox" id="leftPanelEnabled" {{expr:15}}> Activé</label>
+                <div class="field-row">
+                    <div class="field"><label for="leftPanelInterval">Intervalle (ms)</label><input type="number" id="leftPanelInterval" value="{{expr:16}}" min="0" step="1000"></div>
+                    <div class="field"><label for="leftPanelDuration">Durée affichage (ms)</label><input type="number" id="leftPanelDuration" value="{{expr:17}}" min="0" step="1000"></div>
+                    <div class="field"><label for="leftPanelFirstDelay">Premier délai (ms)</label><input type="number" id="leftPanelFirstDelay" value="{{expr:18}}" min="0" step="1000"></div>
+                    <div class="field"><label for="leftPanelTimerColor">Couleur minuteur</label><input type="color" id="leftPanelTimerColor" value="{{expr:19}}"></div>
+                </div>
+        </div>
+
+        <div class="settings-section card" id="section-bottombar">
+            <h2>Bandeau bas de page</h2>
+                <label class="checkbox-row" style="margin-bottom:var(--space-4);"><input type="checkbox" id="bottomBarEnabled" {{expr:20}}> Afficher le bandeau</label>
+                <div class="field"><label for="infoLine1">Ligne d'info 1</label><input type="text" id="infoLine1" value="{{expr:21}}"></div>
+                <div class="field"><label for="infoLine2">Ligne d'info 2</label><input type="text" id="infoLine2" value="{{expr:22}}"></div>
+                <div class="field"><label for="infoLine3">Ligne d'info 3</label><input type="text" id="infoLine3" value="{{expr:23}}"></div>
+                <div class="field"><label for="scrollingText">Texte défilant</label><input type="text" id="scrollingText" value="{{expr:24}}"></div>
+                <div class="field-row" style="margin-top:var(--space-3);">
+                    <div class="field"><label for="bottomBarInterval">Intervalle (ms)</label><input type="number" id="bottomBarInterval" value="{{expr:25}}" min="0" step="1000"></div>
+                    <div class="field"><label for="bottomBarDuration">Durée affichage (ms)</label><input type="number" id="bottomBarDuration" value="{{expr:26}}" min="0" step="1000"></div>
+                    <div class="field"><label for="bottomBarFirstDelay">Premier délai (ms)</label><input type="number" id="bottomBarFirstDelay" value="{{expr:27}}" min="0" step="1000"></div>
+                </div>
+        </div>
+
+        <div class="settings-section card" id="section-animations">
+            <h2>Animations</h2>
+                <label class="checkbox-row" style="margin-bottom:var(--space-4);"><input type="checkbox" id="animationsEnabled" {{expr:28}}> Activées globalement</label>
+
+                {{expr:29}}
+
+                <div class="sub-block">
+                    <label class="checkbox-row"><input type="checkbox" id="circuitLinesEnabled" {{expr:30}}> Lignes de circuit</label>
+                    <div class="field-row" style="margin-top:var(--space-3);">
+                        <div class="field"><label for="circuitLinesHorizontal">Horizontales</label><input type="number" id="circuitLinesHorizontal" value="{{expr:31}}" min="0"></div>
+                        <div class="field"><label for="circuitLinesVertical">Verticales</label><input type="number" id="circuitLinesVertical" value="{{expr:32}}" min="0"></div>
+                        <div class="field"><label for="circuitLinesDuration">Durée (s)</label><input type="number" id="circuitLinesDuration" value="{{expr:33}}" min="0" step="0.5"></div>
+                    </div>
+                </div>
+
+                <div class="sub-block">
+                    <label class="checkbox-row"><input type="checkbox" id="dvdLogoEnabled" {{expr:34}}> Logo DVD</label>
+                    <div class="field-row" style="margin-top:var(--space-3);">
+                        <div class="field"><label for="dvdLogoSpeed">Vitesse</label><input type="number" id="dvdLogoSpeed" value="{{expr:35}}" min="0" step="0.5"></div>
+                        <div class="field"><label for="dvdLogoUpdateInterval">Intervalle rafraîchissement (ms)</label><input type="number" id="dvdLogoUpdateInterval" value="{{expr:36}}" min="1"></div>
+                    </div>
+                </div>
+
+                <p class="hint">S'applique au prochain rafraîchissement de la source navigateur dans OBS (pas instantané, contrairement aux couleurs/textes).</p>
+        </div>
+
+        <div class="settings-section card" id="section-chat">
+            <h2>Chat</h2>
+                <div class="field-row" style="margin-bottom:var(--space-4);">
+                    <label class="checkbox-row"><input type="checkbox" id="chatEnabledStarting" {{expr:37}}> Afficher sur Starting</label>
+                    <label class="checkbox-row"><input type="checkbox" id="chatEnabledIndex" {{expr:38}}> Afficher sur Index</label>
+                    <label class="checkbox-row"><input type="checkbox" id="chatEnabledEnding" {{expr:39}}> Afficher sur Ending</label>
+                </div>
+                <div class="field-row">
+                    <div class="field"><label for="chatColor">Couleur par défaut</label><input type="color" id="chatColor" value="{{expr:40}}"></div>
+                    <div class="field"><label for="chatMaxMessages">Messages max affichés</label><input type="number" id="chatMaxMessages" value="{{expr:41}}" min="1" max="200"></div>
+                </div>
+        </div>
+
+        <div class="settings-section card" id="section-stats">
+            <h2>Statistiques (ending.html)</h2>
+                <div class="field-row">
+                    <div class="field"><label for="statsAnimationDuration">Durée animation compteurs (ms)</label><input type="number" id="statsAnimationDuration" value="{{expr:42}}" min="0" step="100"></div>
+                    <div class="field"><label for="statsUpdateInterval">Intervalle de mise à jour (ms)</label><input type="number" id="statsUpdateInterval" value="{{expr:43}}" min="0" step="1000"></div>
+                </div>
+                <label class="checkbox-row" style="margin-top:var(--space-3);"><input type="checkbox" id="statsSimulateData" {{expr:44}}> Simuler des données (tests, sans vrai stream)</label>
+        </div>
+
+            </div>
+        </div>
+
+        <div class="save-bar">
+            <button type="button" class="btn btn-primary" id="btnSave">Enregistrer</button>
+            <div class="msg" id="msg" role="status"></div>
+        </div>
+    </div>
+
+    <script>
+        const THEME_PAGES = {{expr:45}};
+        const ALERT_TYPES = {{expr:46}};
+        const ALERT_PREVIEW_ACTION = {{expr:47}};
+        const PARTICLE_ANIMATIONS = {{expr:48}};
+        const VIEWED_PROFILE_ID = {{expr:49}};
+
+        // ---------- Onglets (thèmes par page, types d'alertes) ----------
+        // La section/l'onglet actifs sont mémorisés en sessionStorage et réappliqués au chargement
+        // (voir plus bas) : sans ça, le moindre location.reload() (upload de son/média, activation
+        // de profil...) ramène l'utilisateur sur la première section/onglet par défaut au lieu de
+        // le laisser là où il travaillait.
+        function selectTab(groupName, tabKey) {
+            document.querySelectorAll('.tab-bar[data-tabgroup="' + groupName + '"] .tab-btn').forEach((b) => {
+                b.classList.toggle('active', b.dataset.tab === tabKey);
+            });
+            document.querySelectorAll('.tab-panel[data-tabgroup="' + groupName + '"]').forEach((panel) => {
+                panel.classList.toggle('active', panel.dataset.tab === tabKey);
+            });
+            sessionStorage.setItem('settingsActiveTab:' + groupName, tabKey);
+        }
+
+        document.querySelectorAll('[data-tabgroup].tab-bar').forEach((bar) => {
+            const groupName = bar.dataset.tabgroup;
+            bar.querySelectorAll('.tab-btn').forEach((btn) => {
+                btn.addEventListener('click', () => selectTab(groupName, btn.dataset.tab));
+            });
+        });
+
+        // ---------- Navigation entre sections ----------
+        // Une seule section affichée à la fois (pas d'accordéon) : la sidebar bascule
+        // .settings-section.active, le reste reste dans le DOM (le formulaire de sauvegarde
+        // lit tous les champs quelle que soit la section visible).
+        function selectSection(sectionId) {
+            document.querySelectorAll('.settings-nav-btn').forEach((b) => {
+                b.classList.toggle('active', b.dataset.target === sectionId);
+            });
+            document.querySelectorAll('.settings-section').forEach((section) => {
+                section.classList.toggle('active', section.id === sectionId);
+            });
+            sessionStorage.setItem('settingsActiveSection', sectionId);
+        }
+
+        document.querySelectorAll('.settings-nav-btn').forEach((btn) => {
+            btn.addEventListener('click', () => {
+                selectSection(btn.dataset.target);
+                document.querySelector('.settings-content').scrollTop = 0;
+            });
+        });
+
+        // Restaure la section/les onglets actifs d'avant le dernier rechargement, s'il y en a un
+        // (sinon on garde l'état par défaut déjà posé côté serveur : Profils + premier onglet).
+        const savedSection = sessionStorage.getItem('settingsActiveSection');
+        if (savedSection && document.getElementById(savedSection)) {
+            selectSection(savedSection);
+        }
+        document.querySelectorAll('[data-tabgroup].tab-bar').forEach((bar) => {
+            const groupName = bar.dataset.tabgroup;
+            const savedTab = sessionStorage.getItem('settingsActiveTab:' + groupName);
+            if (savedTab && bar.querySelector('.tab-btn[data-tab="' + savedTab + '"]')) {
+                selectTab(groupName, savedTab);
+            }
+        });
+
+        // ---------- Profils ----------
+        const profileSelect = document.getElementById('profileSelect');
+        const profileMsg = document.getElementById('profileMsg');
+
+        function setProfileMsg(text, ok) {
+            profileMsg.textContent = text;
+            profileMsg.className = 'msg ' + (ok ? 'success' : 'error');
+        }
+
+        // computeRedirect(data) : où naviguer après succès (ex: vers le profil nouvellement créé).
+        // Sans elle, on recharge simplement la page courante (même ?profile=...).
+        async function callProfileApi(url, options, computeRedirect) {
+            try {
+                const res = await fetch(url, options);
+                const data = await res.json();
+                if (data.ok) {
+                    if (computeRedirect) {
+                        window.location.href = computeRedirect(data);
+                    } else {
+                        location.reload();
+                    }
+                } else {
+                    setProfileMsg(data.error || 'Erreur', false);
+                }
+            } catch (e) {
+                setProfileMsg('Impossible de contacter le serveur.', false);
+            }
+        }
+
+        // Changer de profil dans la liste charge immédiatement SES réglages (voir GET /settings) —
+        // ça ne l'active pas, ça permet juste de le consulter/modifier.
+        profileSelect.addEventListener('change', () => {
+            window.location.href = '/settings?profile=' + encodeURIComponent(profileSelect.value);
+        });
+
+        document.getElementById('btnProfileActivate').addEventListener('click', () => {
+            callProfileApi('/api/profiles/' + VIEWED_PROFILE_ID + '/activate', { method: 'POST' });
+        });
+
+        // Electron n'implémente pas window.prompt() (l'appel échoue silencieusement, aucune boîte
+        // de dialogue ne s'affiche) — on utilise donc un petit champ inline plutôt qu'un prompt().
+        const profileNameForm = document.getElementById('profileNameForm');
+        const profileNameInput = document.getElementById('profileNameInput');
+        const profileNameFormLabel = document.getElementById('profileNameFormLabel');
+        let pendingProfileAction = null;
+
+        function openProfileNameForm(mode, label, prefill) {
+            pendingProfileAction = mode;
+            profileNameFormLabel.textContent = label;
+            profileNameInput.value = prefill || '';
+            profileNameForm.style.display = '';
+            profileNameInput.focus();
+        }
+
+        function closeProfileNameForm() {
+            profileNameForm.style.display = 'none';
+            pendingProfileAction = null;
+        }
+
+        document.getElementById('btnProfileNew').addEventListener('click', () => {
+            openProfileNameForm('new', 'Nom du nouveau profil (copie de celui affiché)', '');
+        });
+
+        document.getElementById('btnProfileRename').addEventListener('click', () => {
+            const current = profileSelect.options[profileSelect.selectedIndex]?.text.replace(' (actif)', '') || '';
+            openProfileNameForm('rename', 'Nouveau nom', current);
+        });
+
+        document.getElementById('btnProfileNameCancel').addEventListener('click', closeProfileNameForm);
+
+        document.getElementById('btnProfileNameConfirm').addEventListener('click', () => {
+            const name = profileNameInput.value.trim();
+            if (!name) return;
+            if (pendingProfileAction === 'new') {
+                callProfileApi('/api/profiles', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name, basedOn: VIEWED_PROFILE_ID })
+                }, (data) => '/settings?profile=' + encodeURIComponent(data.profile.id));
+            } else if (pendingProfileAction === 'rename') {
+                callProfileApi('/api/profiles/' + VIEWED_PROFILE_ID, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name })
+                });
+            }
+            closeProfileNameForm();
+        });
+
+        profileNameInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') document.getElementById('btnProfileNameConfirm').click();
+            if (e.key === 'Escape') closeProfileNameForm();
+        });
+
+        document.getElementById('btnProfileDelete').addEventListener('click', () => {
+            if (!confirm('Supprimer ce profil ? Cette action est irréversible.')) return;
+            callProfileApi('/api/profiles/' + VIEWED_PROFILE_ID, { method: 'DELETE' }, () => '/settings');
+        });
+
+        document.getElementById('btnProfileSeedThemes').addEventListener('click', () => {
+            callProfileApi('/api/profiles/seed-theme-presets', { method: 'POST' });
+        });
+
+        document.getElementById('btnProfileExport').addEventListener('click', () => {
+            window.location.href = '/api/profiles/' + VIEWED_PROFILE_ID + '/export';
+        });
+
+        document.getElementById('btnProfileImport').addEventListener('click', () => {
+            document.getElementById('profileImportFile').click();
+        });
+
+        document.getElementById('profileImportFile').addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            const formData = new FormData();
+            formData.append('file', file);
+            callProfileApi('/api/profiles/import', { method: 'POST', body: formData }, (data) => '/settings?profile=' + encodeURIComponent(data.profile.id));
+        });
+
+        // ---------- Sons d'alerte (upload immédiat, indépendant du bouton Enregistrer) ----------
+        // Portent sur le profil affiché (VIEWED_PROFILE_ID), pas forcément l'actif — comme le
+        // reste des réglages de cette page.
+        document.querySelectorAll('.alert-sound-input').forEach((input) => {
+            input.addEventListener('change', (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                const formData = new FormData();
+                formData.append('file', file);
+                callProfileApi('/api/profiles/' + VIEWED_PROFILE_ID + '/audio/' + input.dataset.alertType, {
+                    method: 'POST',
+                    body: formData
+                });
+            });
+        });
+
+        document.querySelectorAll('.alert-sound-remove').forEach((btn) => {
+            btn.addEventListener('click', () => {
+                callProfileApi('/api/profiles/' + VIEWED_PROFILE_ID + '/audio/' + btn.dataset.alertType, { method: 'DELETE' });
+            });
+        });
+
+        // ---------- Média (image/GIF) d'alerte — même principe que les sons ----------
+        document.querySelectorAll('.alert-media-input').forEach((input) => {
+            input.addEventListener('change', (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                const formData = new FormData();
+                formData.append('file', file);
+                callProfileApi('/api/profiles/' + VIEWED_PROFILE_ID + '/media/' + input.dataset.alertType, {
+                    method: 'POST',
+                    body: formData
+                });
+            });
+        });
+
+        document.querySelectorAll('.alert-media-remove').forEach((btn) => {
+            btn.addEventListener('click', () => {
+                callProfileApi('/api/profiles/' + VIEWED_PROFILE_ID + '/media/' + btn.dataset.alertType, { method: 'DELETE' });
+            });
+        });
+
+        // ---------- Aperçu d'alerte ----------
+        // Déclenche une vraie simulation d'événement (même chemin que /tests) pour voir le
+        // résultat sur les overlays déjà ouverts, sans quitter /settings.
+        document.querySelectorAll('.alert-preview-btn').forEach((btn) => {
+            btn.addEventListener('click', async () => {
+                const action = ALERT_PREVIEW_ACTION[btn.dataset.alertType];
+                if (!action) return;
+                btn.disabled = true;
+                try {
+                    const res = await fetch('/api/tests/trigger', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ action })
+                    });
+                    const data = await res.json();
+                    msgAlertPreview(btn, data.ok ? 'Aperçu envoyé.' : (data.error || 'Erreur'), data.ok);
+                } catch (e) {
+                    msgAlertPreview(btn, 'Impossible de contacter le serveur.', false);
+                }
+                btn.disabled = false;
+            });
+        });
+
+        function msgAlertPreview(btn, text, ok) {
+            let el = btn.nextElementSibling;
+            if (!el || !el.classList.contains('alert-preview-msg')) {
+                el = document.createElement('span');
+                el.className = 'alert-preview-msg hint';
+                el.style.marginLeft = 'var(--space-2)';
+                btn.after(el);
+            }
+            el.textContent = text;
+            el.style.color = ok ? 'var(--success)' : 'var(--error)';
+        }
+
+        // ---------- Réglages d'affichage ----------
+        document.getElementById('btnSave').addEventListener('click', async () => {
+            const themes = {};
+            for (const key of THEME_PAGES) {
+                themes[key] = {
+                    primary: document.getElementById('theme_' + key + '_primary').value,
+                    secondary: document.getElementById('theme_' + key + '_secondary').value,
+                    accent: document.getElementById('theme_' + key + '_accent').value,
+                    panelBorder: document.getElementById('theme_' + key + '_panelBorder').value,
+                    background: document.getElementById('theme_' + key + '_background').value,
+                    surface: document.getElementById('theme_' + key + '_surface').value,
+                    panelBg: document.getElementById('theme_' + key + '_panelBg').value,
+                    text: document.getElementById('theme_' + key + '_text').value,
+                    mutedText: document.getElementById('theme_' + key + '_mutedText').value
+                };
+            }
+
+            const alerts = {};
+            for (const key of ALERT_TYPES) {
+                alerts[key] = {
+                    title: document.getElementById('alert_' + key + '_title').value,
+                    defaultMessage: document.getElementById('alert_' + key + '_message').value,
+                    border: document.getElementById('alert_' + key + '_border').value,
+                    gradientStart: document.getElementById('alert_' + key + '_gradientStart').value,
+                    gradientEnd: document.getElementById('alert_' + key + '_gradientEnd').value,
+                    animationStyle: document.getElementById('alert_' + key + '_animationStyle').value
+                };
+            }
+
+            const payload = {
+                profileId: VIEWED_PROFILE_ID,
+                themes,
+                alerts,
+                alertsEnabled: document.getElementById('alertsEnabled').checked,
+                alertsDuration: document.getElementById('alertsDuration').value,
+                alertsQueueDelay: document.getElementById('alertsQueueDelay').value,
+                soundVolume: document.getElementById('soundVolume').value,
+                confettiEnabled: document.getElementById('confettiEnabled').checked,
+                confettiParticles: document.getElementById('confettiParticles').value,
+                confettiSpread: document.getElementById('confettiSpread').value,
+                confettiVelocity: document.getElementById('confettiVelocity').value,
+                confettiTicks: document.getElementById('confettiTicks').value,
+
+                leftPanelEnabled: document.getElementById('leftPanelEnabled').checked,
+                leftPanelInterval: document.getElementById('leftPanelInterval').value,
+                leftPanelDuration: document.getElementById('leftPanelDuration').value,
+                leftPanelFirstDelay: document.getElementById('leftPanelFirstDelay').value,
+                leftPanelTimerColor: document.getElementById('leftPanelTimerColor').value,
+
+                bottomBarEnabled: document.getElementById('bottomBarEnabled').checked,
+                bottomBarInterval: document.getElementById('bottomBarInterval').value,
+                bottomBarDuration: document.getElementById('bottomBarDuration').value,
+                bottomBarFirstDelay: document.getElementById('bottomBarFirstDelay').value,
+                infoTexts: [
+                    document.getElementById('infoLine1').value,
+                    document.getElementById('infoLine2').value,
+                    document.getElementById('infoLine3').value
+                ],
+                scrollingText: document.getElementById('scrollingText').value,
+
+                animationsEnabled: document.getElementById('animationsEnabled').checked,
+                circuitLinesEnabled: document.getElementById('circuitLinesEnabled').checked,
+                circuitLinesHorizontal: document.getElementById('circuitLinesHorizontal').value,
+                circuitLinesVertical: document.getElementById('circuitLinesVertical').value,
+                circuitLinesDuration: document.getElementById('circuitLinesDuration').value,
+                dvdLogoEnabled: document.getElementById('dvdLogoEnabled').checked,
+                dvdLogoSpeed: document.getElementById('dvdLogoSpeed').value,
+                dvdLogoUpdateInterval: document.getElementById('dvdLogoUpdateInterval').value,
+
+                chatEnabledStarting: document.getElementById('chatEnabledStarting').checked,
+                chatEnabledIndex: document.getElementById('chatEnabledIndex').checked,
+                chatEnabledEnding: document.getElementById('chatEnabledEnding').checked,
+                chatColor: document.getElementById('chatColor').value,
+                chatMaxMessages: document.getElementById('chatMaxMessages').value,
+
+                statsAnimationDuration: document.getElementById('statsAnimationDuration').value,
+                statsUpdateInterval: document.getElementById('statsUpdateInterval').value,
+                statsSimulateData: document.getElementById('statsSimulateData').checked
+            };
+
+            for (const key of PARTICLE_ANIMATIONS) {
+                payload[key + 'Enabled'] = document.getElementById(key + 'Enabled').checked;
+                payload[key + 'Count'] = document.getElementById(key + 'Count').value;
+                payload[key + 'DurationMin'] = document.getElementById(key + 'DurationMin').value;
+                payload[key + 'DurationMax'] = document.getElementById(key + 'DurationMax').value;
+            }
+
+            const btn = document.getElementById('btnSave');
+            btn.disabled = true;
+            const msg = document.getElementById('msg');
+            try {
+                const res = await fetch('/api/settings', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const data = await res.json();
+                if (data.ok) {
+                    msg.textContent = (VIEWED_PROFILE_ID === {{expr:50}})
+                        ? 'Enregistré — les overlays ouverts se mettent à jour.'
+                        : 'Enregistré sur ce profil (non actif — les overlays ne changent pas).';
+                    msg.className = 'msg success';
+                } else {
+                    msg.textContent = data.error || 'Erreur';
+                    msg.className = 'msg error';
+                }
+            } catch (e) {
+                msg.textContent = 'Impossible de contacter le serveur.';
+                msg.className = 'msg error';
+            }
+            btn.disabled = false;
+        });
+    </script>
+</body>
+</html>

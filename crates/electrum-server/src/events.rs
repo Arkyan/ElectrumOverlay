@@ -81,10 +81,9 @@ pub fn route_event(state: &AppState, event_type: &str, event: &Value) {
         "channel.chat.message" => {
             state.stats().add_chat_message();
             state.broadcast(&chat_message_payload(event));
-            // TODO(migration) : commandes personnalisées (CommandManager) une fois l'envoi de
-            // messages Twitch porté.
+            crate::commands::handle_message(state, event);
         }
-        other => eprintln!("⚠️ Type d'événement non géré: {other}"),
+        other => state.log("warn", format!("⚠️ Type d'événement non géré: {other}")),
     }
 }
 

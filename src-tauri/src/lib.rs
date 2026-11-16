@@ -39,11 +39,15 @@ fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
             return Ok(());
         }
     };
-    println!("📁 Config : {}", store.paths().config_dir.display());
-    println!("🎨 Profil actif : {:?}", store.active_profile_id());
-    println!("🔧 Configuré : {}", store.is_configured());
-
+    let startup = [
+        format!("📁 Config : {}", store.paths().config_dir.display()),
+        format!("🎨 Profil actif : {}", store.active_profile_id().unwrap_or("aucun")),
+        format!("🔧 Configuré : {}", if store.is_configured() { "oui" } else { "non" }),
+    ];
     let state = AppState::new(store, assets);
+    for line in startup {
+        state.log("info", line);
+    }
     let (http_port, ws_port) = electrum_server::configured_ports(&state);
     let running = match tauri::async_runtime::block_on(electrum_server::start(state.clone(), http_port, ws_port)) {
         Ok(running) => running,
@@ -52,11 +56,11 @@ fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
             return Ok(());
         }
     };
-    println!("🌐 Overlays : http://localhost:{}", running.http.port());
-    println!("🔌 WebSocket : ws://localhost:{}", running.ws.port());
+    state.log("info", format!("🌐 Overlays : http://localhost:{}", running.http.port()));
+    state.log("info", format!("🔌 WebSocket : ws://localhost:{}", running.ws.port()));
     app.manage(state);
 
-    let url = format!("http://localhost:{}/", running.http.port()).parse()?;
+    let url = format!("http://localhost:{}/app", running.http.port()).parse()?;
     WebviewWindowBuilder::new(app, "main", WebviewUrl::External(url))
         .title("ElectrumOverlay")
         .inner_size(1280.0, 800.0)

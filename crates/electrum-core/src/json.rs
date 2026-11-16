@@ -121,7 +121,7 @@ pub fn encode_uri_component(input: &str) -> String {
 }
 
 /// Nombre formaté comme le fait JavaScript : un flottant entier s'écrit sans `.0`.
-fn js_number_to_string(value: f64) -> String {
+pub fn js_number_to_string(value: f64) -> String {
     if value.is_finite() && value.fract() == 0.0 && value.abs() < 1e21 {
         if value == 0.0 {
             "0".to_string()

@@ -6,7 +6,9 @@
 //!
 //! Indépendant de Tauri : testable seul (`cargo test -p electrum-server`).
 
+pub mod commands;
 pub mod events;
+pub mod pages;
 pub mod routes;
 pub mod state;
 pub mod stats;
@@ -26,6 +28,7 @@ pub fn http_router(state: AppState) -> Router {
     let public = ServeDir::new(&state.assets.public_dir);
     Router::new()
         .merge(routes::overlay::router())
+        .merge(routes::pages::router())
         .merge(routes::profiles::router())
         .merge(routes::settings::router())
         .merge(routes::testtools::router())

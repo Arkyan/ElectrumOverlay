@@ -1,0 +1,241 @@
+{
+  "scene-editor": {
+    "source": "src/routes/sceneEditor.js",
+    "expressions": [
+      "CANVAS_W",
+      "CANVAS_H",
+      "js(activeId)",
+      "js(THEME_FIELDS)",
+      "CANVAS_W",
+      "CANVAS_H",
+      "js(animDefaults)",
+      "js(BUILTIN_SCENES.map(s => ({\n            ...s,\n            builtin: true,\n            background: (scenes[s.key] && scenes[s.key].background) || { mode: 'theme', color: '#0f172a', color2: '#1e293b' },\n            effects: (scenes[s.key] && scenes[s.key].effects) || {}\n        })))",
+      "js(scenes)",
+      "js(BUILTIN_SCENES.map(s => s.key))",
+      "js(themes)",
+      "js({ messages: pause.messages || [], progressMessages: pause.progressMessages || [] })"
+    ]
+  },
+  "settings": {
+    "source": "src/routes/settings.js",
+    "expressions": [
+      "profileCtx.viewedId === profileCtx.activeId\n            ? \"Les couleurs et textes s'appliquent immédiatement aux overlays déjà ouverts dans OBS. Les paramètres d'animations/panneaux s'appliquent au prochain rafraîchissement de la source.\"\n            : \"Tu consultes/modifies un profil qui n'est pas actif : les changements sont enregistrés mais ne s'appliqueront aux overlays qu'une fois ce profil activé (bouton « Activer » ci-dessous).\"",
+      "profileCtx.profiles.map(p => `<option value=\"${esc(p.id)}\" ${p.id === profileCtx.viewedId ? 'selected' : ''}>${esc(p.name)}${p.id === profileCtx.activeId ? ' (actif)' : ''}</option>`).join('')",
+      "profileCtx.viewedId === profileCtx.activeId ? 'disabled' : ''",
+      "profileCtx.viewedId === profileCtx.activeId ? 'Déjà actif' : 'Activer ce profil'",
+      "renderTabGroup('theme', THEME_PAGES, ({ key }) => {\n                    const t = display.themes?.[key] || {};\n                    return `\n                    <div class=\"color-grid\">\n                        <div class=\"field\"><label for=\"theme_${key}_primary\">Primaire</label><input type=\"color\" id=\"theme_${key}_primary\" value=\"${esc(t.primary || '#a855f7')}\"></div>\n                        <div class=\"field\"><label for=\"theme_${key}_secondary\">Secondaire</label><input type=\"color\" id=\"theme_${key}_secondary\" value=\"${esc(t.secondary || '#8b45f6')}\"></div>\n                        <div class=\"field\"><label for=\"theme_${key}_accent\">Accent</label><input type=\"color\" id=\"theme_${key}_accent\" value=\"${esc(t.accent || '#7c3aed')}\"></div>\n                        <div class=\"field\"><label for=\"theme_${key}_panelBorder\">Bordure panneaux</label><input type=\"color\" id=\"theme_${key}_panelBorder\" value=\"${esc(t.panelBorder || '#8b45f6')}\"></div>\n                        <div class=\"field\"><label for=\"theme_${key}_background\">Fond général</label><input type=\"color\" id=\"theme_${key}_background\" value=\"${esc(t.background || '#0f172a')}\"></div>\n                        <div class=\"field\"><label for=\"theme_${key}_surface\">Surface</label><input type=\"color\" id=\"theme_${key}_surface\" value=\"${esc(t.surface || '#1e293b')}\"></div>\n                        <div class=\"field\"><label for=\"theme_${key}_panelBg\">Fond panneaux</label><input type=\"color\" id=\"theme_${key}_panelBg\" value=\"${esc(t.panelBg || '#0f172a')}\"></div>\n                        <div class=\"field\"><label for=\"theme_${key}_text\">Texte</label><input type=\"color\" id=\"theme_${key}_text\" value=\"${esc(t.text || '#e2e8f0')}\"></div>\n                        <div class=\"field\"><label for=\"theme_${key}_mutedText\">Texte atténué</label><input type=\"color\" id=\"theme_${key}_mutedText\" value=\"${esc(t.mutedText || '#94a3b8')}\"></div>\n                    </div>`;\n                })",
+      "display.alerts?.enabled !== false ? 'checked' : ''",
+      "esc(display.alerts?.duration ?? 6000)",
+      "esc(display.alerts?.queueDelay ?? 500)",
+      "esc(Math.round((display.alerts?.soundVolume ?? 0.8) * 100))",
+      "display.alerts?.confettiEnabled !== false ? 'checked' : ''",
+      "esc(display.alerts?.confettiParticles ?? 300)",
+      "esc(display.alerts?.confettiSpread ?? 360)",
+      "esc(display.alerts?.confettiVelocity ?? 50)",
+      "esc(display.alerts?.confettiTicks ?? 250)",
+      "renderTabGroup('alert', ALERT_TYPES, ({ key, label }) => {\n                    const a = display.alerts?.types?.[key] || {};\n                    const audioMeta = profileCtx.audio[key];\n                    const mediaMeta = profileCtx.media[key];\n                    const currentAnim = ANIMATION_STYLE_KEYS.includes(a.animationStyle) ? a.animationStyle : 'fade';\n                    return `\n                    <div class=\"field-row\">\n                        <div class=\"field\"><label for=\"alert_${key}_title\">Titre</label><input type=\"text\" id=\"alert_${key}_title\" value=\"${esc(a.title || '')}\"></div>\n                        <div class=\"field\"><label for=\"alert_${key}_message\">Message par défaut</label><input type=\"text\" id=\"alert_${key}_message\" value=\"${esc(a.defaultMessage || '')}\"></div>\n                        <div class=\"field\">\n                            <label for=\"alert_${key}_animationStyle\">Animation d'entrée</label>\n                            <select id=\"alert_${key}_animationStyle\">\n                                ${ANIMATION_STYLES.map((s) => `<option value=\"${s.key}\" ${s.key === currentAnim ? 'selected' : ''}>${esc(s.label)}</option>`).join('')}\n                            </select>\n                        </div>\n                    </div>\n                    <div class=\"color-grid\" style=\"margin-top:var(--space-3);\">\n                        <div class=\"field\"><label for=\"alert_${key}_border\">Couleur accent</label><input type=\"color\" id=\"alert_${key}_border\" value=\"${esc(a.border || '#8b45f6')}\"></div>\n                        <div class=\"field\"><label for=\"alert_${key}_gradientStart\">Dégradé début</label><input type=\"color\" id=\"alert_${key}_gradientStart\" value=\"${esc(a.gradientStart || a.border || '#8b45f6')}\"></div>\n                        <div class=\"field\"><label for=\"alert_${key}_gradientEnd\">Dégradé fin</label><input type=\"color\" id=\"alert_${key}_gradientEnd\" value=\"${esc(a.gradientEnd || a.border || '#8b45f6')}\"></div>\n                    </div>\n                    <div class=\"field-row\" style=\"margin-top:var(--space-3);\">\n                        <div class=\"field\">\n                            <label for=\"alert_${key}_sound\">Son personnalisé</label>\n                            <input type=\"file\" id=\"alert_${key}_sound\" class=\"alert-sound-input\" data-alert-type=\"${key}\" accept=\"audio/*\">\n                        </div>\n                        <div class=\"field\">\n                            <label for=\"alert_${key}_media\">Image / GIF personnalisé</label>\n                            <input type=\"file\" id=\"alert_${key}_media\" class=\"alert-media-input\" data-alert-type=\"${key}\" accept=\"image/*\">\n                        </div>\n                    </div>\n                    <div class=\"field-row\" style=\"margin-top:var(--space-2);\">\n                        ${audioMeta ? `<p class=\"hint\">🔊 ${esc(audioMeta.filename)} <button type=\"button\" class=\"btn btn-ghost alert-sound-remove\" data-alert-type=\"${key}\">Supprimer le son</button></p>` : ''}\n                        ${mediaMeta ? `<p class=\"hint\">🖼️ ${esc(mediaMeta.filename)} <button type=\"button\" class=\"btn btn-ghost alert-media-remove\" data-alert-type=\"${key}\">Supprimer le média</button></p>` : ''}\n                    </div>\n                    ${mediaMeta ? `<img src=\"/api/profiles/${esc(profileCtx.viewedId)}/media/${key}?v=${esc(mediaMeta.updatedAt)}\" alt=\"\" style=\"max-height:80px; border-radius:var(--radius-sm); margin-top:var(--space-2);\">` : ''}\n                    <div class=\"field-row\" style=\"margin-top:var(--space-3);\">\n                        <button type=\"button\" class=\"btn alert-preview-btn\" data-alert-type=\"${key}\">Aperçu de \"${esc(label)}\"</button>\n                    </div>`;\n                })",
+      "display.panels?.left?.enabled ? 'checked' : ''",
+      "esc(display.panels?.left?.interval ?? 300000)",
+      "esc(display.panels?.left?.duration ?? 15000)",
+      "esc(display.panels?.left?.firstDelay ?? 30000)",
+      "esc(display.panels?.left?.timerColor || '#ef4444')",
+      "display.panels?.bottom?.enabled ? 'checked' : ''",
+      "esc(display.panels?.bottom?.content?.infoTexts?.[0] || '')",
+      "esc(display.panels?.bottom?.content?.infoTexts?.[1] || '')",
+      "esc(display.panels?.bottom?.content?.infoTexts?.[2] || '')",
+      "esc(display.panels?.bottom?.content?.scrollingText || '')",
+      "esc(display.panels?.bottom?.interval ?? 180000)",
+      "esc(display.panels?.bottom?.duration ?? 20000)",
+      "esc(display.panels?.bottom?.firstDelay ?? 10000)",
+      "display.animations?.enabled !== false ? 'checked' : ''",
+      "PARTICLE_ANIMATIONS.map(({ key, label }) => {\n                    const a = display.animations?.[key] || {};\n                    const duration = a.duration || [5, 8];\n                    return `\n                    <div class=\"sub-block\">\n                        <label class=\"checkbox-row\"><input type=\"checkbox\" id=\"${key}Enabled\" ${a.enabled !== false ? 'checked' : ''}> ${esc(label)}</label>\n                        <div class=\"field-row\" style=\"margin-top:var(--space-3);\">\n                            <div class=\"field\"><label for=\"${key}Count\">Nombre</label><input type=\"number\" id=\"${key}Count\" value=\"${esc(a.count ?? 30)}\" min=\"0\"></div>\n                            <div class=\"field\"><label for=\"${key}DurationMin\">Durée min (s)</label><input type=\"number\" id=\"${key}DurationMin\" value=\"${esc(duration[0])}\" min=\"0\" step=\"0.5\"></div>\n                            <div class=\"field\"><label for=\"${key}DurationMax\">Durée max (s)</label><input type=\"number\" id=\"${key}DurationMax\" value=\"${esc(duration[1])}\" min=\"0\" step=\"0.5\"></div>\n                        </div>\n                    </div>`;\n                }).join('')",
+      "display.animations?.circuitLines?.enabled ? 'checked' : ''",
+      "esc(display.animations?.circuitLines?.horizontal ?? 10)",
+      "esc(display.animations?.circuitLines?.vertical ?? 8)",
+      "esc(display.animations?.circuitLines?.duration ?? 6)",
+      "display.animations?.dvdLogo?.enabled !== false ? 'checked' : ''",
+      "esc(display.animations?.dvdLogo?.speed ?? 2)",
+      "esc(display.animations?.dvdLogo?.updateInterval ?? 16)",
+      "display.chat?.enabled?.starting !== false ? 'checked' : ''",
+      "display.chat?.enabled?.index !== false ? 'checked' : ''",
+      "display.chat?.enabled?.ending !== false ? 'checked' : ''",
+      "esc(display.chat?.defaultColor || '#3b82f6')",
+      "esc(display.chat?.maxMessages ?? 50)",
+      "esc(display.stats?.animationDuration ?? 1000)",
+      "esc(display.stats?.updateInterval ?? 30000)",
+      "display.stats?.simulateData ? 'checked' : ''",
+      "JSON.stringify(THEME_PAGES.map(p => p.key))",
+      "JSON.stringify(ALERT_TYPES.map(a => a.key))",
+      "JSON.stringify(ALERT_PREVIEW_ACTION)",
+      "JSON.stringify(PARTICLE_ANIMATIONS.map(a => a.key))",
+      "JSON.stringify(profileCtx.viewedId)",
+      "JSON.stringify(profileCtx.activeId)"
+    ]
+  },
+  "settings-tabgroup": {
+    "source": "src/routes/settings.js",
+    "expressions": [
+      "groupName",
+      "items.map((item, i) => `<button type=\"button\" class=\"tab-btn${i === 0 ? ' active' : ''}\" data-tab=\"${esc(item.key)}\">${esc(item.label)}</button>`).join('')",
+      "items.map((item, i) => `<div class=\"tab-panel${i === 0 ? ' active' : ''}\" data-tabgroup=\"${groupName}\" data-tab=\"${esc(item.key)}\">${renderPanelContent(item)}</div>`).join('')"
+    ]
+  },
+  "settings-theme-tab": {
+    "source": "src/routes/settings.js",
+    "expressions": [
+      "key",
+      "key",
+      "esc(t.primary || '#a855f7')",
+      "key",
+      "key",
+      "esc(t.secondary || '#8b45f6')",
+      "key",
+      "key",
+      "esc(t.accent || '#7c3aed')",
+      "key",
+      "key",
+      "esc(t.panelBorder || '#8b45f6')",
+      "key",
+      "key",
+      "esc(t.background || '#0f172a')",
+      "key",
+      "key",
+      "esc(t.surface || '#1e293b')",
+      "key",
+      "key",
+      "esc(t.panelBg || '#0f172a')",
+      "key",
+      "key",
+      "esc(t.text || '#e2e8f0')",
+      "key",
+      "key",
+      "esc(t.mutedText || '#94a3b8')"
+    ]
+  },
+  "settings-alert-tab": {
+    "source": "src/routes/settings.js",
+    "expressions": [
+      "key",
+      "key",
+      "esc(a.title || '')",
+      "key",
+      "key",
+      "esc(a.defaultMessage || '')",
+      "key",
+      "key",
+      "ANIMATION_STYLES.map((s) => `<option value=\"${s.key}\" ${s.key === currentAnim ? 'selected' : ''}>${esc(s.label)}</option>`).join('')",
+      "key",
+      "key",
+      "esc(a.border || '#8b45f6')",
+      "key",
+      "key",
+      "esc(a.gradientStart || a.border || '#8b45f6')",
+      "key",
+      "key",
+      "esc(a.gradientEnd || a.border || '#8b45f6')",
+      "key",
+      "key",
+      "key",
+      "key",
+      "key",
+      "key",
+      "audioMeta ? `<p class=\"hint\">🔊 ${esc(audioMeta.filename)} <button type=\"button\" class=\"btn btn-ghost alert-sound-remove\" data-alert-type=\"${key}\">Supprimer le son</button></p>` : ''",
+      "mediaMeta ? `<p class=\"hint\">🖼️ ${esc(mediaMeta.filename)} <button type=\"button\" class=\"btn btn-ghost alert-media-remove\" data-alert-type=\"${key}\">Supprimer le média</button></p>` : ''",
+      "mediaMeta ? `<img src=\"/api/profiles/${esc(profileCtx.viewedId)}/media/${key}?v=${esc(mediaMeta.updatedAt)}\" alt=\"\" style=\"max-height:80px; border-radius:var(--radius-sm); margin-top:var(--space-2);\">` : ''",
+      "key",
+      "esc(label)"
+    ]
+  },
+  "settings-particle": {
+    "source": "src/routes/settings.js",
+    "expressions": [
+      "key",
+      "a.enabled !== false ? 'checked' : ''",
+      "esc(label)",
+      "key",
+      "key",
+      "esc(a.count ?? 30)",
+      "key",
+      "key",
+      "esc(duration[0])",
+      "key",
+      "key",
+      "esc(duration[1])"
+    ]
+  },
+  "tests": {
+    "source": "src/routes/testtools.js",
+    "expressions": []
+  },
+  "logs": {
+    "source": "src/routes/logs.js",
+    "expressions": [
+      "wsPort"
+    ]
+  },
+  "commands": {
+    "source": "src/routes/commands.js",
+    "expressions": [
+      "commandCardHTML({ id: 'new', trigger: '', enabled: true, permission: 'everyone', cooldownSeconds: 5, chatReply: { enabled: false, message: '' }, overlayAction: { enabled: false, panel: 'left' } }, true)",
+      "commands.length ? commands.map((c) => commandCardHTML(c, false)).join('') : '<p class=\"hint\">Aucune commande pour le moment.</p>'"
+    ]
+  },
+  "command-card": {
+    "source": "src/routes/commands.js",
+    "expressions": [
+      "esc(id)",
+      "openByDefault ? 'open' : ''",
+      "isNew ? '+ Nouvelle commande' : (esc(command.trigger) || '(sans déclencheur)')",
+      "tags",
+      "esc(command.trigger)",
+      "Object.entries(PERMISSION_LABELS).map(([value, label]) =>\n                            `<option value=\"${value}\" ${command.permission === value ? 'selected' : ''}>${label}</option>`\n                        ).join('')",
+      "esc(command.cooldownSeconds)",
+      "command.enabled ? 'checked' : ''",
+      "command.chatReply?.enabled ? 'checked' : ''",
+      "esc(command.chatReply?.message || '')",
+      "command.overlayAction?.enabled ? 'checked' : ''",
+      "command.overlayAction?.panel !== 'bottom' ? 'selected' : ''",
+      "command.overlayAction?.panel === 'bottom' ? 'selected' : ''"
+    ]
+  },
+  "integrations": {
+    "source": "src/routes/integrations.js",
+    "expressions": [
+      "error ? `<p class=\"msg error\">${esc(error)}</p>` : ''",
+      "justConnected ? `<p class=\"msg success\">Compte Spotify connecté.</p>` : ''",
+      "esc(redirectUri)",
+      "esc(clientId)",
+      "esc(clientSecret)",
+      "connected ? `\n                            <div class=\"status-pill\" style=\"margin-bottom: var(--space-3);\"><span class=\"dot\"></span> Connecté</div>\n                            <div class=\"spotify-now-playing\" id=\"nowPlaying\" style=\"display:none;\">\n                                <img id=\"npArt\" alt=\"\">\n                                <div>\n                                    <div class=\"np-title\" id=\"npTitle\"></div>\n                                    <div class=\"np-artist\" id=\"npArtist\"></div>\n                                </div>\n                            </div>\n                            <p class=\"hint\" id=\"npHint\">Rien en cours de lecture pour le moment.</p>\n                            <button type=\"button\" class=\"btn btn-danger\" id=\"btnDisconnect\" style=\"margin-top: var(--space-3);\">Déconnecter</button>\n                        ` : configured ? `\n                            <p class=\"hint\">Application enregistrée — connecte ton compte Spotify.</p>\n                            <a href=\"${esc(authUrl)}\" class=\"btn btn-primary\">Se connecter à Spotify</a>\n                        ` : `\n                            <p class=\"hint\">Renseigne d'abord le Client ID et le Client Secret ci-dessus.</p>\n                            <button type=\"button\" class=\"btn\" disabled>Se connecter à Spotify</button>\n                        `",
+      "truckyEnabled ? 'checked' : ''",
+      "esc(truckyUserId || '')",
+      "inputDisplayEnabled ? 'checked' : ''"
+    ]
+  },
+  "setup": {
+    "source": "src/routes/setup.js",
+    "expressions": [
+      "port",
+      "esc(config.twitch.CLIENT_ID)",
+      "config.twitch.CLIENT_SECRET ? 'Déjà enregistré — laisser vide pour ne pas changer' : ''",
+      "esc(config.twitch.BROADCASTER_LOGIN ? '@' + config.twitch.BROADCASTER_LOGIN + ' — ID ' + config.twitch.BROADCASTER_ID : (config.twitch.BROADCASTER_ID || 'Aucune — autorisez d\\'abord'))",
+      "esc(accentDefault)",
+      "esc(bottom.infoTexts?.[0] || '')",
+      "esc(bottom.infoTexts?.[1] || '')",
+      "esc(bottom.infoTexts?.[2] || '')",
+      "esc(bottom.scrollingText || '')",
+      "config.ngrok.ENABLED ? 'checked' : ''",
+      "config.ngrok.AUTHTOKEN ? 'Déjà enregistré — laisser vide pour ne pas changer' : ''"
+    ]
+  },
+  "app": {
+    "source": "server.js",
+    "expressions": []
+  },
+  "stream-stats": {
+    "source": "src/services/StreamStatsManager.js",
+    "expressions": [
+      "JSON.stringify(this.getStats()).replace(/</g, '\\\\u003c')"
+    ]
+  }
+}

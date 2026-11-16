@@ -1,0 +1,187 @@
+
+                <html>
+                    <head>
+                        <title>ElectrumOverlay</title>
+                        <meta charset="UTF-8">
+                        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                        <link rel="stylesheet" href="/css/app-ui.css">
+                    </head>
+                    <body>
+                        <script src="/js/app-titlebar.js"></script>
+                        <div class="page in-app page-home">
+                            <h1>ElectrumOverlay</h1>
+                            <div class="field-row">
+                                <div class="status-pill" id="serverStatusPill"><span class="dot"></span> Serveur actif</div>
+                                <button type="button" class="btn" id="btnServerToggle">Arrêter le serveur</button>
+                            </div>
+                            <p class="hint" id="serverStatusHint" style="display:none;">Le serveur est arrêté : les overlays (OBS) et le chat ne fonctionnent plus tant qu'il n'est pas redémarré.</p>
+                            <p class="msg error" id="ngrokWarning" style="display:none;">ngrok est activé mais pas connecté — vérifiez votre authtoken dans <a href="/setup">Configuration</a>. Sans ça, aucun événement Twitch (chat, follows, alertes...) ne peut arriver.</p>
+
+                            <div class="card" id="updateBanner" style="display:none; margin-top:var(--space-4);">
+                                <p id="updateBannerText" style="margin:0 0 var(--space-3);"></p>
+                                <button type="button" class="btn btn-primary" id="btnInstallUpdate" style="display:none;">Installer et redémarrer</button>
+                            </div>
+
+                            <!-- Deux destinations mises en avant : ce sont les seules qu'on ouvre
+                                 vraiment tous les jours. Le reste est regroupé par MOMENT d'usage
+                                 (avant/pendant le live, installation), et les sorties JSON de
+                                 diagnostic sont repliées — elles n'ont rien à faire au même niveau
+                                 visuel qu'un réglage quotidien. -->
+                            <div class="home-hero">
+                                <a href="/scene-editor" class="link-card link-card-lg">
+                                    <span class="link-card-icon">🎬</span>
+                                    <span class="link-card-body">
+                                        <h3>Éditeur de scène</h3>
+                                        <p>Placer les éléments, créer des scènes, récupérer les URLs pour OBS</p>
+                                    </span>
+                                </a>
+                                <a href="/settings" class="link-card link-card-lg">
+                                    <span class="link-card-icon">🎨</span>
+                                    <span class="link-card-body">
+                                        <h3>Paramètres</h3>
+                                        <p>Profils, couleurs, textes, alertes, animations</p>
+                                    </span>
+                                </a>
+                            </div>
+
+                            <p class="section-label">Ajouter du contenu</p>
+                            <div class="link-grid">
+                                <a href="/integrations" class="link-card">
+                                    <span class="link-card-icon">🔌</span>
+                                    <span class="link-card-body">
+                                        <h3>Intégrations</h3>
+                                        <p>Spotify, Trucky, affichage des touches</p>
+                                    </span>
+                                </a>
+                                <a href="/commands" class="link-card">
+                                    <span class="link-card-icon">💬</span>
+                                    <span class="link-card-body">
+                                        <h3>Commandes de chat</h3>
+                                        <p>Réponses automatiques (!discord...)</p>
+                                    </span>
+                                </a>
+                            </div>
+
+                            <p class="section-label">Pendant le live</p>
+                            <div class="link-grid">
+                                <a href="/tests" class="link-card">
+                                    <span class="link-card-icon">🧪</span>
+                                    <span class="link-card-body">
+                                        <h3>Tests</h3>
+                                        <p>Simuler follow, sub, raid, alertes...</p>
+                                    </span>
+                                </a>
+                                <a href="/stream-stats-html" class="link-card">
+                                    <span class="link-card-icon">📊</span>
+                                    <span class="link-card-body">
+                                        <h3>Statistiques</h3>
+                                        <p>Viewers, follows, subs du live en cours</p>
+                                    </span>
+                                </a>
+                                <a href="/logs" class="link-card">
+                                    <span class="link-card-icon">📜</span>
+                                    <span class="link-card-body">
+                                        <h3>Logs</h3>
+                                        <p>Journal du serveur en direct</p>
+                                    </span>
+                                </a>
+                            </div>
+
+                            <p class="section-label">Configuration</p>
+                            <div class="link-grid">
+                                <a href="/setup" class="link-card">
+                                    <span class="link-card-icon">🧰</span>
+                                    <span class="link-card-body">
+                                        <h3>Assistant de configuration</h3>
+                                        <p>Identifiants Twitch, ngrok, image de marque</p>
+                                    </span>
+                                </a>
+                                <a href="/auth-url" class="link-card" target="_blank">
+                                    <span class="link-card-icon">🔑</span>
+                                    <span class="link-card-body">
+                                        <h3>Autorisation Twitch</h3>
+                                        <p>Renouveler l'accès au compte — ouvre le navigateur</p>
+                                    </span>
+                                </a>
+                            </div>
+
+                            <details class="adv">
+                                <summary>Diagnostic (avancé)</summary>
+                                <p class="hint">Sorties brutes du serveur, utiles pour comprendre un problème d'événements Twitch. S'ouvrent dans le navigateur.</p>
+                                <div class="adv-links">
+                                    <a href="/subscriptions" target="_blank">Abonnements EventSub (JSON)</a>
+                                    <a href="/status" target="_blank">Statut du serveur (JSON)</a>
+                                </div>
+                            </details>
+                        </div>
+
+                        <script>
+                            (function () {
+                                if (!window.electronAPI) return; // page ouverte hors Electron : rien à piloter
+
+                                const pill = document.getElementById('serverStatusPill');
+                                const hint = document.getElementById('serverStatusHint');
+                                const btn = document.getElementById('btnServerToggle');
+                                const ngrokWarning = document.getElementById('ngrokWarning');
+
+                                function render(isRunning) {
+                                    pill.innerHTML = isRunning
+                                        ? '<span class="dot"></span> Serveur actif'
+                                        : 'Serveur arrêté';
+                                    hint.style.display = isRunning ? 'none' : '';
+                                    btn.textContent = isRunning ? 'Arrêter le serveur' : 'Démarrer le serveur';
+                                    if (!isRunning) ngrokWarning.style.display = 'none';
+                                }
+
+                                function checkNgrokStatus() {
+                                    fetch('/status').then(r => r.json()).then(data => {
+                                        ngrokWarning.style.display = (data.ngrok?.enabled && !data.ngrok?.connected) ? '' : 'none';
+                                    }).catch(() => {});
+                                }
+
+                                const updateBanner = document.getElementById('updateBanner');
+                                const updateBannerText = document.getElementById('updateBannerText');
+                                const btnInstallUpdate = document.getElementById('btnInstallUpdate');
+
+                                function renderUpdater(state) {
+                                    if (state.status === 'downloading') {
+                                        updateBanner.style.display = '';
+                                        updateBannerText.textContent = 'Téléchargement de la mise à jour v' + state.version + '... (' + (state.percent || 0) + '%)';
+                                        btnInstallUpdate.style.display = 'none';
+                                    } else if (state.status === 'downloaded') {
+                                        updateBanner.style.display = '';
+                                        updateBannerText.textContent = 'Mise à jour v' + state.version + ' prête à installer.';
+                                        btnInstallUpdate.style.display = '';
+                                    } else {
+                                        updateBanner.style.display = 'none';
+                                    }
+                                }
+
+                                window.electronAPI.getUpdaterStatus().then(renderUpdater);
+                                window.electronAPI.onUpdaterStatusChange(renderUpdater);
+                                btnInstallUpdate.addEventListener('click', () => window.electronAPI.installUpdate());
+
+                                window.electronAPI.getServerStatus().then((isRunning) => {
+                                    render(isRunning);
+                                    if (isRunning) checkNgrokStatus();
+                                });
+                                window.electronAPI.onServerStatusChange((isRunning) => {
+                                    render(isRunning);
+                                    if (isRunning) setTimeout(checkNgrokStatus, 3000);
+                                });
+                                setInterval(() => {
+                                    window.electronAPI.getServerStatus().then((isRunning) => { if (isRunning) checkNgrokStatus(); });
+                                }, 10000);
+
+                                btn.addEventListener('click', async () => {
+                                    btn.disabled = true;
+                                    const isRunning = await window.electronAPI.getServerStatus();
+                                    await (isRunning ? window.electronAPI.stopServer() : window.electronAPI.startServer());
+                                    render(await window.electronAPI.getServerStatus());
+                                    btn.disabled = false;
+                                });
+                            })();
+                        </script>
+                    </body>
+                </html>
+            

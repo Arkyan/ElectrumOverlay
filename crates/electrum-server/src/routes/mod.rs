@@ -1,6 +1,7 @@
 //! Routes HTTP, regroupées comme les fichiers de `src/routes/` côté Node.
 
 pub mod overlay;
+pub mod pages;
 pub mod profiles;
 pub mod settings;
 pub mod testtools;

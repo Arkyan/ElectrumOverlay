@@ -1,0 +1,34 @@
+
+                    <div class="field-row">
+                        <div class="field"><label for="alert_{{expr:0}}_title">Titre</label><input type="text" id="alert_{{expr:1}}_title" value="{{expr:2}}"></div>
+                        <div class="field"><label for="alert_{{expr:3}}_message">Message par défaut</label><input type="text" id="alert_{{expr:4}}_message" value="{{expr:5}}"></div>
+                        <div class="field">
+                            <label for="alert_{{expr:6}}_animationStyle">Animation d'entrée</label>
+                            <select id="alert_{{expr:7}}_animationStyle">
+                                {{expr:8}}
+                            </select>
+                        </div>
+                    </div>
+                    <div class="color-grid" style="margin-top:var(--space-3);">
+                        <div class="field"><label for="alert_{{expr:9}}_border">Couleur accent</label><input type="color" id="alert_{{expr:10}}_border" value="{{expr:11}}"></div>
+                        <div class="field"><label for="alert_{{expr:12}}_gradientStart">Dégradé début</label><input type="color" id="alert_{{expr:13}}_gradientStart" value="{{expr:14}}"></div>
+                        <div class="field"><label for="alert_{{expr:15}}_gradientEnd">Dégradé fin</label><input type="color" id="alert_{{expr:16}}_gradientEnd" value="{{expr:17}}"></div>
+                    </div>
+                    <div class="field-row" style="margin-top:var(--space-3);">
+                        <div class="field">
+                            <label for="alert_{{expr:18}}_sound">Son personnalisé</label>
+                            <input type="file" id="alert_{{expr:19}}_sound" class="alert-sound-input" data-alert-type="{{expr:20}}" accept="audio/*">
+                        </div>
+                        <div class="field">
+                            <label for="alert_{{expr:21}}_media">Image / GIF personnalisé</label>
+                            <input type="file" id="alert_{{expr:22}}_media" class="alert-media-input" data-alert-type="{{expr:23}}" accept="image/*">
+                        </div>
+                    </div>
+                    <div class="field-row" style="margin-top:var(--space-2);">
+                        {{expr:24}}
+                        {{expr:25}}
+                    </div>
+                    {{expr:26}}
+                    <div class="field-row" style="margin-top:var(--space-3);">
+                        <button type="button" class="btn alert-preview-btn" data-alert-type="{{expr:27}}">Aperçu de "{{expr:28}}"</button>
+                    </div>

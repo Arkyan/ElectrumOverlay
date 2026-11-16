@@ -35,7 +35,20 @@ sinon ils sont ignorés) :
   sont comparés octet pour octet (UUID et dates normalisés) ;
 - `crates/electrum-server/tests/routes_parity.rs` : les appels de `tests/node/calls.json` sont
   joués sur les vrais handlers de `src/routes/profiles.js` / `settings.js` et sur le serveur Rust ;
-  réponses, diffusions WebSocket et config obtenue doivent être identiques.
+  réponses, diffusions WebSocket et config obtenue doivent être identiques ;
+- `crates/electrum-server/tests/pages_parity.rs` : la version Node prépare une config réaliste et
+  génère les pages ; Rust ouvre le même dossier et doit produire le même HTML, octet pour octet.
+
+### Pages HTML
+
+Le HTML des pages vient des routes Node : `crates/electrum-server/templates/extract.js` l'extrait
+dans `templates/pages/*.html`, chaque valeur calculée par le serveur devenant un repère
+`{{expr:N}}` rempli par `src/pages/mod.rs`. **Après toute modification d'une page côté Node**,
+relance l'extraction puis `cargo test` (le test de parité signale tout écart) :
+
+```bash
+node crates/electrum-server/templates/extract.js
+```
 
 `cargo tauri dev` ouvre la config existante (`%APPDATA%\ElectrumOverlay\config`, la même que la
 version Electron), démarre le serveur sur les ports configurés (8080 / 8081 par défaut) et ouvre
@@ -69,8 +82,12 @@ $env:ELECTRUM_CONFIG_DIR = "C:\chemin\vers\une\copie\config"
 | API profils / sons / médias / export / import / éditeur de scène | ✅ testé contre Node |
 | API réglages (`POST /api/settings`) | ✅ testé contre Node |
 | Outils de test (`/api/tests/trigger`, `/api/panels/:panel/show`), stats du stream | ✅ testé |
-| Pages de l'app (`/app`, `/settings`, `/scene-editor`, `/setup`, `/tests`, `/logs`...) | ⏳ |
-| Commandes de chat (réponses dans le chat, actions overlay) | ⏳ |
+| Pages `/app`, `/settings`, `/scene-editor`, `/commands`, `/tests`, `/logs`, `/stream-stats-html` | ✅ HTML identique à Node (testé) |
+| Journal `/api/logs` + logs en direct | ✅ |
+| Commandes de chat : API, permissions, cooldown, action overlay | ✅ |
+| Commandes de chat : réponse dans le chat Twitch | ⏳ (avec Twitch) |
+| Pages `/setup`, `/integrations`, autorisation Twitch | ⏳ (avec Twitch / Spotify) |
+| Barre de titre de l'app, bouton « Arrêter le serveur » (API `window.electronAPI`) | ⏳ |
 | Twitch : OAuth, EventSub **par WebSocket**, chat, badges, viewers | ⏳ |
 | Spotify | ⏳ |
 | Trucky (contournement Cloudflare) | ⏳ |
