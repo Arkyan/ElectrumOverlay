@@ -4,12 +4,12 @@
     <title>Éditeur de scène - ElectrumOverlay</title>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="stylesheet" href="/css/app-ui.css">
+    <link rel="stylesheet" href="/css/app-v3.css">
     <style>
         html, body { height: 100%; overflow: hidden; }
         .se-app {
             display: flex; flex-direction: column;
-            height: 100vh; padding-top: var(--titlebar-height);
+            height: 100%;
         }
         .se-header {
             display: flex; align-items: baseline; gap: var(--space-4);
@@ -98,7 +98,7 @@
         }
         .se-toolbar-btn {
             background: var(--surface-elevated); border: 1px solid var(--border); color: var(--text);
-            border-radius: 999px; padding: 5px 14px; font-size: 12px; font-weight: 600;
+            border-radius: var(--radius-sm); height: 26px; padding: 0 9px; font-size: 12px; font-weight: 500; white-space: nowrap;
             font-family: inherit; cursor: pointer;
         }
         .se-toolbar-btn:hover { border-color: var(--accent); }
@@ -200,11 +200,10 @@
     </style>
 </head>
 <body>
-    <script src="/js/app-titlebar.js"></script>
+{{shell:open}}
     <div class="se-toast" id="toast"></div>
     <div class="se-app">
         <div class="se-header">
-            <a class="back-link" href="/app">← Retour</a>
             <h1>Éditeur de scène</h1>
             <span class="se-header-hint">Glisse les éléments sur l'aperçu — tout s'enregistre automatiquement sur le profil actif</span>
         </div>
@@ -220,11 +219,11 @@
 
             <div class="se-center">
                 <div class="se-toolbar">
-                    <span class="se-toolbar-label">Aligner :</span>
+                    <span class="se-toolbar-label">Aligner</span>
                     <button type="button" class="se-toolbar-btn" id="btnCenterH" title="Centrer horizontalement la source sélectionnée" disabled>↔ Centrer horiz.</button>
                     <button type="button" class="se-toolbar-btn" id="btnCenterV" title="Centrer verticalement la source sélectionnée" disabled>↕ Centrer vert.</button>
                     <span class="se-toolbar-sep"></span>
-                    <span class="se-toolbar-label">Aperçu :</span>
+                    <span class="se-toolbar-label">Aperçu</span>
                     <button type="button" class="se-toolbar-btn" data-test="follow">Follow</button>
                     <button type="button" class="se-toolbar-btn" data-test="sub">Sub</button>
                     <button type="button" class="se-toolbar-btn" data-test="subs_gift">Gift de subs</button>
@@ -1328,5 +1327,6 @@
         fitCanvas();
         loadScene('starting');
     </script>
+{{shell:close}}
 </body>
 </html>

@@ -88,7 +88,7 @@ pub fn js(value: &Value) -> String {
     to_js_string(value).replace('<', "\\u003c")
 }
 
-/// Remplit les repères `{{expr:N}}` d'un gabarit extrait par `templates/extract.js`.
+/// Remplit les repères `{{expr:N}}` d'un gabarit de page.
 /// Une valeur sans repère est permise : un changement volontaire (`changes.rs`) peut avoir retiré
 /// le passage qui la contenait.
 pub fn fill(template: &str, values: &[String]) -> String {

@@ -4,7 +4,7 @@
     <title>Logs - ElectrumOverlay</title>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="stylesheet" href="/css/app-ui.css">
+    <link rel="stylesheet" href="/css/app-v3.css">
     <style>
         .page { max-width: none; padding-left: var(--space-5); padding-right: var(--space-5); }
         #log {
@@ -28,11 +28,10 @@
     </style>
 </head>
 <body>
-    <script src="/js/app-titlebar.js"></script>
+{{shell:open}}
     <div class="page in-app">
-        <a class="back-link" href="/app">← Retour</a>
-        <div class="top-row">
-            <h1 style="margin:0;">Logs</h1>
+        <div class="page-header top-row">
+            <h1>Logs</h1>
             <label class="checkbox-row"><input type="checkbox" id="autoscroll" checked> Défilement automatique</label>
         </div>
         <div id="log"></div>
@@ -69,5 +68,6 @@
             }
         };
     </script>
+{{shell:close}}
 </body>
 </html>

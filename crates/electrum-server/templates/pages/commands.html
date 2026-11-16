@@ -4,9 +4,8 @@
     <title>Commandes - ElectrumOverlay</title>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="stylesheet" href="/css/app-ui.css">
+    <link rel="stylesheet" href="/css/app-v3.css">
     <style>
-        .page.wide { max-width: 980px; }
         textarea.cmd-reply-message { width: 100%; font-family: inherit; resize: vertical; }
 
         .cmd-card { padding: 0; }
@@ -17,7 +16,7 @@
             align-items: center;
             justify-content: space-between;
             gap: var(--space-3);
-            padding: var(--space-4) var(--space-5);
+            padding: 10px var(--space-4);
         }
         .cmd-summary::-webkit-details-marker { display: none; }
         .cmd-summary::before {
@@ -28,29 +27,28 @@
             transition: transform 0.15s ease;
         }
         .cmd-card[open] .cmd-summary::before { transform: rotate(90deg); }
-        .cmd-summary-trigger { font-weight: 600; font-family: monospace; font-size: 14px; }
+        .cmd-summary-trigger { font-weight: 600; font-size: 13px; margin-right: auto; }
         .cmd-summary-tags { display: flex; gap: var(--space-2); }
         .cmd-tag {
             font-size: 11px;
             padding: 2px 8px;
-            border-radius: 999px;
+            border-radius: 3px;
             background: var(--surface-elevated);
             border: 1px solid var(--border);
             color: var(--text-muted);
         }
-        .cmd-body { padding: 0 var(--space-5) var(--space-5); border-top: 1px solid var(--border); padding-top: var(--space-4); }
+        .cmd-body { padding: 0 var(--space-4) var(--space-4); border-top: 1px solid var(--border); padding-top: var(--space-4); }
     </style>
 </head>
 <body>
-    <script src="/js/app-titlebar.js"></script>
+{{shell:open}}
     <div class="page in-app wide">
-        <a class="back-link" href="/app">← Retour</a>
         <h1>Commandes</h1>
-        <p class="hint">Commandes de chat personnalisées : réponse automatique et/ou action sur l'overlay. La réponse dans le chat nécessite d'avoir autorisé l'application avec le scope <code>user:write:chat</code> — si les réponses échouent silencieusement après une mise à jour, refais l'étape "Autorisation Twitch" depuis <a href="/setup">l'assistant de configuration</a>.</p>
+        <p class="hint">Réponse automatique dans le chat et/ou action sur l'overlay. Si les réponses n'arrivent pas, ré-autorise Twitch dans <a href="/setup">Configuration</a>.</p>
 
         {{expr:0}}
 
-        <h2 style="margin-top:var(--space-6);">Commandes existantes</h2>
+        <div class="section-label">Commandes existantes</div>
         <div id="commandsList">
             {{expr:1}}
         </div>
@@ -142,5 +140,6 @@
             }
         });
     </script>
+{{shell:close}}
 </body>
 </html>

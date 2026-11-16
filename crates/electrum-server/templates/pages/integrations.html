@@ -4,7 +4,7 @@
     <title>Intégrations - ElectrumOverlay</title>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="stylesheet" href="/css/app-ui.css">
+    <link rel="stylesheet" href="/css/app-v3.css">
     <style>
         .spotify-now-playing {
             display: flex; align-items: center; gap: var(--space-3);
@@ -14,15 +14,13 @@
         .spotify-now-playing img { width: 56px; height: 56px; border-radius: 6px; object-fit: cover; flex-shrink: 0; }
         .spotify-now-playing .np-title { font-weight: 600; font-size: 14px; }
         .spotify-now-playing .np-artist { font-size: 12px; color: var(--text-muted); }
-        .page.wide { max-width: 980px; }
     </style>
 </head>
 <body>
-    <script src="/js/app-titlebar.js"></script>
+{{shell:open}}
     <div class="page in-app wide">
-        <a class="back-link" href="/app">← Retour</a>
         <h1>Intégrations</h1>
-        <p>Réglages tiers optionnels — n'affectent rien d'autre dans l'app et se sauvegardent sans redémarrer le serveur.</p>
+        <p class="hint">Services optionnels. Chaque réglage est appliqué immédiatement.</p>
 
         {{expr:0}}
         {{expr:1}}
@@ -226,5 +224,6 @@
             }
         });
     </script>
+{{shell:close}}
 </body>
 </html>

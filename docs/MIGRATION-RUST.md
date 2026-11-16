@@ -36,23 +36,19 @@ sinon ils sont ignorés) :
 - `crates/electrum-server/tests/routes_parity.rs` : les appels de `tests/node/calls.json` sont
   joués sur les vrais handlers de `src/routes/profiles.js` / `settings.js` et sur le serveur Rust ;
   réponses, diffusions WebSocket et config obtenue doivent être identiques ;
-- `crates/electrum-server/tests/pages_parity.rs` : la version Node prépare une config réaliste et
-  génère les pages ; Rust ouvre le même dossier et doit produire le même HTML, octet pour octet.
+- les pages de l'app (HTML) ne sont plus comparées à Node depuis la refonte de l'interface
+  (voir plus bas) : elles appartiennent désormais à la version Rust.
 
 `crates/electrum-server/tests/eventsub.rs` fait tourner la connexion EventSub contre un faux
 serveur Twitch local qui joue le protocole officiel : création des abonnements, notification en
 double, `session_reconnect`, keepalive dépassé, token refusé puis ré-autorisation.
 
-### Pages HTML
+### Interface de l'app
 
-Le HTML des pages vient des routes Node : `crates/electrum-server/templates/extract.js` l'extrait
-dans `templates/pages/*.html`, chaque valeur calculée par le serveur devenant un repère
-`{{expr:N}}` rempli par `src/pages/mod.rs`. **Après toute modification d'une page côté Node**,
-relance l'extraction puis `cargo test` (le test de parité signale tout écart) :
-
-```bash
-node crates/electrum-server/templates/extract.js
-```
+Depuis la refonte (style « outil pro », façon OBS), les pages de l'app appartiennent à la version
+Rust : `crates/electrum-server/templates/pages/*.html` (contenu), `src/pages/shell.rs` (barre de
+titre, barre latérale, icônes) et `public/css/app-v3.css` (styles). La version Electron garde son
+ancienne interface (`app-ui.css`) jusqu'à la bascule. Les overlays OBS ne changent pas.
 
 `cargo tauri dev` ouvre la config existante (`%APPDATA%\ElectrumOverlay\config`, la même que la
 version Electron), démarre le serveur sur les ports configurés (8080 / 8081 par défaut) et ouvre
@@ -86,7 +82,7 @@ $env:ELECTRUM_CONFIG_DIR = "C:\chemin\vers\une\copie\config"
 | API profils / sons / médias / export / import / éditeur de scène | ✅ testé contre Node |
 | API réglages (`POST /api/settings`) | ✅ testé contre Node |
 | Outils de test (`/api/tests/trigger`, `/api/panels/:panel/show`), stats du stream | ✅ testé |
-| Pages `/app`, `/settings`, `/scene-editor`, `/commands`, `/tests`, `/logs`, `/stream-stats-html` | ✅ HTML identique à Node (testé) |
+| Pages de l'app | ✅ nouvelle interface (barre latérale, tableau de bord) |
 | Journal `/api/logs` + logs en direct | ✅ |
 | Commandes de chat : API, permissions, cooldown, action overlay | ✅ |
 | Commandes de chat : réponse dans le chat Twitch (écho ignoré) | ✅ (à valider avec un vrai compte) |
@@ -96,7 +92,7 @@ $env:ELECTRUM_CONFIG_DIR = "C:\chemin\vers\une\copie\config"
 | `/status`, `/subscriptions`, badges, nombre de viewers | ✅ |
 | Liens externes (Twitch, Spotify...) ouverts dans le navigateur | ✅ |
 | Spotify : connexion du compte, renouvellement du token, morceau en cours | ✅ testé contre un faux Spotify (à valider avec un vrai compte) |
-| Page `/integrations` (Spotify, Trucky, affichage des touches) | ✅ HTML identique à Node (testé) |
+| Page `/integrations` (Spotify, Trucky, affichage des touches) | ✅ |
 | Trucky `/api/info-panel` : HTTP direct, navigateur invisible si Cloudflare bloque | ✅ testé (faux Trucky + Chromium) |
 | Affichage des touches : capture clavier/souris (Windows) | ✅ logique testée, compile pour Windows (à valider en jeu) |
 | Instance unique, fenêtre sans bordure + barre de titre maison | ✅ |
@@ -125,6 +121,9 @@ $env:ELECTRUM_CONFIG_DIR = "C:\chemin\vers\une\copie\config"
 - L'image de marque saisie dans `/setup` est enregistrée dans le profil actif (côté Node, elle
   partait à la racine de la config et était perdue au redémarrage dès qu'un profil existait).
 
+- Fermer la fenêtre la détruit (la version Electron la cachait) : l'app réduite dans la zone de
+  notification ne garde que le serveur (~10 Mo) au lieu du moteur web complet.
+- Nouvelle interface de l'app (tableau de bord avec URLs OBS à copier, navigation latérale).
 - Les fichiers JSON sont écrits via un fichier temporaire renommé ensuite : un crash en pleine
   écriture ne laisse plus de fichier tronqué. Le contenu écrit est identique.
 - Un id de profil contenant `/`, `\` ou `..` est refusé (« Profil introuvable ») : il ne peut

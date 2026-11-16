@@ -4,14 +4,14 @@
     <title>Paramètres - ElectrumOverlay</title>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="stylesheet" href="/css/app-ui.css">
+    <link rel="stylesheet" href="/css/app-v3.css">
     <style>
-        .page { max-width: 900px; padding-bottom: 88px; }
+        .page { padding-bottom: 72px; }
         .save-bar {
-            position: fixed; left: 0; right: 0; bottom: 0;
+            position: fixed; left: var(--sidebar-width); right: 0; bottom: 0;
             display: flex; align-items: center; gap: var(--space-3);
-            padding: var(--space-4) var(--space-5);
-            background: var(--surface);
+            padding: var(--space-3) var(--space-6);
+            background: var(--surface-sunken);
             border-top: 1px solid var(--border);
             z-index: 20;
         }
@@ -20,9 +20,8 @@
     </style>
 </head>
 <body>
-    <script src="/js/app-titlebar.js"></script>
+{{shell:open}}
     <div class="page in-app">
-        <a class="back-link" href="/app">← Retour</a>
         <h1>Paramètres</h1>
         <p>{{expr:0}}</p>
 
@@ -554,5 +553,6 @@
             btn.disabled = false;
         });
     </script>
+{{shell:close}}
 </body>
 </html>

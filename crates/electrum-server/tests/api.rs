@@ -329,3 +329,37 @@ async fn arret_puis_redemarrage_du_serveur() {
     assert!(raw_post(http_port, "/api/panels/left/show").await.starts_with("HTTP/1.1 200"));
     running.stop().await;
 }
+
+#[tokio::test]
+async fn toutes_les_pages_de_l_app_utilisent_la_nouvelle_interface() {
+    let (state, _dir) = new_state();
+    let pages = [
+        ("/app", "/app"),
+        ("/settings", "/settings"),
+        ("/scene-editor", "/scene-editor"),
+        ("/commands", "/commands"),
+        ("/integrations", "/integrations"),
+        ("/setup", "/setup"),
+        ("/tests", "/tests"),
+        ("/logs", "/logs"),
+        ("/stream-stats-html", "/stream-stats-html"),
+        ("/auth-url", "/setup"),
+    ];
+    for (path, active) in pages {
+        let page = send(&state, "GET", path, None).await;
+        assert_eq!(page.status, StatusCode::OK, "{path}");
+        let html = page.text();
+        assert!(html.contains("/css/app-v3.css") && !html.contains("app-ui.css"), "{path} : feuille de style");
+        assert!(html.contains("<nav class=\"sidebar\">"), "{path} : barre latérale");
+        assert!(html.contains(&format!("class=\"nav-item active\" href=\"{active}\"")), "{path} : entrée active");
+        assert!(!html.contains("{{"), "{path} : repère non rempli");
+        assert!(!html.to_lowercase().contains("ngrok"), "{path} : mention de ngrok");
+        assert!(!html.contains("app-titlebar.js") && !html.contains("← Retour"), "{path} : ancienne structure");
+    }
+    // Retour d'autorisation (ouvert dans le navigateur) : sans navigation.
+    let callback = send(&state, "GET", "/auth-callback", None).await.text();
+    assert!(callback.contains("class=\"standalone\"") && !callback.contains("sidebar"));
+    // Tableau de bord : URLs des sources OBS prêtes à copier.
+    let home = send(&state, "GET", "/app", None).await.text();
+    assert!(home.contains("data-copy=\"http://localhost:8080/starting.html\""));
+}

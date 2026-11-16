@@ -20,7 +20,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use tauri::menu::{MenuBuilder, MenuEvent, MenuItemBuilder};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::webview::NewWindowResponse;
-use tauri::{AppHandle, Manager, Url, WebviewUrl, WebviewWindow, WebviewWindowBuilder, WindowEvent};
+use tauri::{AppHandle, Manager, RunEvent, Url, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
 use tauri_plugin_dialog::{DialogExt, MessageDialogKind};
 
 const WINDOW: &str = "main";
@@ -85,17 +85,57 @@ fn main_window(app: &AppHandle) -> Option<WebviewWindow> {
     app.get_webview_window(WINDOW)
 }
 
-/// Montre la fenêtre (et optionnellement l'amène sur une page).
+/// Montre la fenêtre (en la recréant si elle a été fermée), optionnellement sur une page.
 fn show(app: &AppHandle, path: Option<&str>) {
-    let Some(window) = main_window(app) else { return };
-    if let Some(path) = path {
-        if let Ok(url) = app.state::<Desktop>().url(path).parse() {
-            let _ = window.navigate(url);
+    let window = match main_window(app) {
+        Some(window) => {
+            if let Some(path) = path {
+                if let Ok(url) = app.state::<Desktop>().url(path).parse() {
+                    let _ = window.navigate(url);
+                }
+            }
+            window
         }
-    }
+        None => match create_window(app, path.unwrap_or("/app")) {
+            Ok(window) => window,
+            Err(error) => return eprintln!("❌ Impossible d'ouvrir la fenêtre : {error}"),
+        },
+    };
     let _ = window.unminimize();
     let _ = window.show();
     let _ = window.set_focus();
+}
+
+/// Crée la fenêtre principale sur `path`.
+///
+/// Fermer la fenêtre la DÉTRUIT (au lieu de la cacher comme la version Electron) : le moteur web
+/// qui affiche les pages représente presque toute la mémoire de l'app, alors que le serveur des
+/// overlays ne pèse qu'une dizaine de Mo. Pendant un live, l'app réduite dans la zone de
+/// notification ne garde donc que le serveur ; la fenêtre est recréée à la demande.
+fn create_window(app: &AppHandle, path: &str) -> tauri::Result<WebviewWindow> {
+    let desktop = app.state::<Desktop>();
+    let port = desktop.http_port;
+    let url: Url = desktop.url(path).parse().map_err(tauri::Error::InvalidUrl)?;
+    let version = app.package_info().version.to_string();
+    WebviewWindowBuilder::new(app, WINDOW, WebviewUrl::External(url))
+        .title(format!("ElectrumOverlay v{version}"))
+        .inner_size(1180.0, 760.0)
+        .min_inner_size(820.0, 520.0)
+        .decorations(false)
+        .background_color(tauri::window::Color(0x18, 0x19, 0x1d, 0xff))
+        .initialization_script(BRIDGE)
+        .on_navigation(move |url| {
+            if is_own_server(url, port) {
+                return true;
+            }
+            open_in_browser(url);
+            false
+        })
+        .on_new_window(|url, _| {
+            open_in_browser(&url);
+            NewWindowResponse::Deny
+        })
+        .build()
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -239,7 +279,7 @@ fn window_toggle_maximize(window: WebviewWindow) {
 
 #[tauri::command]
 fn window_close(window: WebviewWindow) {
-    let _ = window.close(); // intercepté : la fenêtre est cachée, pas détruite
+    let _ = window.close(); // détruit la fenêtre ; l'app continue dans la zone de notification
 }
 
 #[tauri::command]
@@ -333,41 +373,7 @@ fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     }
     app.add_capability(capability)?;
 
-    let version = app.package_info().version.to_string();
-    let port = http_port;
-    let window = WebviewWindowBuilder::new(app, WINDOW, WebviewUrl::External(format!("http://localhost:{port}/app").parse()?))
-        .title(format!("ElectrumOverlay v{version}"))
-        .inner_size(980.0, 720.0)
-        .min_inner_size(720.0, 480.0)
-        .decorations(false)
-        .background_color(tauri::window::Color(0x0b, 0x0d, 0x12, 0xff))
-        .initialization_script(BRIDGE)
-        .on_navigation(move |url| {
-            if is_own_server(url, port) {
-                return true;
-            }
-            open_in_browser(url);
-            false
-        })
-        .on_new_window(|url, _| {
-            open_in_browser(&url);
-            NewWindowResponse::Deny
-        })
-        .build()?;
-
-    // Fermer la fenêtre la cache (l'app continue de servir les overlays) ; « Quitter » est dans
-    // le menu de l'icône.
-    let app_handle = app.handle().clone();
-    window.on_window_event(move |event| {
-        if let WindowEvent::CloseRequested { api, .. } = event {
-            if !app_handle.state::<Desktop>().quitting.load(Ordering::SeqCst) {
-                api.prevent_close();
-                if let Some(window) = main_window(&app_handle) {
-                    let _ = window.hide();
-                }
-            }
-        }
-    });
+    create_window(app.handle(), "/app")?;
 
     let icon = app.default_window_icon().cloned().ok_or("icône de l'app introuvable")?;
     TrayIconBuilder::with_id(TRAY)
@@ -389,7 +395,7 @@ fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
 }
 
 pub fn run() {
-    tauri::Builder::default()
+    let app = tauri::Builder::default()
         // En premier : une deuxième instance ramène la fenêtre de la première, puis se ferme.
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| show(app, None)))
         .plugin(tauri_plugin_dialog::init())
@@ -409,6 +415,15 @@ pub fn run() {
             updater_install
         ])
         .setup(setup)
-        .run(tauri::generate_context!())
+        .build(tauri::generate_context!())
         .expect("erreur au lancement de l'application Tauri");
+    app.run(|app, event| {
+        // Fermer la dernière fenêtre ne quitte pas l'app : elle continue de servir les overlays
+        // depuis la zone de notification. Seul « Quitter » (ou une mise à jour) l'arrête.
+        if let RunEvent::ExitRequested { api, code: None, .. } = event {
+            if !app.state::<Desktop>().quitting.load(Ordering::SeqCst) {
+                api.prevent_exit();
+            }
+        }
+    });
 }

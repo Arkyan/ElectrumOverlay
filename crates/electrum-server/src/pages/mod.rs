@@ -1,11 +1,11 @@
-//! Pages de l'app (HTML généré côté serveur), identiques octet pour octet à la version Node.
+//! Pages de l'app (HTML généré côté serveur).
 //!
-//! Le HTML vient de `templates/pages/*.html`, extrait des routes Node par `templates/extract.js` ;
-//! chaque `{{expr:N}}` y remplace une expression serveur, recalculée ici. `tests/pages_parity.rs`
-//! compare le résultat avec le vrai rendu Node.
+//! Le contenu de chaque page est dans `templates/pages/*.html` (à l'origine extrait des routes
+//! Node, désormais propre à la version Rust) ; chaque `{{expr:N}}` y est remplacé par une valeur
+//! calculée ici, et `{{shell:open}}` / `{{shell:close}}` par la structure commune (`shell.rs`).
 
-pub mod changes;
 pub mod js;
+pub mod shell;
 
 use electrum_core::json::number_value;
 use electrum_core::Store;
@@ -27,22 +27,45 @@ pub fn normalize_newlines(text: &str) -> std::borrow::Cow<'_, str> {
 
 /// Page des outils de test (aucune donnée serveur).
 pub fn tests() -> String {
-    template!("tests").to_string()
+    shell::wrap(template!("tests"), "/tests")
 }
 
-/// Accueil de l'app (aucune donnée serveur ; mentions de ngrok retirées).
-pub fn app_home() -> String {
-    changes::apply("app", template!("app"))
+/// Pages d'overlay intégrées, dans l'ordre d'un stream.
+const OBS_PAGES: [(&str, &str); 4] = [("Démarrage", "/starting.html"), ("En direct", "/"), ("Pause", "/pause.html"), ("Fin", "/ending.html")];
+
+/// Tableau de bord : état de Twitch et du live (rafraîchis par la page), tests rapides, et URLs
+/// des sources OBS (pages intégrées + scènes personnalisées du profil actif) à copier.
+pub fn app_home(config: &Value) -> String {
+    let port = js::string(at(config, &["server", "PORT"]));
+    let row = |name: &str, path: &str| {
+        let url = format!("http://localhost:{port}{path}");
+        format!(
+            "<tr><td>{}</td><td class=\"url\">{}</td><td class=\"actions\"><button type=\"button\" class=\"btn btn-sm btn-ghost\" data-copy=\"{}\">{}<span>Copier</span></button></td></tr>",
+            esc(name), esc(&url), esc(&url), shell::icon("copy")
+        )
+    };
+    let mut rows: String = OBS_PAGES.iter().map(|(name, path)| row(name, path)).collect();
+    if let Some(scenes) = at(config, &["display", "scenes"]).and_then(Value::as_object) {
+        for (id, scene) in scenes {
+            if electrum_core::store::BUILTIN_PAGE_KEYS.contains(&id.as_str()) {
+                continue;
+            }
+            rows.push_str(&row(&js::string(scene.get("name")), &format!("/scene/{id}")));
+        }
+    }
+    let login = at(config, &["twitch", "BROADCASTER_LOGIN"]).filter(|v| electrum_core::json::is_truthy(Some(v)));
+    let channel = login.map_or("—".to_string(), |l| esc(&js::string(Some(l))));
+    shell::wrap(&fill(template!("app"), &[shell::icon("scene"), channel, rows]), "/app")
 }
 
 /// `/auth-url` : lien d'autorisation Twitch.
 pub fn auth_url(url: &str) -> String {
-    fill(template!("auth-url"), &[url.to_string()])
+    shell::wrap(&fill(template!("auth-url"), &[url.to_string()]), "/setup")
 }
 
 /// `/auth-callback` : récupère le token dans l'URL et l'envoie à `/api/oauth-callback`.
 pub fn auth_callback() -> String {
-    template!("auth-callback").to_string()
+    shell::wrap(template!("auth-callback"), "")
 }
 
 /// `/setup` (assistant de configuration), sans la section ngrok.
@@ -58,8 +81,8 @@ pub fn setup(config: &Value) -> String {
             if electrum_core::json::is_truthy(id) { js::string(id) } else { "Aucune — autorisez d'abord".to_string() }
         }
     };
-    fill(
-        &changes::apply("setup", template!("setup")),
+    shell::wrap(&fill(
+        template!("setup"),
         &[
             js::string(at(config, &["server", "PORT"])),
             esc_v(twitch.get("CLIENT_ID")),
@@ -71,17 +94,17 @@ pub fn setup(config: &Value) -> String {
             esc_or(at(bottom, &["infoTexts", "2"]), ""),
             esc_or(bottom.get("scrollingText"), ""),
         ],
-    )
+    ), "/setup")
 }
 
 /// Logs en direct : seul le port WebSocket est injecté.
 pub fn logs(ws_port: &Value) -> String {
-    fill(template!("logs"), &[js::string(Some(ws_port))])
+    shell::wrap(&fill(template!("logs"), &[js::string(Some(ws_port))]), "/logs")
 }
 
 /// `/stream-stats-html`.
 pub fn stream_stats(stats: &Value) -> String {
-    fill(template!("stream-stats"), &[js_json(stats)])
+    shell::wrap(&fill(template!("stream-stats"), &[js_json(stats)]), "/stream-stats-html")
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -150,7 +173,7 @@ pub fn scene_editor(store: &Store) -> electrum_core::Result<String> {
     let list_or_empty = |key: &str| or(pause.get(key), None).cloned().unwrap_or_else(|| json!([]));
     let pause_lists = json!({ "messages": list_or_empty("messages"), "progressMessages": list_or_empty("progressMessages") });
 
-    Ok(fill(
+    Ok(shell::wrap(&fill(
         template!("scene-editor"),
         &[
             CANVAS_W.into(),
@@ -166,7 +189,7 @@ pub fn scene_editor(store: &Store) -> electrum_core::Result<String> {
             js_json(&themes),
             js_json(&pause_lists),
         ],
-    ))
+    ), "/scene-editor"))
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -354,13 +377,13 @@ fn settings_page(display: &Value, ctx: &SettingsContext) -> String {
 
     let preview: Map<String, Value> = ALERT_PREVIEW_ACTION.iter().map(|(k, v)| (k.to_string(), json!(v))).collect();
 
-    fill(
+    shell::wrap(&fill(
         template!("settings"),
         &[
             if is_active {
-                "Les couleurs et textes s'appliquent immédiatement aux overlays déjà ouverts dans OBS. Les paramètres d'animations/panneaux s'appliquent au prochain rafraîchissement de la source.".to_string()
+                "Couleurs et textes : appliqués tout de suite aux overlays. Animations et panneaux : au prochain rafraîchissement de la source OBS.".to_string()
             } else {
-                "Tu consultes/modifies un profil qui n'est pas actif : les changements sont enregistrés mais ne s'appliqueront aux overlays qu'une fois ce profil activé (bouton « Activer » ci-dessous).".to_string()
+                "Ce profil n'est pas actif : les changements s'appliqueront aux overlays une fois qu'il sera activé.".to_string()
             },
             profile_options,
             if is_active { "disabled".into() } else { String::new() },
@@ -413,7 +436,7 @@ fn settings_page(display: &Value, ctx: &SettingsContext) -> String {
             stringify(&json!(ctx.viewed_id)),
             stringify(&json!(ctx.active_id)),
         ],
-    )
+    ), "/settings")
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -484,7 +507,7 @@ pub fn commands(list: &[Value]) -> String {
     } else {
         list.iter().map(|c| command_card(c, false)).collect()
     };
-    fill(template!("commands"), &[new_card, cards])
+    shell::wrap(&fill(template!("commands"), &[new_card, cards]), "/commands")
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -512,7 +535,7 @@ pub fn integrations(ctx: &IntegrationsContext) -> String {
     } else {
         template!("integrations-unconfigured").to_string()
     };
-    fill(
+    shell::wrap(&fill(
         template!("integrations"),
         &[
             ctx.error.filter(|e| !e.is_empty()).map_or(String::new(), |e| format!("<p class=\"msg error\">{}</p>", esc(e))),
@@ -525,5 +548,5 @@ pub fn integrations(ctx: &IntegrationsContext) -> String {
             esc_or(trucky.get("USER_ID"), ""),
             if_truthy(at(ctx.config, &["inputDisplay", "enabled"]), "checked"),
         ],
-    )
+    ), "/integrations")
 }

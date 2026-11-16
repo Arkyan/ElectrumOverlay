@@ -34,10 +34,9 @@ fn page(result: electrum_core::Result<String>) -> Response {
     }
 }
 
-async fn app_home() -> Html<String> {
-    // TODO(migration) : rediriger vers /setup tant que la config Twitch n'est pas faite, quand
-    // l'assistant de configuration sera porté.
-    Html(pages::app_home())
+async fn app_home(State(state): State<AppState>) -> Html<String> {
+    let config = state.store().config().clone();
+    Html(pages::app_home(&config))
 }
 
 async fn logs_page(State(state): State<AppState>) -> Html<String> {

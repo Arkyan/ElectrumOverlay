@@ -4,14 +4,13 @@
     <title>Tests - ElectrumOverlay</title>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="stylesheet" href="/css/app-ui.css">
+    <link rel="stylesheet" href="/css/app-v3.css">
 </head>
 <body>
-    <script src="/js/app-titlebar.js"></script>
+{{shell:open}}
     <div class="page in-app">
-        <a class="back-link" href="/app">← Retour</a>
         <h1>Tests</h1>
-        <p>Simule de faux événements Twitch pour vérifier les overlays sans attendre un vrai follow/sub/raid. Ouvre <code>index.html</code> dans un navigateur (ou regarde OBS) pour voir le résultat.</p>
+        <p class="hint">Faux événements Twitch, visibles sur les overlays ouverts dans OBS.</p>
 
         <div class="card">
             <h2 class="card-title">Alertes</h2>
@@ -86,5 +85,6 @@
         document.getElementById('btnShowLeftPanel').addEventListener('click', (e) => callTestApi('/api/panels/left/show', e.target));
         document.getElementById('btnShowBottomBar').addEventListener('click', (e) => callTestApi('/api/panels/bottom/show', e.target));
     </script>
+{{shell:close}}
 </body>
 </html>

@@ -4,7 +4,7 @@
                 <title>Statistiques - ElectrumOverlay</title>
                 <meta charset="UTF-8">
                 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                <link rel="stylesheet" href="/css/app-ui.css">
+                <link rel="stylesheet" href="/css/app-v3.css">
                 <style>
                     .grid {
                         display: grid;
@@ -21,9 +21,8 @@
                 </style>
             </head>
             <body>
-                <script src="/js/app-titlebar.js"></script>
+{{shell:open}}
                 <div class="page in-app">
-                    <a class="back-link" href="/app">← Retour</a>
                     <h1>Statistiques du stream</h1>
 
                     <div class="card">
@@ -64,6 +63,7 @@
                         fetch('/api/stream-stats').then(r => r.json()).then(render).catch(() => {});
                     }, 5000);
                 </script>
-            </body>
+            {{shell:close}}
+</body>
         </html>
         

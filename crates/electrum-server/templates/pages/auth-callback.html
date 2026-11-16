@@ -4,12 +4,11 @@
                     <title>Autorisation - ElectrumOverlay</title>
                     <meta charset="UTF-8">
                     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                    <link rel="stylesheet" href="/css/app-ui.css">
+                    <link rel="stylesheet" href="/css/app-v3.css">
                 </head>
                 <body>
-                    <script src="/js/app-titlebar.js"></script>
+{{shell:standalone}}
                     <div class="page in-app">
-                        <a class="back-link" href="/app">← Retour</a>
                         <h1>Autorisation Twitch</h1>
                         <div class="card" id="token-container">
                             <p>Traitement en cours…</p>
@@ -42,6 +41,7 @@
                             container.innerHTML = '<p class="msg error">Aucun token trouvé dans l\'URL. Vérifiez que l\'autorisation s\'est bien déroulée.</p>';
                         }
                     </script>
-                </body>
+                {{shell:standalone-close}}
+</body>
             </html>
         

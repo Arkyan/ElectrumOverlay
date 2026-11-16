@@ -4,7 +4,7 @@
     <title>Configuration - ElectrumOverlay</title>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="stylesheet" href="/css/app-ui.css">
+    <link rel="stylesheet" href="/css/app-v3.css">
     <style>
         ul.requirements { margin: 0 0 var(--space-4); padding-left: 20px; color: var(--text-muted); font-size: 13px; }
         ul.requirements code {
@@ -13,11 +13,10 @@
     </style>
 </head>
 <body>
-    <script src="/js/app-titlebar.js"></script>
+{{shell:open}}
     <div class="page in-app">
-        <a class="back-link" href="/app">← Retour</a>
         <h1>Configuration</h1>
-        <p>Chaque section se sauvegarde indépendamment — pas besoin de tout redonner pour changer un seul réglage. Tout reste sur votre machine, rien n'est envoyé ailleurs qu'à Twitch.</p>
+        <p class="hint">Chaque section s'enregistre séparément. Tout reste sur ce PC.</p>
 
         <section class="card" id="step1">
             <h2 class="card-title">Application Twitch</h2>
@@ -56,7 +55,7 @@
         </section>
 
         <section class="card" id="step3">
-            <h2 class="card-title">Branding et ngrok</h2>
+            <h2 class="card-title">Image de marque</h2>
             <div class="field">
                 <label for="accentColor">Couleur principale de l'overlay</label>
                 <input type="color" id="accentColor" value="{{expr:4}}">
@@ -78,17 +77,8 @@
                 <input type="text" id="scrollingText" value="{{expr:8}}">
             </div>
 
-            <div class="sub-block">
-                <label class="checkbox-row"><input type="checkbox" id="ngrokEnabled" {{expr:9}}> Utiliser ngrok (tunnel automatique pour les webhooks Twitch)</label>
-                <div class="hint">Requiert un compte gratuit : <a href="https://dashboard.ngrok.com/get-started/your-authtoken" target="_blank">dashboard.ngrok.com/get-started/your-authtoken</a></div>
-                <div class="field" style="margin-top:var(--space-3);margin-bottom:0;">
-                    <label for="ngrokAuthtoken">Authtoken ngrok</label>
-                    <input type="password" id="ngrokAuthtoken" autocomplete="off" placeholder="{{expr:10}}">
-                </div>
-            </div>
-
             <button type="button" class="btn btn-primary" id="btnFinish">Enregistrer</button>
-            <div class="hint">Le serveur redémarre après cette sauvegarde (ngrok ne se reconfigure qu'au lancement). Spotify et Trucky se configurent séparément depuis <a href="/integrations">Intégrations</a>, sans redémarrage.</div>
+            <div class="hint">La connexion à Twitch est relancée après cette sauvegarde, sans redémarrage. Spotify et Trucky se configurent séparément depuis <a href="/integrations">Intégrations</a>, sans redémarrage.</div>
             <div class="msg" id="msg3" role="status"></div>
         </section>
     </div>
@@ -164,9 +154,7 @@
                 infoLine2: document.getElementById('infoLine2').value.trim(),
                 infoLine3: document.getElementById('infoLine3').value.trim(),
                 scrollingText: document.getElementById('scrollingText').value.trim(),
-                accentColor: document.getElementById('accentColor').value,
-                ngrokEnabled: document.getElementById('ngrokEnabled').checked,
-                ngrokAuthtoken: document.getElementById('ngrokAuthtoken').value.trim()
+                accentColor: document.getElementById('accentColor').value
             };
             const res = await fetch('/api/setup/finish', {
                 method: 'POST',
@@ -175,13 +163,14 @@
             });
             const data = await res.json();
             if (data.ok) {
-                msg('msg3', 'Configuration enregistrée, redémarrage en cours...', false);
-                setTimeout(() => { window.location.href = '/app'; }, 4000);
+                msg('msg3', 'Configuration enregistrée, connexion à Twitch...', false);
+                setTimeout(() => { window.location.href = '/app'; }, 1500);
             } else {
                 btn.disabled = false;
                 msg('msg3', data.error || 'Erreur', true);
             }
         });
     </script>
+{{shell:close}}
 </body>
 </html>
