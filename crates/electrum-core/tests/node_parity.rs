@@ -40,8 +40,10 @@ fn node_available() -> bool {
     Command::new("node").arg("--version").output().map(|o| o.status.success()).unwrap_or(false)
 }
 
-fn repo_root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../..").canonicalize().unwrap()
+/// Chemin du script, construit sans `canonicalize()` : sous Windows, celui-ci renvoie un chemin
+/// `\\?\C:\...` que Node ne sait pas ouvrir.
+fn scenario_script() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("tests").join("node").join("scenario.js")
 }
 
 /// Remplace UUID et horodatages par des jetons numérotés dans l'ordre d'apparition.
@@ -100,7 +102,7 @@ fn snapshot_files(dir: &Path, normalizer: &mut Normalizer) -> Vec<(String, Strin
 }
 
 fn run_node(dir: &Path) -> Value {
-    let script = repo_root().join("crates/electrum-core/tests/node/scenario.js");
+    let script = scenario_script();
     let output = Command::new("node")
         .arg(&script)
         .env("ELECTRUM_CONFIG_DIR", dir)
