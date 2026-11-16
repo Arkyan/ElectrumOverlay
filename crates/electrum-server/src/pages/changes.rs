@@ -58,8 +58,9 @@ pub const RENAMES: &[(&str, &str, &str)] = &[
 /// Gabarit Node avec les changements Rust de `page` appliqués.
 pub fn apply(page: &str, template: &str) -> String {
     let mut out = template.to_string();
-    for (target, from, to) in CHANGES.iter().filter(|(p, ..)| *p == page) {
-        debug_assert_eq!(out.matches(from).count(), 1, "changement introuvable dans {target} : {from}");
+    // Un passage introuvable est simplement ignoré : la page reste utilisable. Le test
+    // `chaque_changement_vise_un_passage_unique_du_gabarit_node` est là pour le signaler.
+    for (_, from, to) in CHANGES.iter().filter(|(p, ..)| *p == page) {
         out = out.replacen(from, to, 1);
     }
     for (_, from, to) in RENAMES.iter().filter(|(p, ..)| *p == page) {
@@ -73,12 +74,21 @@ mod tests {
     use super::*;
     use serde_json::json;
 
-    fn template(page: &str) -> &'static str {
-        match page {
+    fn template(page: &str) -> String {
+        let raw = match page {
             "app" => include_str!("../../templates/pages/app.html"),
             "setup" => include_str!("../../templates/pages/setup.html"),
             other => panic!("page inconnue : {other}"),
-        }
+        };
+        super::super::normalize_newlines(raw).into_owned()
+    }
+
+    #[test]
+    fn fonctionne_aussi_avec_des_fins_de_ligne_windows() {
+        // Ce que git produit sous Windows (core.autocrlf) : la page doit rester correcte.
+        let windows = template("setup").replace('\n', "\r\n");
+        let page = apply("setup", &super::super::normalize_newlines(&windows));
+        assert!(!page.to_lowercase().contains("ngrok"));
     }
 
     #[test]

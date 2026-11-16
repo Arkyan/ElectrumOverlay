@@ -91,7 +91,8 @@ function parse(src, start) {
 fs.mkdirSync(OUT, { recursive: true });
 const manifest = {};
 for (const [name, [file, marker]] of Object.entries(PAGES)) {
-    const src = fs.readFileSync(path.join(ROOT, file), 'utf-8');
+    // Fins de ligne Windows (\r\n) ramenées à \n, comme le fait JavaScript dans un gabarit.
+    const src = fs.readFileSync(path.join(ROOT, file), 'utf-8').replace(/\r\n/g, '\n');
     const at = src.indexOf(marker);
     if (at < 0) throw new Error(`${name} : « ${marker} » introuvable dans ${file}`);
     const segs = parse(src, src.indexOf('`', at));

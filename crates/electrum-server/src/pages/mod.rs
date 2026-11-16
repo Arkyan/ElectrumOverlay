@@ -12,10 +12,17 @@ use electrum_core::Store;
 use js::{at, esc, esc_nn, esc_or, esc_v, fill, if_truthy, js as js_json, or, stringify, unless_false};
 use serde_json::{json, Map, Value};
 
+/// Gabarit embarqué, toujours en fins de ligne Unix : sous Windows, git peut extraire les
+/// fichiers en `\r\n`, alors que les pages Node (gabarits JS) sont toujours en `\n`.
 macro_rules! template {
     ($name:literal) => {
-        include_str!(concat!("../../templates/pages/", $name, ".html"))
+        &*crate::pages::normalize_newlines(include_str!(concat!("../../templates/pages/", $name, ".html")))
     };
+}
+
+/// `\r\n` → `\n` (sans copie si le texte n'en contient pas).
+pub fn normalize_newlines(text: &str) -> std::borrow::Cow<'_, str> {
+    if text.contains('\r') { std::borrow::Cow::Owned(text.replace("\r\n", "\n")) } else { std::borrow::Cow::Borrowed(text) }
 }
 
 /// Page des outils de test (aucune donnée serveur).
