@@ -125,6 +125,20 @@ class EventSubManager {
     }
 
     /**
+     * Un abonnement existant n'est réutilisable que s'il pointe vers l'URL webhook actuelle,
+     * concerne la bonne chaîne (même condition) et que Twitch le considère actif.
+     */
+    isSubscriptionHealthy(existing, wanted, webhookUrl) {
+        const HEALTHY_STATUSES = ['enabled', 'webhook_callback_verification_pending'];
+        if (!HEALTHY_STATUSES.includes(existing.status)) return false;
+        if (existing.transport?.callback !== webhookUrl) return false;
+        if (wanted.version && existing.version && String(existing.version) !== String(wanted.version)) return false;
+        const existingCondition = existing.condition || {};
+        return Object.entries(wanted.condition || {})
+            .every(([key, value]) => String(existingCondition[key] ?? '') === String(value));
+    }
+
+    /**
      * Configurer les abonnements pour une chaîne spécifique
      */
     async setupSubscriptionsForChannel(broadcasterId, webhookUrl) {
@@ -149,29 +163,39 @@ class EventSubManager {
                 }))
             ];
 
-            // Un abonnement du même type peut déjà exister mais pointer vers une ancienne URL
-            // (ex: un tunnel ngrok gratuit change d'adresse à chaque redémarrage) : Twitch ne
-            // délivrera alors plus jamais rien dessus. On ne le garde que si son callback
-            // correspond exactement à l'URL webhook actuelle ; sinon on le supprime et on le
-            // recrée avec la bonne URL.
+            // Un abonnement du même type peut déjà exister mais être inutilisable :
+            //  - callback vers une ancienne URL (tunnel ngrok qui a changé d'adresse) ;
+            //  - callback correct mais statut ≠ enabled. Cas fréquent depuis que ngrok donne un
+            //    domaine FIXE aux comptes gratuits : si l'app a été fermée sans nettoyage (PC
+            //    éteint, crash, kill), Twitch continue d'envoyer sur ce domaine, échoue, et passe
+            //    l'abonnement en `notification_failures_exceeded` (ou `authorization_revoked`
+            //    après une ré-autorisation, `webhook_callback_verification_failed`...). Comparer
+            //    seulement l'URL le faisait passer pour valide et Twitch n'envoyait plus RIEN
+            //    (chat muet, stats de fin de stream à 0) ;
+            //  - condition pour une autre chaîne (changement de compte avec la même app Twitch).
+            // On ne garde donc qu'un abonnement sain, et on supprime/recrée tout le reste.
             const subscriptionsToCreate = [];
             let upToDateCount = 0;
 
             for (const sub of subscriptionsToTry) {
-                const existing = existingSubs.find(s => s.type === sub.type);
-                if (existing && existing.transport?.callback === webhookUrl) {
-                    upToDateCount++;
-                    continue;
-                }
-                if (existing) {
-                    console.log(`♻️  Callback obsolète pour ${sub.type}, recréation avec la nouvelle URL...`);
+                const sameType = existingSubs.filter(s => s.type === sub.type);
+                const healthy = sameType.find(s => this.isSubscriptionHealthy(s, sub, webhookUrl));
+
+                for (const existing of sameType) {
+                    if (existing === healthy) continue;
+                    console.log(`♻️  Abonnement ${sub.type} inutilisable (statut: ${existing.status}, callback: ${existing.transport?.callback}), suppression...`);
                     try {
                         await this.deleteSubscription(existing.id);
                     } catch (error) {
                         console.warn(`⚠️  Impossible de supprimer l'ancien abonnement ${sub.type}:`, error.response?.data?.message || error.message);
                     }
                 }
-                subscriptionsToCreate.push(sub);
+
+                if (healthy) {
+                    upToDateCount++;
+                } else {
+                    subscriptionsToCreate.push(sub);
+                }
             }
 
             if (subscriptionsToCreate.length === 0) {
