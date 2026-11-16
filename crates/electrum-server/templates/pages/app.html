@@ -24,7 +24,7 @@
         <section class="card">
             <h2 class="card-title">Twitch</h2>
             <div class="metric-row"><span>Chaîne</span><strong id="twChannel">{{expr:1}}</strong></div>
-            <div class="metric-row"><span>Connexion</span><strong id="twState">…</strong></div>
+            <div class="metric-row"><span>Connexion</span><span class="tag" id="twState">…</span></div>
             <div class="metric-row"><span>Événements suivis</span><strong id="twSubs">–</strong></div>
             <p class="hint" id="twError" hidden></p>
             <div class="card-actions">
@@ -34,10 +34,14 @@
 
         <section class="card">
             <h2 class="card-title">Live</h2>
-            <div class="metric-row"><span>Statut</span><strong id="stLive">–</strong></div>
+            <div class="metric-row"><span>Statut</span><span class="tag" id="stLive">–</span></div>
             <div class="metric-row"><span>Durée</span><strong id="stDuration">–</strong></div>
-            <div class="metric-row"><span>Viewers</span><strong id="stViewers">–</strong></div>
-            <div class="metric-row"><span>Follows / subs / messages</span><strong id="stCounts">–</strong></div>
+            <div class="metric-grid">
+                <div><div class="metric-big" id="stViewers">–</div><span>viewers</span></div>
+                <div><div class="metric-big" id="stFollows">0</div><span>follows</span></div>
+                <div><div class="metric-big" id="stSubs">0</div><span>subs</span></div>
+                <div><div class="metric-big" id="stMessages">0</div><span>messages</span></div>
+            </div>
         </section>
 
         <section class="card">
@@ -95,7 +99,9 @@
     function refreshTwitch() {
         fetch('/status').then((r) => r.json()).then((s) => {
             const e = s.eventsub || {};
-            $('twState').textContent = !s.twitchAuthenticated ? 'Non autorisé' : e.connected ? 'Connecté' : e.needsAuthorization ? 'À ré-autoriser' : 'Connexion…';
+            const [cls, text] = !s.twitchAuthenticated ? ['bad', 'Non autorisé'] : e.connected ? ['ok', 'Connecté'] : e.needsAuthorization ? ['bad', 'À ré-autoriser'] : ['warn', 'Connexion…'];
+            $('twState').className = 'tag ' + cls;
+            $('twState').textContent = text;
             $('twSubs').textContent = e.connected ? String(e.subscriptions) : '–';
             $('twError').hidden = !e.lastError;
             $('twError').textContent = e.lastError || '';
@@ -104,10 +110,13 @@
 
     function refreshStats() {
         fetch('/api/stream-stats').then((r) => r.json()).then((s) => {
+            $('stLive').className = 'tag' + (s.isLive ? ' live' : '');
             $('stLive').textContent = s.isLive ? 'En direct' : 'Hors ligne';
             $('stDuration').textContent = s.isLive ? s.streamDuration : '–';
             $('stViewers').textContent = s.isLive ? String(s.viewerCount) : '–';
-            $('stCounts').textContent = s.follows + ' / ' + s.subscribers + ' / ' + s.chatMessages;
+            $('stFollows').textContent = String(s.follows);
+            $('stSubs').textContent = String(s.subscribers);
+            $('stMessages').textContent = String(s.chatMessages);
         }).catch(() => {});
     }
 

@@ -10,18 +10,20 @@
  */
 
 :root {
-    --bg: #18191d;
-    --surface: #1f2126;
-    --surface-elevated: #282b32;
-    --surface-sunken: #141518;
-    --border: #2d3037;
-    --border-strong: #3c404a;
-    --text: #e6e8ec;
-    --text-muted: #a3a8b2;
-    --text-faint: #737984;
-    --accent: #7468e8;
-    --accent-hover: #8579f0;
-    --accent-soft: rgba(116, 104, 232, 0.14);
+    --bg: #111217;
+    --surface: #1a1c23;
+    --surface-elevated: #24272f;
+    --surface-sunken: #0d0e12;
+    --border: #2a2d36;
+    --border-strong: #3a3e4a;
+    --text: #eceef3;
+    --text-muted: #a7acb8;
+    --text-faint: #737a88;
+    --accent: #9146ff;
+    --accent-hover: #a366ff;
+    --accent-2: #5b8cff;
+    --accent-soft: rgba(145, 70, 255, 0.16);
+    --accent-glow: rgba(145, 70, 255, 0.35);
     --accent-text: #ffffff;
     --success: #3fb67a;
     --warning: #d6a23c;
@@ -356,3 +358,77 @@ select:not(.field select) { max-width: 360px; width: 100%; }
 
 /* Texte d'introduction d'une section : un peu d'air avant le contenu. */
 .settings-section > h2 + p, .settings-section > h2 + .hint { margin: calc(-1 * var(--space-3)) 0 var(--space-4); }
+
+/* ------------------------------------------------------------------------------------------
+   Identité : le violet de Twitch (celui des overlays), profondeur, états en couleur.
+   Uniquement des couleurs et des effets : la disposition ne change pas.
+   ------------------------------------------------------------------------------------------ */
+
+body {
+    background:
+        radial-gradient(1200px 600px at 85% -10%, rgba(145, 70, 255, 0.10), transparent 60%),
+        radial-gradient(900px 500px at 10% 110%, rgba(91, 140, 255, 0.06), transparent 60%),
+        var(--bg);
+    background-attachment: fixed;
+}
+.main { background: transparent; }
+
+.chrome { background: var(--surface-sunken); border-bottom-color: rgba(145, 70, 255, 0.18); }
+.chrome-brand { color: var(--text); }
+
+.sidebar { background: linear-gradient(180deg, rgba(145, 70, 255, 0.06), transparent 240px), var(--surface-sunken); }
+.nav-item.active {
+    background: linear-gradient(90deg, rgba(145, 70, 255, 0.22), rgba(145, 70, 255, 0.06));
+    color: #fff;
+}
+.nav-item.active::before { background: var(--accent); box-shadow: 0 0 10px var(--accent-glow); }
+.nav-item.active svg.icon { color: #c4a3ff; }
+.nav-item:hover svg.icon { color: var(--text); }
+
+h1 { background: linear-gradient(90deg, #ffffff 30%, #c9b0ff); -webkit-background-clip: text; background-clip: text; color: transparent; }
+
+.card {
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.025), transparent 120px), var(--surface);
+    border-color: var(--border);
+    box-shadow: 0 1px 0 rgba(255, 255, 255, 0.04) inset, 0 8px 24px rgba(0, 0, 0, 0.25);
+}
+.card-title, .card > h2.card-title, .card > h3.card-title {
+    color: #d7c4ff;
+    background: linear-gradient(90deg, rgba(145, 70, 255, 0.14), rgba(145, 70, 255, 0) 70%);
+    border-bottom-color: rgba(145, 70, 255, 0.18);
+}
+.sub-block { background: rgba(13, 14, 18, 0.7); }
+
+.btn-primary {
+    background: linear-gradient(135deg, #9b55ff, #7a3cf0);
+    box-shadow: 0 4px 14px rgba(145, 70, 255, 0.3);
+}
+.btn-primary:hover { background: linear-gradient(135deg, #a76bff, #8a4dff); }
+.btn:not(.btn-primary):not(.btn-danger):not(.btn-ghost):hover { border-color: rgba(145, 70, 255, 0.5); }
+
+input:focus, textarea:focus, select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.checkbox-row input[type="checkbox"] { accent-color: var(--accent); }
+
+.tab-btn.active { color: #fff; border-bottom-color: var(--accent); }
+.settings-nav-btn.active { background: linear-gradient(90deg, rgba(145, 70, 255, 0.22), rgba(145, 70, 255, 0.05)); color: #fff; }
+.section-label { color: #a990e0; }
+
+/* États en couleur (tableau de bord, barre latérale). */
+.tag {
+    display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 10px; border-radius: 12px;
+    font-size: 12px; font-weight: 600; background: rgba(255, 255, 255, 0.06); color: var(--text-muted);
+}
+.tag::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+.tag.ok { background: rgba(63, 182, 122, 0.14); color: #5fd49a; }
+.tag.warn { background: rgba(214, 162, 60, 0.14); color: #e8b95a; }
+.tag.bad { background: rgba(229, 99, 106, 0.14); color: #ff8a90; }
+.tag.live { background: rgba(255, 64, 88, 0.16); color: #ff6b80; }
+.tag.live::before { animation: pulse 1.6s ease-in-out infinite; }
+@keyframes pulse { 50% { opacity: 0.35; } }
+.metric-big { font-size: 26px; font-weight: 700; color: #fff; font-variant-numeric: tabular-nums; line-height: 1.1; }
+.metric-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(90px, 1fr)); gap: var(--space-3); margin-top: var(--space-3); }
+.metric-grid > div { background: rgba(13, 14, 18, 0.6); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 10px 12px; }
+.metric-grid span { display: block; font-size: 12px; color: var(--text-faint); margin-top: 4px; }
+
+.table tbody tr:hover td { background: rgba(145, 70, 255, 0.05); }
+.table td.url { color: #c4b5f5; }
