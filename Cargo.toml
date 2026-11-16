@@ -1,0 +1,15 @@
+[workspace]
+resolver = "2"
+members = ["crates/electrum-core", "src-tauri"]
+# `cargo test` / `cargo build` à la racine ne visent que le cœur (testable partout) ;
+# l'app se lance avec `cargo tauri dev`.
+default-members = ["crates/electrum-core"]
+
+[workspace.package]
+version = "3.0.0-alpha.0"
+edition = "2021"
+license = "MIT"
+
+[workspace.dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["preserve_order"] }

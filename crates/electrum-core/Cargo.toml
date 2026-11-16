@@ -1,0 +1,19 @@
+[package]
+name = "electrum-core"
+description = "Cœur d'ElectrumOverlay : config, profils, formats de données (voir docs/FORMATS.md)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+base64 = "0.22"
+chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
+dirs = "6"
+thiserror = "2"
+uuid = { version = "1", features = ["v4"] }
+
+[dev-dependencies]
+regex = "1.13.1"
+tempfile = "3"
