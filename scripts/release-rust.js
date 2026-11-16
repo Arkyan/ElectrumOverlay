@@ -3,7 +3,8 @@
  * Release de la version Rust (Tauri) — voir docs/RELEASE-RUST.md avant la première utilisation.
  *
  *   node scripts/release-rust.js              build signé + release GitHub en BROUILLON
- *   node scripts/release-rust.js --skip-build réutilise le build déjà présent dans target/
+ *   node scripts/release-rust.js --skip-build réutilise l'installateur déjà compilé dans target/
+ *                                             (le plugin Stream Deck est toujours reconstruit)
  *
  * La release contient :
  * - l'installateur NSIS (ElectrumOverlay_<version>_x64-setup.exe) ;
@@ -83,8 +84,13 @@ function main() {
             throw new Error('TAURI_SIGNING_PRIVATE_KEY non défini — voir docs/RELEASE-RUST.md');
         }
         run('cargo', ['tauri', 'build']);
-        run('npm', ['run', 'package:streamdeck']);
     }
+    // Plugin Stream Deck : ses dépendances (rollup...) ne sont pas installées par défaut sur un
+    // nouveau PC — on les installe si besoin.
+    if (!fs.existsSync(path.join(ROOT, 'streamdeck-plugin', 'node_modules'))) {
+        run('npm', ['install'], { cwd: path.join(ROOT, 'streamdeck-plugin') });
+    }
+    run('npm', ['run', 'package:streamdeck']);
 
     const installerName = `ElectrumOverlay_${version}_x64-setup.exe`;
     const installer = path.join(ROOT, 'target', 'release', 'bundle', 'nsis', installerName);
