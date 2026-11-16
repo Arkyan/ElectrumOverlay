@@ -25,6 +25,27 @@
     "resources": {
       "../public/": "public/",
       "../src/templates/": "templates/"
+    },
+    "createUpdaterArtifacts": true,
+    "windows": {
+      "nsis": {
+        "installMode": "currentUser",
+        "installerHooks": "./windows/hooks.nsh",
+        "languages": [
+          "French"
+        ]
+      }
+    }
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "À_REMPLACER_PAR_LA_CLÉ_PUBLIQUE (voir docs/RELEASE-RUST.md)",
+      "endpoints": [
+        "https://github.com/Arkyan/ElectrumOverlay/releases/latest/download/latest.json"
+      ],
+      "windows": {
+        "installMode": "passive"
+      }
     }
   }
 }

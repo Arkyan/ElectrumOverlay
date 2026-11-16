@@ -103,8 +103,10 @@ $env:ELECTRUM_CONFIG_DIR = "C:\chemin\vers\une\copie\config"
 | Pont `window.electronAPI` (barre de titre, bouton « Arrêter le serveur », bannière de mise à jour) | ✅ testé dans Chromium sur les vraies pages |
 | Fermer = cacher ; icône de la zone de notification avec menu | ✅ |
 | Arrêt / redémarrage du serveur (ports libérés, overlays déconnectés) | ✅ testé |
-| Mises à jour automatiques | ⏳ |
-| Reprise de la config par l'installateur, première release Rust | ⏳ |
+| Mises à jour automatiques (signées), entrée « Installer la mise à jour » dans le menu | ✅ (clé de signature à générer, voir RELEASE-RUST.md) |
+| Installateur : désinstalle l'ancienne version Electron, reprend la config | ✅ testé sous Wine |
+| Script de release (installateur, `latest.json`, `latest.yml` pour la bascule Electron) | ✅ `latest.yml` vérifié avec electron-updater |
+| Première pré-version Rust, test réel de la bascule 2.5.2 → 3.0 | ⏳ voir [RELEASE-RUST.md](RELEASE-RUST.md) |
 
 ## Différences volontaires avec la version Node
 

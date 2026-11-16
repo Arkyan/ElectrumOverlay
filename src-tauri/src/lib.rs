@@ -10,10 +10,11 @@
 //! - liens externes ouverts dans le navigateur ; affichage des touches (src/input.rs).
 
 mod input;
+mod updater;
 
 use electrum_core::Store;
 use electrum_server::{AppState, Assets, Running};
-use serde_json::{json, Value};
+use serde_json::Value;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use tauri::menu::{MenuBuilder, MenuEvent, MenuItemBuilder};
@@ -134,7 +135,12 @@ async fn stop_server(app: &AppHandle) {
 async fn refresh_tray(app: &AppHandle) {
     let running = app.state::<Desktop>().server_running().await;
     let Some(tray) = app.tray_by_id(TRAY) else { return };
+    let downloaded = app.state::<updater::Updater>().downloaded_version();
     let build = || -> tauri::Result<_> {
+        let update_item = match &downloaded {
+            Some(version) => MenuItemBuilder::with_id("install-update", format!("Installer la mise à jour (v{version})")).build(app)?,
+            None => MenuItemBuilder::with_id("check-update", "Vérifier les mises à jour").enabled(updater::enabled()).build(app)?,
+        };
         let toggle = if running { "Arrêter le serveur" } else { "Démarrer le serveur" };
         MenuBuilder::new(app)
             .item(&MenuItemBuilder::with_id("open", "Ouvrir").build(app)?)
@@ -144,6 +150,7 @@ async fn refresh_tray(app: &AppHandle) {
             .separator()
             .item(&MenuItemBuilder::with_id("toggle-server", toggle).build(app)?)
             .separator()
+            .item(&update_item)
             .item(&MenuItemBuilder::with_id("quit", "Quitter").build(app)?)
             .build()
     };
@@ -171,16 +178,40 @@ fn on_tray_menu(app: &AppHandle, event: MenuEvent) {
                 }
             });
         }
+        "check-update" => {
+            let app = app.clone();
+            tauri::async_runtime::spawn(async move { updater::check(&app).await });
+        }
+        "install-update" => {
+            let app = app.clone();
+            tauri::async_runtime::spawn(async move {
+                if let Err(error) = updater::install(&app).await {
+                    app.state::<Desktop>().state.log("error", format!("❌ Installation de la mise à jour impossible : {error}"));
+                }
+            });
+        }
         "quit" => {
             let app = app.clone();
-            app.state::<Desktop>().quitting.store(true, Ordering::SeqCst);
             tauri::async_runtime::spawn(async move {
-                stop_server(&app).await;
+                prepare_quit(&app).await;
                 app.exit(0);
             });
         }
         _ => {}
     }
+}
+
+/// Avant de quitter (Quitter, ou installation d'une mise à jour) : la fenêtre doit pouvoir se
+/// fermer pour de bon, et le serveur libérer ses ports.
+pub(crate) async fn prepare_quit(app: &AppHandle) {
+    app.state::<Desktop>().quitting.store(true, Ordering::SeqCst);
+    stop_server(app).await;
+}
+
+/// Met à jour le menu de l'icône en tâche de fond (après un changement d'état).
+pub(crate) fn refresh_tray_later(app: &AppHandle) {
+    let app = app.clone();
+    tauri::async_runtime::spawn(async move { refresh_tray(&app).await });
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -233,19 +264,21 @@ async fn server_stop(app: AppHandle) -> bool {
     false
 }
 
-// Mises à jour automatiques : branchées à l'étape « installateur et mises à jour ».
 #[tauri::command]
-fn updater_status() -> Value {
-    json!({ "status": "idle" })
+fn updater_status(app: AppHandle) -> Value {
+    app.state::<updater::Updater>().status()
 }
 
 #[tauri::command]
-fn updater_check() -> bool {
+fn updater_check(app: AppHandle) -> bool {
+    tauri::async_runtime::spawn(async move { updater::check(&app).await });
     true
 }
 
 #[tauri::command]
-fn updater_install() {}
+async fn updater_install(app: AppHandle) -> Result<(), String> {
+    updater::install(&app).await
+}
 
 // ------------------------------------------------------------------------------------------------
 // Démarrage
@@ -270,6 +303,7 @@ fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
         state.log("info", line);
     }
     let (http_port, ws_port) = electrum_server::configured_ports(&state);
+    app.manage(updater::Updater::default());
     app.manage(Desktop {
         state,
         server: tokio::sync::Mutex::new(None),
@@ -349,7 +383,8 @@ fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
         .build(app)?;
     tauri::async_runtime::block_on(refresh_tray(&handle));
 
-    input::spawn(handle);
+    input::spawn(handle.clone());
+    updater::spawn(handle);
     Ok(())
 }
 
@@ -359,6 +394,7 @@ pub fn run() {
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| show(app, None)))
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .invoke_handler(tauri::generate_handler![
             app_version,
             window_minimize,

@@ -5,3 +5,4 @@ package-lock.json
 /target/
 /src-tauri/target/
 /src-tauri/gen/
+/dist-rust/
