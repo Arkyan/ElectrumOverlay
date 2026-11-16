@@ -362,4 +362,12 @@ async fn toutes_les_pages_de_l_app_utilisent_la_nouvelle_interface() {
     // Tableau de bord : URLs des sources OBS prêtes à copier.
     let home = send(&state, "GET", "/app", None).await.text();
     assert!(home.contains("data-copy=\"http://localhost:8080/starting.html\""));
+    assert!(home.contains("href=\"/css/accent.css\""));
+
+    // La couleur de l'app suit la couleur principale des overlays du profil actif.
+    let id = state.store().active_profile_id().unwrap().to_string();
+    send(&state, "PATCH", &format!("/api/profiles/{id}/theme/index"), Some(json!({ "primary": "#10b981" }))).await;
+    let accent = send(&state, "GET", "/css/accent.css", None).await;
+    assert_eq!(accent.headers["cache-control"], "no-store");
+    assert!(accent.text().contains("--accent: #10b981; --accent-rgb: 16, 185, 129;"));
 }

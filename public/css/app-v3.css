@@ -19,11 +19,13 @@
     --text: #eceef3;
     --text-muted: #a7acb8;
     --text-faint: #737a88;
+    /* Couleur de l'app : par défaut, puis celle des overlays du profil actif via /css/accent.css. */
     --accent: #9146ff;
-    --accent-hover: #a366ff;
+    --accent-rgb: 145, 70, 255;
+    --accent-hover: color-mix(in srgb, var(--accent) 80%, white);
     --accent-2: #5b8cff;
-    --accent-soft: rgba(145, 70, 255, 0.16);
-    --accent-glow: rgba(145, 70, 255, 0.35);
+    --accent-soft: rgba(var(--accent-rgb), 0.16);
+    --accent-glow: rgba(var(--accent-rgb), 0.35);
     --accent-text: #ffffff;
     --success: #3fb67a;
     --warning: #d6a23c;
@@ -319,7 +321,7 @@ p.msg.success { background: rgba(63, 182, 122, 0.08); border-color: rgba(63, 182
 .metric-row + .metric-row { border-top: 1px solid var(--border); }
 .metric-row strong { color: var(--text); font-weight: 600; font-variant-numeric: tabular-nums; text-align: right; }
 .card-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-top: var(--space-4); }
-.banner { display: flex; align-items: center; gap: var(--space-4); padding: 14px 18px; border: 1px solid rgba(116, 104, 232, 0.4); background: var(--accent-soft); border-radius: var(--radius); margin-bottom: var(--space-4); }
+.banner { display: flex; align-items: center; gap: var(--space-4); padding: 14px 18px; border: 1px solid rgba(var(--accent-rgb), 0.4); background: var(--accent-soft); border-radius: var(--radius); margin-bottom: var(--space-4); }
 .banner p { margin: 0; flex: 1; color: var(--text); }
 
 /* Éditeur de scène : la navigation se réduit aux icônes pour laisser la place à l'aperçu. */
@@ -366,26 +368,26 @@ select:not(.field select) { max-width: 360px; width: 100%; }
 
 body {
     background:
-        radial-gradient(1200px 600px at 85% -10%, rgba(145, 70, 255, 0.10), transparent 60%),
+        radial-gradient(1200px 600px at 85% -10%, rgba(var(--accent-rgb), 0.10), transparent 60%),
         radial-gradient(900px 500px at 10% 110%, rgba(91, 140, 255, 0.06), transparent 60%),
         var(--bg);
     background-attachment: fixed;
 }
 .main { background: transparent; }
 
-.chrome { background: var(--surface-sunken); border-bottom-color: rgba(145, 70, 255, 0.18); }
+.chrome { background: var(--surface-sunken); border-bottom-color: rgba(var(--accent-rgb), 0.18); }
 .chrome-brand { color: var(--text); }
 
-.sidebar { background: linear-gradient(180deg, rgba(145, 70, 255, 0.06), transparent 240px), var(--surface-sunken); }
+.sidebar { background: linear-gradient(180deg, rgba(var(--accent-rgb), 0.06), transparent 240px), var(--surface-sunken); }
 .nav-item.active {
-    background: linear-gradient(90deg, rgba(145, 70, 255, 0.22), rgba(145, 70, 255, 0.06));
+    background: linear-gradient(90deg, rgba(var(--accent-rgb), 0.22), rgba(var(--accent-rgb), 0.06));
     color: #fff;
 }
 .nav-item.active::before { background: var(--accent); box-shadow: 0 0 10px var(--accent-glow); }
-.nav-item.active svg.icon { color: #c4a3ff; }
+.nav-item.active svg.icon { color: color-mix(in srgb, var(--accent) 55%, white); }
 .nav-item:hover svg.icon { color: var(--text); }
 
-h1 { background: linear-gradient(90deg, #ffffff 30%, #c9b0ff); -webkit-background-clip: text; background-clip: text; color: transparent; }
+h1 { background: linear-gradient(90deg, #ffffff 30%, color-mix(in srgb, var(--accent) 45%, white)); -webkit-background-clip: text; background-clip: text; color: transparent; }
 
 .card {
     background: linear-gradient(180deg, rgba(255, 255, 255, 0.025), transparent 120px), var(--surface);
@@ -393,25 +395,25 @@ h1 { background: linear-gradient(90deg, #ffffff 30%, #c9b0ff); -webkit-backgroun
     box-shadow: 0 1px 0 rgba(255, 255, 255, 0.04) inset, 0 8px 24px rgba(0, 0, 0, 0.25);
 }
 .card-title, .card > h2.card-title, .card > h3.card-title {
-    color: #d7c4ff;
-    background: linear-gradient(90deg, rgba(145, 70, 255, 0.14), rgba(145, 70, 255, 0) 70%);
-    border-bottom-color: rgba(145, 70, 255, 0.18);
+    color: color-mix(in srgb, var(--accent) 40%, white);
+    background: linear-gradient(90deg, rgba(var(--accent-rgb), 0.14), rgba(var(--accent-rgb), 0) 70%);
+    border-bottom-color: rgba(var(--accent-rgb), 0.18);
 }
 .sub-block { background: rgba(13, 14, 18, 0.7); }
 
 .btn-primary {
-    background: linear-gradient(135deg, #9b55ff, #7a3cf0);
-    box-shadow: 0 4px 14px rgba(145, 70, 255, 0.3);
+    background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 88%, white), color-mix(in srgb, var(--accent) 80%, black));
+    box-shadow: 0 4px 14px rgba(var(--accent-rgb), 0.3);
 }
-.btn-primary:hover { background: linear-gradient(135deg, #a76bff, #8a4dff); }
-.btn:not(.btn-primary):not(.btn-danger):not(.btn-ghost):hover { border-color: rgba(145, 70, 255, 0.5); }
+.btn-primary:hover { background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 78%, white), color-mix(in srgb, var(--accent) 92%, black)); }
+.btn:not(.btn-primary):not(.btn-danger):not(.btn-ghost):hover { border-color: rgba(var(--accent-rgb), 0.5); }
 
 input:focus, textarea:focus, select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
 .checkbox-row input[type="checkbox"] { accent-color: var(--accent); }
 
 .tab-btn.active { color: #fff; border-bottom-color: var(--accent); }
-.settings-nav-btn.active { background: linear-gradient(90deg, rgba(145, 70, 255, 0.22), rgba(145, 70, 255, 0.05)); color: #fff; }
-.section-label { color: #a990e0; }
+.settings-nav-btn.active { background: linear-gradient(90deg, rgba(var(--accent-rgb), 0.22), rgba(var(--accent-rgb), 0.05)); color: #fff; }
+.section-label { color: color-mix(in srgb, var(--accent) 60%, #a7acb8); }
 
 /* États en couleur (tableau de bord, barre latérale). */
 .tag {
@@ -430,5 +432,5 @@ input:focus, textarea:focus, select:focus { border-color: var(--accent); box-sha
 .metric-grid > div { background: rgba(13, 14, 18, 0.6); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 10px 12px; }
 .metric-grid span { display: block; font-size: 12px; color: var(--text-faint); margin-top: 4px; }
 
-.table tbody tr:hover td { background: rgba(145, 70, 255, 0.05); }
-.table td.url { color: #c4b5f5; }
+.table tbody tr:hover td { background: rgba(var(--accent-rgb), 0.05); }
+.table td.url { color: color-mix(in srgb, var(--accent) 40%, #d8dbe2); }

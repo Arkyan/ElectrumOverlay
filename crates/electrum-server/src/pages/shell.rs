@@ -141,13 +141,73 @@ const CLOSE: &str = r#"</main>
     }
     refreshTwitch();
     setInterval(refreshTwitch, 10000);
+
+    // Couleur de l'app = couleur principale des overlays : suit en direct un changement fait dans
+    // Paramètres › Thèmes ou un changement de profil.
+    const accentLink = document.querySelector('link[href^="/css/accent.css"]');
+    let accentCss = null;
+    setInterval(() => {
+        fetch('/css/accent.css').then((r) => r.ok ? r.text() : null).then((css) => {
+            if (css === null) return;
+            if (accentCss !== null && css !== accentCss && accentLink) accentLink.href = '/css/accent.css?v=' + Date.now();
+            accentCss = css;
+        }).catch(() => {});
+    }, 3000);
 })();
 </script>"#;
 
 /// Remplace les repères de structure. `active` = chemin de l'entrée de navigation en surbrillance.
 pub fn wrap(html: &str, active: &str) -> String {
-    html.replacen("{{shell:open}}", &open(active), 1)
+    html.replacen(
+        "<link rel=\"stylesheet\" href=\"/css/app-v3.css\">",
+        "<link rel=\"stylesheet\" href=\"/css/app-v3.css\">\n    <link rel=\"stylesheet\" href=\"/css/accent.css\">",
+        1,
+    )
+    .replacen("{{shell:open}}", &open(active), 1)
         .replacen("{{shell:close}}", CLOSE, 1)
         .replacen("{{shell:standalone}}", "<div class=\"standalone\">", 1)
         .replacen("{{shell:standalone-close}}", "</div>", 1)
+}
+
+/// Couleur de l'app quand le profil n'en définit pas de valide (couleur des overlays par défaut).
+const DEFAULT_ACCENT: (u8, u8, u8) = (0xa8, 0x55, 0xf7);
+
+/// `#rrggbb` → (r, g, b).
+fn parse_hex(color: &str) -> Option<(u8, u8, u8)> {
+    let hex = color.trim().strip_prefix('#')?;
+    if hex.len() != 6 || !hex.chars().all(|c| c.is_ascii_hexdigit()) {
+        return None;
+    }
+    let channel = |i: usize| u8::from_str_radix(&hex[i..i + 2], 16).ok();
+    Some((channel(0)?, channel(2)?, channel(4)?))
+}
+
+/// `/css/accent.css` : la couleur de l'app suit la couleur principale des overlays du profil
+/// actif (thème de la page « En direct »). Le texte des boutons passe en sombre si la couleur
+/// est claire, pour rester lisible.
+pub fn accent_css(config: &serde_json::Value) -> String {
+    let color = config["display"]["themes"]["index"]["primary"].as_str().unwrap_or_default();
+    let (r, g, b) = parse_hex(color).unwrap_or(DEFAULT_ACCENT);
+    let linear = |c: u8| {
+        let c = c as f64 / 255.0;
+        if c <= 0.04045 { c / 12.92 } else { ((c + 0.055) / 1.055).powf(2.4) }
+    };
+    let luminance = 0.2126 * linear(r) + 0.7152 * linear(g) + 0.0722 * linear(b);
+    let text = if luminance > 0.45 { "#111217" } else { "#ffffff" };
+    format!(":root {{ --accent: #{r:02x}{g:02x}{b:02x}; --accent-rgb: {r}, {g}, {b}; --accent-text: {text}; }}\n")
+}
+
+#[cfg(test)]
+mod tests {
+    use serde_json::json;
+
+    #[test]
+    fn couleur_du_profil() {
+        let css = super::accent_css(&json!({ "display": { "themes": { "index": { "primary": "#3B82F6" } } } }));
+        assert_eq!(css, ":root { --accent: #3b82f6; --accent-rgb: 59, 130, 246; --accent-text: #ffffff; }\n");
+        let light = super::accent_css(&json!({ "display": { "themes": { "index": { "primary": "#ffe066" } } } }));
+        assert!(light.contains("--accent-text: #111217"), "texte sombre sur couleur claire");
+        let invalid = super::accent_css(&json!({ "display": { "themes": { "index": { "primary": "rouge" } } } }));
+        assert!(invalid.contains("--accent: #a855f7"));
+    }
 }

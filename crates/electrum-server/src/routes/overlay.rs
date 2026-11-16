@@ -11,6 +11,7 @@ use electrum_core::store::BUILTIN_PAGE_KEYS;
 pub fn router() -> Router<AppState> {
     Router::new()
         .route("/js/config.js", get(config_js))
+        .route("/css/accent.css", get(accent_css))
         .route("/scene/{scene_id}", get(custom_scene))
         .route("/api/stream-stats", get(stream_stats))
         .route("/stream-stats", get(stream_stats))
@@ -20,6 +21,13 @@ pub fn router() -> Router<AppState> {
 async fn config_js(State(state): State<AppState>) -> Response {
     let script = state.store().frontend_config_script();
     ([(header::CONTENT_TYPE, "application/javascript; charset=utf-8")], script).into_response()
+}
+
+/// Couleur de l'interface de l'app, tirée du profil actif (jamais mise en cache : elle change
+/// avec le profil ou ses couleurs).
+async fn accent_css(State(state): State<AppState>) -> Response {
+    let css = crate::pages::shell::accent_css(state.store().config());
+    ([(header::CONTENT_TYPE, "text/css; charset=utf-8"), (header::CACHE_CONTROL, "no-store")], css).into_response()
 }
 
 async fn stream_stats(State(state): State<AppState>) -> Response {
