@@ -39,7 +39,7 @@
   },
   "plugins": {
     "updater": {
-      "pubkey": "À_REMPLACER_PAR_LA_CLÉ_PUBLIQUE (voir docs/RELEASE-RUST.md)",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDUxRDRFMjExMzQ3RTgxNTcKUldSWGdYNDBFZUxVVVRldmFJZEYrMnlWeHk1K01TaU9CbW5WZTJYR2g3Q3NVWnR6MzZwNmp3UGQK",
       "endpoints": [
         "https://github.com/Arkyan/ElectrumOverlay/releases/latest/download/latest.json"
       ],

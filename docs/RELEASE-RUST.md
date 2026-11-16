@@ -15,9 +15,9 @@ La commande demande un mot de passe et crée deux fichiers :
 - `electrumoverlay.key` : la **clé privée**. À garder précieusement (gestionnaire de mots de
   passe + sauvegarde), **jamais dans le dépôt**. Perdue = les apps installées refuseront toutes
   les futures mises à jour (réinstallation manuelle obligatoire pour tout le monde).
-- `electrumoverlay.key.pub` : la clé publique. Copie son contenu dans
-  `src-tauri/tauri.conf.json`, à la place de `À_REMPLACER_PAR_LA_CLÉ_PUBLIQUE...`
-  (`plugins.updater.pubkey`), puis commite ce changement.
+- `electrumoverlay.key.pub` : la clé publique, intégrée dans `src-tauri/tauri.conf.json`
+  (`plugins.updater.pubkey`). ✅ Fait : clé `51D4E211347E8157`. Si un jour tu changes de clé,
+  remplace cette valeur (les apps déjà installées n'accepteront alors plus les mises à jour).
 
 Ce n'est **pas** un certificat de signature de code Windows (celui qui évite l'avertissement
 SmartScreen) : celui-là est payant et optionnel, et rien ne change de ce côté.

@@ -1168,7 +1168,7 @@ checksum = "0e9c71c2167ca323c882b99918929403426e2373ea17242ff5653e0d5e1058be"
 
 [[package]]
 name = "electrum-core"
-version = "3.0.0-alpha.0"
+version = "3.0.0-beta.1"
 dependencies = [
  "base64 0.22.1",
  "chrono",
@@ -1183,7 +1183,7 @@ dependencies = [
 
 [[package]]
 name = "electrum-overlay"
-version = "3.0.0-alpha.0"
+version = "3.0.0-beta.1"
 dependencies = [
  "electrum-core",
  "electrum-server",
@@ -1201,7 +1201,7 @@ dependencies = [
 
 [[package]]
 name = "electrum-server"
-version = "3.0.0-alpha.0"
+version = "3.0.0-beta.1"
 dependencies = [
  "axum",
  "base64 0.22.1",
