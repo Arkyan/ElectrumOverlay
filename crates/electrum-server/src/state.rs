@@ -34,6 +34,8 @@ pub struct Inner {
     pub spotify: crate::spotify::SpotifyState,
     /// Base de l'API Trucky (`https://e.truckyapp.com/api/`).
     pub trucky_base: String,
+    /// Incrémenté à chaque arrêt du serveur : les overlays connectés se ferment.
+    overlays_generation: tokio::sync::watch::Sender<u64>,
 }
 
 /// URLs des services externes, remplaçables par de faux serveurs dans les tests.
@@ -86,6 +88,7 @@ impl AppState {
             twitch: TwitchState::new(external.twitch),
             spotify: crate::spotify::SpotifyState::new(external.spotify),
             trucky_base: external.trucky,
+            overlays_generation: tokio::sync::watch::channel(0).0,
         }))
     }
 
@@ -103,6 +106,16 @@ impl AppState {
     pub fn broadcast(&self, event: &Value) {
         // Aucun abonné = aucun overlay ouvert : pas une erreur.
         let _ = self.events.send(to_js_string(event));
+    }
+
+    /// Signal de fermeture des connexions WebSocket des overlays (arrêt du serveur).
+    pub fn overlays_closing(&self) -> tokio::sync::watch::Receiver<u64> {
+        self.overlays_generation.subscribe()
+    }
+
+    /// Ferme toutes les connexions WebSocket des overlays.
+    pub fn close_overlays(&self) {
+        self.overlays_generation.send_modify(|generation| *generation += 1);
     }
 
     pub fn subscribe(&self) -> broadcast::Receiver<String> {

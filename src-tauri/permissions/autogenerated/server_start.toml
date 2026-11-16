@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-server-start"
+description = "Enables the server_start command without any pre-configured scope."
+commands.allow = ["server_start"]
+
+[[permission]]
+identifier = "deny-server-start"
+description = "Denies the server_start command without any pre-configured scope."
+commands.deny = ["server_start"]

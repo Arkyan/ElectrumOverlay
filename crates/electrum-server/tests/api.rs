@@ -300,3 +300,32 @@ async fn websocket_de_bout_en_bout() {
     assert!(response.starts_with("HTTP/1.1 200"), "{response}");
     assert_eq!(next_json(&mut socket).await, json!({ "type": "show-panel", "panel": "bottom" }));
 }
+
+#[tokio::test]
+async fn arret_puis_redemarrage_du_serveur() {
+    let (state, _dir) = new_state();
+    let running = electrum_server::start(state.clone(), 0, 0).await.unwrap();
+    let (http_port, ws_port) = (running.http.port(), running.ws.port());
+    let (mut socket, _) = tokio_tungstenite::connect_async(format!("ws://127.0.0.1:{ws_port}")).await.unwrap();
+    assert_eq!(next_json(&mut socket).await["type"], "connected");
+
+    running.stop().await;
+
+    // L'overlay connecté est déconnecté, et plus rien n'écoute sur les ports.
+    let closed = tokio::time::timeout(std::time::Duration::from_secs(3), async {
+        loop {
+            match socket.next().await {
+                None | Some(Err(_)) | Some(Ok(tokio_tungstenite::tungstenite::Message::Close(_))) => return,
+                Some(Ok(_)) => continue,
+            }
+        }
+    })
+    .await;
+    assert!(closed.is_ok(), "l'overlay aurait dû être déconnecté");
+    assert!(tokio::net::TcpStream::connect(("127.0.0.1", http_port)).await.is_err(), "le port HTTP devrait être libéré");
+
+    // Redémarrage sur les mêmes ports, avec le même état.
+    let running = electrum_server::start(state.clone(), http_port, ws_port).await.unwrap();
+    assert!(raw_post(http_port, "/api/panels/left/show").await.starts_with("HTTP/1.1 200"));
+    running.stop().await;
+}

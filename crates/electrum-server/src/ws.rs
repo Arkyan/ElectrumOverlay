@@ -19,6 +19,8 @@ async fn upgrade(ws: WebSocketUpgrade, State(state): State<AppState>) -> Respons
 
 async fn client(mut socket: WebSocket, state: AppState) {
     let mut events = state.subscribe();
+    let mut closing = state.overlays_closing();
+    closing.mark_unchanged();
     let welcome = json!({ "type": "connected", "message": "Connexion WebSocket établie" });
     if socket.send(Message::Text(welcome.to_string().into())).await.is_err() {
         return;
@@ -26,6 +28,10 @@ async fn client(mut socket: WebSocket, state: AppState) {
 
     loop {
         tokio::select! {
+            _ = closing.changed() => {
+                let _ = socket.send(Message::Close(None)).await;
+                break;
+            }
             event = events.recv() => match event {
                 Ok(text) => {
                     if socket.send(Message::Text(text.into())).await.is_err() {

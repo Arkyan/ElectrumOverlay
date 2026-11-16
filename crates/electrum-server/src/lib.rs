@@ -8,6 +8,7 @@
 
 pub mod commands;
 pub mod events;
+pub mod input;
 pub mod pages;
 pub mod routes;
 pub mod spotify;
@@ -43,11 +44,34 @@ pub fn http_router(state: AppState) -> Router {
         .with_state(state)
 }
 
-/// Adresses effectivement écoutées.
-#[derive(Debug, Clone, Copy)]
+/// Serveur démarré : adresses écoutées, et de quoi l'arrêter proprement.
 pub struct Running {
     pub http: SocketAddr,
     pub ws: SocketAddr,
+    state: AppState,
+    shutdown: tokio::sync::watch::Sender<bool>,
+    servers: Vec<tokio::task::JoinHandle<()>>,
+    background: Vec<tokio::task::JoinHandle<()>>,
+}
+
+impl Running {
+    /// Arrête le serveur : plus de nouvelles connexions, connexions inactives et overlays
+    /// connectés fermés, EventSub et suivis (viewers, Spotify) coupés. Les ports sont libérés à
+    /// la fin de l'appel, l'état (config, stats) est conservé pour un redémarrage.
+    pub async fn stop(self) {
+        let _ = self.shutdown.send(true);
+        self.state.close_overlays();
+        for task in &self.background {
+            task.abort();
+        }
+        for task in self.servers {
+            let abort = task.abort_handle();
+            if tokio::time::timeout(std::time::Duration::from_secs(3), task).await.is_err() {
+                abort.abort();
+            }
+        }
+        self.state.twitch.set_status(|s| *s = Default::default());
+    }
 }
 
 /// Ports configurés (`server.PORT` / `server.WS_PORT`, 8080 / 8081 par défaut).
@@ -58,9 +82,9 @@ pub fn configured_ports(state: &AppState) -> (u16, u16) {
     (port("PORT", 8080), port("WS_PORT", 8081))
 }
 
-/// Ouvre les deux ports puis sert en tâche de fond, et lance la connexion EventSub et le suivi
-/// du nombre de viewers. Renvoie une erreur claire si un port est
-/// déjà pris (par exemple par la version Electron encore ouverte).
+/// Ouvre les deux ports puis sert en tâche de fond, et lance la connexion EventSub et les suivis
+/// (viewers, Spotify). Renvoie une erreur claire si un port est déjà pris (par exemple par la
+/// version Electron encore ouverte).
 pub async fn start(state: AppState, http_port: u16, ws_port: u16) -> io::Result<Running> {
     let bind = |port: u16, label: &'static str| async move {
         TcpListener::bind(("0.0.0.0", port)).await.map_err(|error| {
@@ -69,22 +93,35 @@ pub async fn start(state: AppState, http_port: u16, ws_port: u16) -> io::Result<
     };
     let http_listener = bind(http_port, "HTTP").await?;
     let ws_listener = bind(ws_port, "WebSocket").await?;
-    let running = Running { http: http_listener.local_addr()?, ws: ws_listener.local_addr()? };
+    let (http, ws) = (http_listener.local_addr()?, ws_listener.local_addr()?);
 
-    let http = http_router(state.clone());
-    tokio::spawn(async move {
-        if let Err(error) = axum::serve(http_listener, http).await {
-            eprintln!("❌ Serveur HTTP arrêté : {error}");
+    let (shutdown, _) = tokio::sync::watch::channel(false);
+    let signal = |shutdown: &tokio::sync::watch::Sender<bool>| {
+        let mut rx = shutdown.subscribe();
+        async move {
+            let _ = rx.wait_for(|stop| *stop).await;
         }
-    });
-    tokio::spawn(twitch::eventsub::run(state.clone(), twitch::eventsub::Options::default()));
-    tokio::spawn(twitch::poll_viewer_count(state.clone()));
-    tokio::spawn(spotify::poll(state.clone(), std::time::Duration::from_secs(5)));
-    let ws_app = ws::router(state);
-    tokio::spawn(async move {
-        if let Err(error) = axum::serve(ws_listener, ws_app).await {
-            eprintln!("❌ Serveur WebSocket arrêté : {error}");
-        }
-    });
-    Ok(running)
+    };
+    let http_app = http_router(state.clone());
+    let http_signal = signal(&shutdown);
+    let ws_app = ws::router(state.clone());
+    let ws_signal = signal(&shutdown);
+    let servers = vec![
+        tokio::spawn(async move {
+            if let Err(error) = axum::serve(http_listener, http_app).with_graceful_shutdown(http_signal).await {
+                eprintln!("❌ Serveur HTTP arrêté : {error}");
+            }
+        }),
+        tokio::spawn(async move {
+            if let Err(error) = axum::serve(ws_listener, ws_app).with_graceful_shutdown(ws_signal).await {
+                eprintln!("❌ Serveur WebSocket arrêté : {error}");
+            }
+        }),
+    ];
+    let background = vec![
+        tokio::spawn(twitch::eventsub::run(state.clone(), twitch::eventsub::Options::default())),
+        tokio::spawn(twitch::poll_viewer_count(state.clone())),
+        tokio::spawn(spotify::poll(state.clone(), std::time::Duration::from_secs(5))),
+    ];
+    Ok(Running { http, ws, state, shutdown, servers, background })
 }

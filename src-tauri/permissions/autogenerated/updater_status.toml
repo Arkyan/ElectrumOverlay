@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-updater-status"
+description = "Enables the updater_status command without any pre-configured scope."
+commands.allow = ["updater_status"]
+
+[[permission]]
+identifier = "deny-updater-status"
+description = "Denies the updater_status command without any pre-configured scope."
+commands.deny = ["updater_status"]

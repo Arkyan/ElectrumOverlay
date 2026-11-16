@@ -95,12 +95,15 @@ $env:ELECTRUM_CONFIG_DIR = "C:\chemin\vers\une\copie\config"
 | Redirection vers `/setup` tant que Twitch n'est pas configuré | ✅ |
 | `/status`, `/subscriptions`, badges, nombre de viewers | ✅ |
 | Liens externes (Twitch, Spotify...) ouverts dans le navigateur | ✅ |
-| Barre de titre de l'app, bouton « Arrêter le serveur » (API `window.electronAPI`) | ⏳ |
 | Spotify : connexion du compte, renouvellement du token, morceau en cours | ✅ testé contre un faux Spotify (à valider avec un vrai compte) |
 | Page `/integrations` (Spotify, Trucky, affichage des touches) | ✅ HTML identique à Node (testé) |
 | Trucky `/api/info-panel` : HTTP direct, navigateur invisible si Cloudflare bloque | ✅ testé (faux Trucky + Chromium) |
-| Capture clavier (affichage des touches) | ⏳ |
-| Icône de la barre des tâches, mises à jour automatiques | ⏳ |
+| Affichage des touches : capture clavier/souris (Windows) | ✅ logique testée, compile pour Windows (à valider en jeu) |
+| Instance unique, fenêtre sans bordure + barre de titre maison | ✅ |
+| Pont `window.electronAPI` (barre de titre, bouton « Arrêter le serveur », bannière de mise à jour) | ✅ testé dans Chromium sur les vraies pages |
+| Fermer = cacher ; icône de la zone de notification avec menu | ✅ |
+| Arrêt / redémarrage du serveur (ports libérés, overlays déconnectés) | ✅ testé |
+| Mises à jour automatiques | ⏳ |
 | Reprise de la config par l'installateur, première release Rust | ⏳ |
 
 ## Différences volontaires avec la version Node
@@ -114,6 +117,9 @@ $env:ELECTRUM_CONFIG_DIR = "C:\chemin\vers\une\copie\config"
 - L'assistant `/setup` ne redémarre plus l'app : la connexion Twitch est simplement relancée.
 - Trucky : un appel HTTP direct est tenté d'abord ; le Chrome/Edge installé n'est lancé (une
   seule fois par mise à jour du panneau, au lieu d'une fois par appel) que si Cloudflare bloque.
+- Affichage des touches : une fois activée, la capture du clavier ne peut plus être retirée
+  sans quitter l'app (limite de la bibliothèque `rdev`) ; quand l'affichage est désactivé ou le
+  serveur arrêté, plus rien n'est transmis aux overlays.
 - L'image de marque saisie dans `/setup` est enregistrée dans le profil actif (côté Node, elle
   partait à la racine de la config et était perdue au redémarrage dès qu'un profil existait).
 
