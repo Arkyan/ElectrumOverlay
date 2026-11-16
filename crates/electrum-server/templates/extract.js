@@ -26,6 +26,8 @@ const PAGES = {
     'integrations': ['src/routes/integrations.js', 'const INTEGRATIONS_PAGE_HTML'],
     'setup': ['src/routes/setup.js', 'const SETUP_PAGE_HTML'],
     'app': ['server.js', "this.app.get('/app'"],
+    'auth-url': ['src/routes/api.js', "router.get('/auth-url'"],
+    'auth-callback': ['src/routes/api.js', "router.get('/auth-callback'"],
     'stream-stats': ['src/services/StreamStatsManager.js', 'generateHTMLStats() {']
 };
 

@@ -232,6 +232,16 @@
     "source": "server.js",
     "expressions": []
   },
+  "auth-url": {
+    "source": "src/routes/api.js",
+    "expressions": [
+      "authUrl"
+    ]
+  },
+  "auth-callback": {
+    "source": "src/routes/api.js",
+    "expressions": []
+  },
   "stream-stats": {
     "source": "src/services/StreamStatsManager.js",
     "expressions": [

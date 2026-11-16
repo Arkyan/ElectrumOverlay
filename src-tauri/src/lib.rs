@@ -5,7 +5,8 @@
 use electrum_core::Store;
 use electrum_server::{AppState, Assets};
 use std::path::PathBuf;
-use tauri::{Manager, WebviewUrl, WebviewWindowBuilder};
+use tauri::webview::NewWindowResponse;
+use tauri::{Manager, Url, WebviewUrl, WebviewWindowBuilder};
 use tauri_plugin_dialog::{DialogExt, MessageDialogKind};
 
 /// `public/` et `src/templates/` : lus directement dans le dépôt en développement, embarqués
@@ -17,6 +18,20 @@ fn resolve_assets(app: &tauri::App) -> tauri::Result<Assets> {
     } else {
         let resources = app.path().resource_dir()?;
         Ok(Assets { public_dir: resources.join("public"), templates_dir: resources.join("templates") })
+    }
+}
+
+/// Un lien vers autre chose que notre propre serveur (autorisation Twitch, Spotify, docs...)
+/// s'ouvre dans le navigateur habituel, pas dans la fenêtre de l'app — comme la version Electron.
+fn is_own_server(url: &Url, port: u16) -> bool {
+    matches!(url.scheme(), "http" | "https")
+        && matches!(url.host_str(), Some("localhost") | Some("127.0.0.1"))
+        && url.port_or_known_default() == Some(port)
+}
+
+fn open_in_browser(url: &Url) {
+    if let Err(error) = tauri_plugin_opener::open_url(url.as_str(), None::<&str>) {
+        eprintln!("❌ Impossible d'ouvrir {url} : {error}");
     }
 }
 
@@ -60,10 +75,23 @@ fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     state.log("info", format!("🔌 WebSocket : ws://localhost:{}", running.ws.port()));
     app.manage(state);
 
-    let url = format!("http://localhost:{}/app", running.http.port()).parse()?;
+    let port = running.http.port();
+    let url = format!("http://localhost:{port}/app").parse()?;
     WebviewWindowBuilder::new(app, "main", WebviewUrl::External(url))
         .title("ElectrumOverlay")
         .inner_size(1280.0, 800.0)
+        .on_navigation(move |url| {
+            if is_own_server(url, port) {
+                return true;
+            }
+            open_in_browser(url);
+            false
+        })
+        // target="_blank" : toujours dans le navigateur, jamais dans une nouvelle fenêtre de l'app.
+        .on_new_window(|url, _| {
+            open_in_browser(&url);
+            NewWindowResponse::Deny
+        })
         .build()?;
     Ok(())
 }
@@ -71,6 +99,7 @@ fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_opener::init())
         .setup(setup)
         .run(tauri::generate_context!())
         .expect("erreur au lancement de l'application Tauri");

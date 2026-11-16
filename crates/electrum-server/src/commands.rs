@@ -35,6 +35,13 @@ pub fn handle_message(state: &AppState, event: &Value) {
     if !text.trim().starts_with('!') {
         return;
     }
+    // Écho de notre propre réponse (envoyée au nom du streamer) : à ignorer, sinon une réponse
+    // commençant par « ! » relancerait la commande en boucle.
+    if let Some(id) = event.get("message_id").and_then(Value::as_str) {
+        if state.twitch.sent_messages.lock().unwrap_or_else(|p| p.into_inner()).take(id) {
+            return;
+        }
+    }
     let token = text.split_whitespace().next().unwrap_or_default().to_lowercase();
     let command = state.store().list_commands().into_iter().find(|c| {
         electrum_core::json::is_truthy(c.get("enabled")) && c.get("trigger").and_then(Value::as_str) == Some(token.as_str())
@@ -66,8 +73,7 @@ pub fn execute_command(state: &AppState, command: &Value, event: &Value) {
     if electrum_core::json::is_truthy(reply.and_then(|r| r.get("enabled"))) && !message.is_empty() {
         let user = event.get("chatter_user_name").and_then(Value::as_str).unwrap_or_default();
         let message = message.replace("{user}", user);
-        // TODO(migration) : envoi dans le chat Twitch une fois l'API Twitch portée.
-        state.log("warn", format!("⚠️ Réponse chat de {} non envoyée (Twitch pas encore porté en Rust) : {message}", command["trigger"]));
+        crate::twitch::send_chat_message(state, message);
     }
     let action = command.get("overlayAction");
     if electrum_core::json::is_truthy(action.and_then(|a| a.get("enabled"))) {

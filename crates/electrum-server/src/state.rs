@@ -2,6 +2,8 @@
 //! WebSocket vers les overlays.
 
 use crate::stats::StreamStats;
+use crate::twitch::api::Endpoints;
+use crate::twitch::TwitchState;
 use electrum_core::json::to_js_string;
 use electrum_core::Store;
 use serde_json::{json, Value};
@@ -29,6 +31,7 @@ pub struct Inner {
     /// Dernier déclenchement de chaque commande de chat (cooldown, en mémoire seulement).
     pub(crate) command_cooldowns: Mutex<HashMap<String, Instant>>,
     pub assets: Assets,
+    pub twitch: TwitchState,
 }
 
 /// Nombre de lignes de logs conservées pour /logs (comme LogBuffer côté Node).
@@ -47,6 +50,11 @@ impl Deref for AppState {
 
 impl AppState {
     pub fn new(store: Store, assets: Assets) -> Self {
+        Self::with_endpoints(store, assets, Endpoints::default())
+    }
+
+    /// Comme `new`, avec des URLs Twitch au choix (faux serveur Twitch dans les tests).
+    pub fn with_endpoints(store: Store, assets: Assets, endpoints: Endpoints) -> Self {
         let (events, _) = broadcast::channel(256);
         AppState(Arc::new(Inner {
             store: Mutex::new(store),
@@ -55,6 +63,7 @@ impl AppState {
             logs: Mutex::new(VecDeque::new()),
             command_cooldowns: Mutex::new(HashMap::new()),
             assets,
+            twitch: TwitchState::new(endpoints),
         }))
     }
 

@@ -4,6 +4,7 @@
 //! chaque `{{expr:N}}` y remplace une expression serveur, recalculée ici. `tests/pages_parity.rs`
 //! compare le résultat avec le vrai rendu Node.
 
+pub mod changes;
 pub mod js;
 
 use electrum_core::json::number_value;
@@ -22,9 +23,48 @@ pub fn tests() -> String {
     template!("tests").to_string()
 }
 
-/// Accueil de l'app (aucune donnée serveur).
+/// Accueil de l'app (aucune donnée serveur ; mentions de ngrok retirées).
 pub fn app_home() -> String {
-    template!("app").to_string()
+    changes::apply("app", template!("app"))
+}
+
+/// `/auth-url` : lien d'autorisation Twitch.
+pub fn auth_url(url: &str) -> String {
+    fill(template!("auth-url"), &[url.to_string()])
+}
+
+/// `/auth-callback` : récupère le token dans l'URL et l'envoie à `/api/oauth-callback`.
+pub fn auth_callback() -> String {
+    template!("auth-callback").to_string()
+}
+
+/// `/setup` (assistant de configuration), sans la section ngrok.
+pub fn setup(config: &Value) -> String {
+    let twitch = &config["twitch"];
+    let empty = json!({});
+    let bottom = or(at(config, &["display", "panels", "bottom", "content"]), Some(&empty)).unwrap_or(&empty);
+    let login = twitch.get("BROADCASTER_LOGIN").filter(|v| electrum_core::json::is_truthy(Some(v)));
+    let channel = match login {
+        Some(login) => format!("@{} — ID {}", js::string(Some(login)), js::string(twitch.get("BROADCASTER_ID"))),
+        None => {
+            let id = twitch.get("BROADCASTER_ID");
+            if electrum_core::json::is_truthy(id) { js::string(id) } else { "Aucune — autorisez d'abord".to_string() }
+        }
+    };
+    fill(
+        &changes::apply("setup", template!("setup")),
+        &[
+            js::string(at(config, &["server", "PORT"])),
+            esc_v(twitch.get("CLIENT_ID")),
+            if_truthy(twitch.get("CLIENT_SECRET"), "Déjà enregistré — laisser vide pour ne pas changer"),
+            esc(&channel),
+            esc_or(at(config, &["display", "themes", "index", "primary"]), "#a855f7"),
+            esc_or(at(bottom, &["infoTexts", "0"]), ""),
+            esc_or(at(bottom, &["infoTexts", "1"]), ""),
+            esc_or(at(bottom, &["infoTexts", "2"]), ""),
+            esc_or(bottom.get("scrollingText"), ""),
+        ],
+    )
 }
 
 /// Logs en direct : seul le port WebSocket est injecté.

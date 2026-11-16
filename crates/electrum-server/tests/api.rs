@@ -18,7 +18,9 @@ fn repo() -> PathBuf {
 
 fn new_state() -> (AppState, tempfile::TempDir) {
     let dir = tempfile::tempdir().unwrap();
-    let store = Store::open(dir.path()).unwrap();
+    let mut store = Store::open(dir.path()).unwrap();
+    // Config Twitch complète : sinon toutes les pages redirigent vers /setup (comme côté Node).
+    store.save_config(&serde_json::json!({ "twitch": { "CLIENT_ID": "test", "CLIENT_SECRET": "s", "BROADCASTER_ID": "1", "USER_ACCESS_TOKEN": "t" } })).unwrap();
     let assets = Assets { public_dir: repo().join("public"), templates_dir: repo().join("src").join("templates") };
     (AppState::new(store, assets), dir)
 }
@@ -99,6 +101,27 @@ async fn sert_les_overlays_et_la_config() {
     let config: Value = serde_json::from_str(json_part).unwrap();
     assert_eq!(config["server"], json!({ "host": "localhost", "port": 8080, "wsPort": 8081 }));
     assert!(config["alerts"]["types"]["follow"]["sound"].is_null());
+}
+
+#[tokio::test]
+async fn redirige_vers_setup_tant_que_twitch_n_est_pas_configure() {
+    let dir = tempfile::tempdir().unwrap();
+    let assets = Assets { public_dir: repo().join("public"), templates_dir: repo().join("src").join("templates") };
+    let state = AppState::new(Store::open(dir.path()).unwrap(), assets);
+    for path in ["/", "/app", "/settings", "/starting.html"] {
+        let r = send(&state, "GET", path, None).await;
+        assert_eq!(r.headers["location"], "/setup", "{path}");
+    }
+    for path in ["/setup", "/css/app-ui.css", "/js/config.js", "/api/profiles", "/logs", "/auth-callback"] {
+        assert_eq!(send(&state, "GET", path, None).await.status, StatusCode::OK, "{path}");
+    }
+    let setup = send(&state, "GET", "/setup", None).await.text();
+    assert!(!setup.to_lowercase().contains("ngrok"));
+    assert_eq!(send(&state, "POST", "/api/setup/credentials", Some(json!({ "clientId": " abc " }))).await.json()["error"], "Client Secret requis");
+    send(&state, "POST", "/api/setup/credentials", Some(json!({ "clientId": " abc ", "clientSecret": "s" }))).await;
+    let url = send(&state, "GET", "/api/setup/auth-url", None).await.json();
+    assert!(url["url"].as_str().unwrap().contains("client_id=abc&redirect_uri=http%3A%2F%2Flocalhost%3A8080%2Fauth-callback&scope=user%3Aread%3Achat+"));
+    assert_eq!(send(&state, "POST", "/api/setup/finish", Some(json!({}))).await.json()["error"], "Autorisation Twitch requise avant d'enregistrer");
 }
 
 #[tokio::test]

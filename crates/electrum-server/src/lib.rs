@@ -12,6 +12,7 @@ pub mod pages;
 pub mod routes;
 pub mod state;
 pub mod stats;
+pub mod twitch;
 pub mod ws;
 
 pub use state::{AppState, Assets};
@@ -29,10 +30,13 @@ pub fn http_router(state: AppState) -> Router {
     Router::new()
         .merge(routes::overlay::router())
         .merge(routes::pages::router())
+        .merge(routes::twitch::router())
+        .merge(routes::setup::router())
         .merge(routes::profiles::router())
         .merge(routes::settings::router())
         .merge(routes::testtools::router())
         .fallback_service(public)
+        .layer(axum::middleware::from_fn_with_state(state.clone(), routes::setup::redirect_until_configured))
         .with_state(state)
 }
 
@@ -51,7 +55,8 @@ pub fn configured_ports(state: &AppState) -> (u16, u16) {
     (port("PORT", 8080), port("WS_PORT", 8081))
 }
 
-/// Ouvre les deux ports puis sert en tâche de fond. Renvoie une erreur claire si un port est
+/// Ouvre les deux ports puis sert en tâche de fond, et lance la connexion EventSub et le suivi
+/// du nombre de viewers. Renvoie une erreur claire si un port est
 /// déjà pris (par exemple par la version Electron encore ouverte).
 pub async fn start(state: AppState, http_port: u16, ws_port: u16) -> io::Result<Running> {
     let bind = |port: u16, label: &'static str| async move {
@@ -69,6 +74,8 @@ pub async fn start(state: AppState, http_port: u16, ws_port: u16) -> io::Result<
             eprintln!("❌ Serveur HTTP arrêté : {error}");
         }
     });
+    tokio::spawn(twitch::eventsub::run(state.clone(), twitch::eventsub::Options::default()));
+    tokio::spawn(twitch::poll_viewer_count(state.clone()));
     let ws_app = ws::router(state);
     tokio::spawn(async move {
         if let Err(error) = axum::serve(ws_listener, ws_app).await {

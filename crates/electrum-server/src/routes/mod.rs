@@ -4,7 +4,9 @@ pub mod overlay;
 pub mod pages;
 pub mod profiles;
 pub mod settings;
+pub mod setup;
 pub mod testtools;
+pub mod twitch;
 
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};

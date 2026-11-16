@@ -45,7 +45,9 @@ fn fill_value(value: &Value, vars: &HashMap<String, String>) -> Value {
 }
 
 async fn run_rust(dir: &Path) -> Value {
-    let store = Store::open(dir).unwrap();
+    let mut store = Store::open(dir).unwrap();
+    // Config Twitch complète : sinon toutes les pages redirigent vers /setup (comme côté Node).
+    store.save_config(&serde_json::json!({ "twitch": { "CLIENT_ID": "test", "CLIENT_SECRET": "s", "BROADCASTER_ID": "1", "USER_ACCESS_TOKEN": "t" } })).unwrap();
     let repo = here().join("..").join("..");
     let state = AppState::new(store, Assets { public_dir: repo.join("public"), templates_dir: repo.join("src").join("templates") });
     let mut events = state.subscribe();

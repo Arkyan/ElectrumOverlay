@@ -39,6 +39,10 @@ sinon ils sont ignorés) :
 - `crates/electrum-server/tests/pages_parity.rs` : la version Node prépare une config réaliste et
   génère les pages ; Rust ouvre le même dossier et doit produire le même HTML, octet pour octet.
 
+`crates/electrum-server/tests/eventsub.rs` fait tourner la connexion EventSub contre un faux
+serveur Twitch local qui joue le protocole officiel : création des abonnements, notification en
+double, `session_reconnect`, keepalive dépassé, token refusé puis ré-autorisation.
+
 ### Pages HTML
 
 Le HTML des pages vient des routes Node : `crates/electrum-server/templates/extract.js` l'extrait
@@ -85,10 +89,14 @@ $env:ELECTRUM_CONFIG_DIR = "C:\chemin\vers\une\copie\config"
 | Pages `/app`, `/settings`, `/scene-editor`, `/commands`, `/tests`, `/logs`, `/stream-stats-html` | ✅ HTML identique à Node (testé) |
 | Journal `/api/logs` + logs en direct | ✅ |
 | Commandes de chat : API, permissions, cooldown, action overlay | ✅ |
-| Commandes de chat : réponse dans le chat Twitch | ⏳ (avec Twitch) |
-| Pages `/setup`, `/integrations`, autorisation Twitch | ⏳ (avec Twitch / Spotify) |
+| Commandes de chat : réponse dans le chat Twitch (écho ignoré) | ✅ (à valider avec un vrai compte) |
+| **EventSub par WebSocket** : plus de ngrok ni de webhooks | ✅ testé contre un faux Twitch (à valider avec un vrai compte) |
+| Assistant `/setup` (sans ngrok), `/auth-url`, `/auth-callback`, `/api/oauth-callback` | ✅ |
+| Redirection vers `/setup` tant que Twitch n'est pas configuré | ✅ |
+| `/status`, `/subscriptions`, badges, nombre de viewers | ✅ |
+| Liens externes (Twitch, Spotify...) ouverts dans le navigateur | ✅ |
+| Page `/integrations` | ⏳ (avec Spotify) |
 | Barre de titre de l'app, bouton « Arrêter le serveur » (API `window.electronAPI`) | ⏳ |
-| Twitch : OAuth, EventSub **par WebSocket**, chat, badges, viewers | ⏳ |
 | Spotify | ⏳ |
 | Trucky (contournement Cloudflare) | ⏳ |
 | Capture clavier (affichage des touches) | ⏳ |
@@ -96,6 +104,16 @@ $env:ELECTRUM_CONFIG_DIR = "C:\chemin\vers\une\copie\config"
 | Reprise de la config par l'installateur, première release Rust | ⏳ |
 
 ## Différences volontaires avec la version Node
+
+- **Twitch par EventSub WebSocket** au lieu des webhooks : ngrok, son authtoken et le secret de
+  webhook ne servent plus. Leurs valeurs restent dans `overlay-config.json` (ignorées) pour
+  pouvoir revenir à la version Electron pendant la transition. Les pages Rust n'en parlent plus
+  (liste des changements dans `crates/electrum-server/src/pages/changes.rs`, vérifiée par les tests).
+- Au démarrage, le token Twitch est vérifié : message clair s'il est expiré, s'il vient d'une
+  autre application Twitch, ou s'il manque des autorisations (scopes).
+- L'assistant `/setup` ne redémarre plus l'app : la connexion Twitch est simplement relancée.
+- L'image de marque saisie dans `/setup` est enregistrée dans le profil actif (côté Node, elle
+  partait à la racine de la config et était perdue au redémarrage dès qu'un profil existait).
 
 - Les fichiers JSON sont écrits via un fichier temporaire renommé ensuite : un crash en pleine
   écriture ne laisse plus de fichier tronqué. Le contenu écrit est identique.

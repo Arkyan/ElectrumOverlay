@@ -47,8 +47,11 @@ async fn memes_pages_que_la_version_node() {
     let other = node["other"].as_str().unwrap();
 
     let repo = here().join("..").join("..");
+    let mut store = Store::open(dir.path()).unwrap();
+    // Config Twitch complète : sinon toutes les pages redirigent vers /setup (comme côté Node).
+    store.save_config(&serde_json::json!({ "twitch": { "CLIENT_ID": "test", "CLIENT_SECRET": "s", "BROADCASTER_ID": "1", "USER_ACCESS_TOKEN": "t" } })).unwrap();
     let state = AppState::new(
-        Store::open(dir.path()).unwrap(),
+        store,
         Assets { public_dir: repo.join("public"), templates_dir: repo.join("src").join("templates") },
     );
 

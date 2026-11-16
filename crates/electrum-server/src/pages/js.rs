@@ -89,20 +89,19 @@ pub fn js(value: &Value) -> String {
 }
 
 /// Remplit les repères `{{expr:N}}` d'un gabarit extrait par `templates/extract.js`.
+/// Une valeur sans repère est permise : un changement volontaire (`changes.rs`) peut avoir retiré
+/// le passage qui la contenait.
 pub fn fill(template: &str, values: &[String]) -> String {
     let mut out = String::with_capacity(template.len() + values.iter().map(String::len).sum::<usize>());
     let mut rest = template;
-    let mut used = 0;
     while let Some(start) = rest.find("{{expr:") {
         out.push_str(&rest[..start]);
         let end = start + rest[start..].find("}}").expect("repère {{expr:N}} non fermé");
         let index: usize = rest[start + 7..end].parse().expect("numéro de repère invalide");
         out.push_str(values.get(index).unwrap_or_else(|| panic!("valeur manquante pour {{{{expr:{index}}}}}")));
-        used += 1;
         rest = &rest[end + 2..];
     }
     out.push_str(rest);
-    debug_assert_eq!(used, values.len(), "nombre de valeurs différent du nombre de repères");
     out
 }
 
