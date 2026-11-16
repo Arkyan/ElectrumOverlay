@@ -370,4 +370,12 @@ async fn toutes_les_pages_de_l_app_utilisent_la_nouvelle_interface() {
     let accent = send(&state, "GET", "/css/accent.css", None).await;
     assert_eq!(accent.headers["cache-control"], "no-store");
     assert!(accent.text().contains("--accent: #10b981; --accent-rgb: 16, 185, 129;"));
+
+    // Idem en activant un thème prêt à l'emploi.
+    send(&state, "POST", "/api/profiles/seed-theme-presets", None).await;
+    let profiles = state.store().list_profiles().unwrap();
+    let id = profiles.iter().find(|p| p["name"] == "Rouge Braise").unwrap()["id"].as_str().unwrap().to_string();
+    send(&state, "POST", &format!("/api/profiles/{id}/activate"), None).await;
+    let accent = send(&state, "GET", "/css/accent.css", None).await.text();
+    assert!(accent.contains("--accent: #ef4444;"), "{accent}");
 }
