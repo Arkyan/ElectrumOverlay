@@ -345,3 +345,14 @@ p.msg.success { background: rgba(63, 182, 122, 0.08); border-color: rgba(63, 182
     .sidebar-status { align-items: center; padding: var(--space-3) 0; }
     .sidebar-status .btn { padding: 0; width: 40px; }
 }
+
+/* Case à cocher qui active un groupe de champs : sur sa propre ligne, au-dessus des champs. */
+.field-row > .field:has(> .checkbox-row) { grid-column: 1 / -1; }
+.field-row > .field:has(> .checkbox-row) > label:not(.checkbox-row) { display: none; }
+.field-row > .field:has(> .checkbox-row) > .checkbox-row { min-height: 0; font-weight: 600; }
+
+/* Listes déroulantes isolées (hors grille) : largeur raisonnable plutôt que pleine largeur. */
+select:not(.field select) { max-width: 360px; width: 100%; }
+
+/* Texte d'introduction d'une section : un peu d'air avant le contenu. */
+.settings-section > h2 + p, .settings-section > h2 + .hint { margin: calc(-1 * var(--space-3)) 0 var(--space-4); }
