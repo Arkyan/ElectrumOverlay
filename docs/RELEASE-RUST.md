@@ -1,4 +1,4 @@
-# Releases de la version Rust (Tauri) et bascule depuis Electron
+# Releases (et bascule depuis l'ancienne version Electron)
 
 ## 1. Une seule fois : la clé de signature des mises à jour
 
@@ -46,7 +46,7 @@ $env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD = "ton mot de passe"
 ```
 
 ```bash
-node scripts/release-rust.js
+cargo xtask release
 ```
 
 Le script compile l'installateur signé et le plugin Stream Deck, prépare les fichiers de mise à

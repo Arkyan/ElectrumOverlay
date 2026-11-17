@@ -1,6 +1,3 @@
-# Node.js
-node_modules/
-
-# Stream Deck files
+# Produits de compilation et logs écrits par Stream Deck
 *.sdPlugin/bin
 *.sdPlugin/logs

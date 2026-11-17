@@ -112,7 +112,7 @@ async fn redirige_vers_setup_tant_que_twitch_n_est_pas_configure() {
         let r = send(&state, "GET", path, None).await;
         assert_eq!(r.headers["location"], "/setup", "{path}");
     }
-    for path in ["/setup", "/css/app-ui.css", "/js/config.js", "/api/profiles", "/logs", "/auth-callback"] {
+    for path in ["/setup", "/css/app-v3.css", "/js/config.js", "/api/profiles", "/logs", "/auth-callback"] {
         assert_eq!(send(&state, "GET", path, None).await.status, StatusCode::OK, "{path}");
     }
     let setup = send(&state, "GET", "/setup", None).await.text();

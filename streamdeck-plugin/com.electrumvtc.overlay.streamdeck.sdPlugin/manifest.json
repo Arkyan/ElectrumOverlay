@@ -1,6 +1,6 @@
 {
 	"Name": "ElectrumOverlay Deck",
-	"Version": "0.1.0.0",
+	"Version": "0.2.0.0",
 	"Author": "Arkyan",
 	"Actions": [
 		{
@@ -74,12 +74,12 @@
 	],
 	"Category": "ElectrumOverlay Deck",
 	"CategoryIcon": "imgs/plugin/category-icon",
-	"CodePath": "bin/plugin.js",
+	"CodePath": "bin/electrum-deck.exe",
 	"Description": "Controle ElectrumOverlay depuis un Stream Deck.",
 	"Icon": "imgs/plugin/marketplace",
-	"SDKVersion": 3,
+	"SDKVersion": 2,
 	"Software": {
-		"MinimumVersion": "7.1"
+		"MinimumVersion": "6.4"
 	},
 	"OS": [
 		{
@@ -87,9 +87,5 @@
 			"MinimumVersion": "10"
 		}
 	],
-	"Nodejs": {
-		"Version": "24",
-		"Debug": "enabled"
-	},
 	"UUID": "com.electrumvtc.overlay.streamdeck"
 }

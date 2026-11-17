@@ -1,0 +1,3 @@
+[alias]
+# Tâches du projet (voir xtask/src/main.rs) : `cargo xtask release`, `cargo xtask plugin`.
+xtask = "run --quiet --package xtask --"
