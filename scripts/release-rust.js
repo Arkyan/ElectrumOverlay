@@ -116,9 +116,13 @@ function main() {
     if (plugin) assets.push(path.join(distDir, plugin));
     else console.warn('⚠️  Plugin Stream Deck introuvable dans dist/ : non joint à la release');
 
-    const notes = prerelease
-        ? 'Pré-version de test de la version Rust (Tauri). Non proposée en mise à jour automatique.'
-        : 'Version Rust (Tauri) : voir docs/RELEASE-RUST.md.';
+    // Notes de version : docs/notes/<version>.md si le fichier existe (affiché sur GitHub).
+    const notesFile = path.join(ROOT, 'docs', 'notes', `${version}.md`);
+    const notes = fs.existsSync(notesFile)
+        ? fs.readFileSync(notesFile, 'utf-8')
+        : prerelease
+            ? 'Pré-version de test de la version Rust (Tauri). Non proposée en mise à jour automatique.'
+            : 'Version Rust (Tauri) : voir docs/RELEASE-RUST.md.';
     const args = ['release', 'create', `v${version}`, '--repo', REPO, '--draft', '--title', version, '--notes', notes];
     if (prerelease) args.push('--prerelease');
     try {

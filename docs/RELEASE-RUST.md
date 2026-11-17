@@ -35,6 +35,7 @@ gh auth login
 ```
 
 Version : `version` de `[workspace.package]` dans `Cargo.toml` (ex. `3.0.0`, ou `3.0.0-beta.1`).
+Notes affichées sur GitHub : `docs/notes/<version>.md` s'il existe.
 
 ```bash
 $env:TAURI_SIGNING_PRIVATE_KEY = Get-Content -Raw "$env:USERPROFILE\.tauri\electrumoverlay.key"
