@@ -14,6 +14,19 @@ fn broadcast_raw(state: &AppState, event_type: &str, event: &Value) {
     state.broadcast(&json!({ "type": event_type, "data": event }));
 }
 
+/// Diffuse une alerte et la garde dans l'historique du tableau de bord.
+fn broadcast_alert(state: &AppState, event_type: &str, event: &Value, test: bool) {
+    state.history().record(event_type, event, test);
+    broadcast_raw(state, event_type, event);
+}
+
+/// Rejoue une alerte de l'historique (sans recompter les stats).
+pub fn replay(state: &AppState, id: u64) -> bool {
+    let Some(entry) = state.history().get(id) else { return false };
+    broadcast_raw(state, entry["type"].as_str().unwrap_or_default(), &entry["data"]);
+    true
+}
+
 /// Message de chat au format attendu par les overlays (`type: "message"`).
 pub fn chat_message_payload(event: &Value) -> Value {
     let mut badges = Map::new();
@@ -42,6 +55,15 @@ pub fn chat_message_payload(event: &Value) -> Value {
 
 /// Traite un événement EventSub (`subscription.type` + `event`).
 pub fn route_event(state: &AppState, event_type: &str, event: &Value) {
+    route(state, event_type, event, false);
+}
+
+/// Comme `route_event`, pour un faux événement des outils de test (marqué dans l'historique).
+pub fn route_test_event(state: &AppState, event_type: &str, event: &Value) {
+    route(state, event_type, event, true);
+}
+
+fn route(state: &AppState, event_type: &str, event: &Value, test: bool) {
     match event_type {
         "stream.online" => {
             state.stats().start_stream(
@@ -64,20 +86,20 @@ pub fn route_event(state: &AppState, event_type: &str, event: &Value) {
         }
         "channel.follow" => {
             state.stats().add_follow();
-            broadcast_raw(state, "channel.follow", event);
+            broadcast_alert(state, "channel.follow", event, test);
         }
         // Un renouvellement est diffusé comme un abonnement (même alerte côté overlay).
         "channel.subscribe" | "channel.subscription.message" => {
             state.stats().add_subscriber(1);
-            broadcast_raw(state, "channel.subscribe", event);
+            broadcast_alert(state, "channel.subscribe", event, test);
         }
         "channel.subscription.gift" => {
             let total = event.get("total").and_then(Value::as_u64).filter(|t| *t > 0).unwrap_or(1);
             state.stats().add_subscriber(total);
-            broadcast_raw(state, "channel.subscription.gift", event);
+            broadcast_alert(state, "channel.subscription.gift", event, test);
         }
-        "channel.cheer" => broadcast_raw(state, "channel.cheer", event),
-        "channel.raid" => broadcast_raw(state, "channel.raid", event),
+        "channel.cheer" => broadcast_alert(state, "channel.cheer", event, test),
+        "channel.raid" => broadcast_alert(state, "channel.raid", event, test),
         "channel.chat.message" => {
             state.stats().add_chat_message();
             state.broadcast(&chat_message_payload(event));

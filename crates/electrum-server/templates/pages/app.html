@@ -59,6 +59,17 @@
     </div>
 
     <section class="card">
+        <h2 class="card-title with-actions">Derniers événements <button type="button" class="btn btn-sm btn-ghost" id="btnClearHistory" hidden>Vider</button></h2>
+        <p class="hint" id="historyEmpty" style="margin:0;">Aucun événement depuis le lancement de l'app. Les follows, subs, bits et raids apparaîtront ici, avec un bouton pour rejouer l'alerte.</p>
+        <div class="history-scroll" id="historyWrap" hidden>
+            <table class="table">
+                <thead><tr><th>Heure</th><th>Événement</th><th>Viewer</th><th></th></tr></thead>
+                <tbody id="historyRows"></tbody>
+            </table>
+        </div>
+    </section>
+
+    <section class="card">
         <h2 class="card-title">Sources pour OBS</h2>
         <table class="table">
             <thead><tr><th>Scène</th><th>URL (source navigateur, 1920×1080)</th><th></th></tr></thead>
@@ -120,8 +131,45 @@
         }).catch(() => {});
     }
 
+    // Derniers événements + rejouer une alerte.
+    const KINDS = { 'channel.follow': ['Follow', ''], 'channel.subscribe': ['Sub', 'ok'], 'channel.subscription.gift': ['Subs offerts', 'ok'], 'channel.cheer': ['Bits', 'warn'], 'channel.raid': ['Raid', 'live'] };
+    const esc = (t) => String(t ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    let lastHistory = '';
+    function refreshHistory() {
+        fetch('/api/events/history').then((r) => r.json()).then(({ events }) => {
+            const key = events.map((e) => e.id).join(',');
+            if (key === lastHistory) return;
+            lastHistory = key;
+            $('historyEmpty').hidden = events.length > 0;
+            $('historyWrap').hidden = events.length === 0;
+            $('btnClearHistory').hidden = events.length === 0;
+            $('historyRows').innerHTML = events.map((e) => {
+                const [label, cls] = KINDS[e.type] || [e.type, ''];
+                const time = new Date(e.time).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+                return '<tr><td class="nowrap">' + time + '</td>'
+                    + '<td><span class="tag ' + cls + '">' + label + '</span> ' + esc(e.detail) + (e.test ? ' <span class="tag">test</span>' : '') + '</td>'
+                    + '<td><strong>' + esc(e.user || '—') + '</strong></td>'
+                    + '<td class="actions"><button type="button" class="btn btn-sm" data-replay="' + e.id + '">Rejouer</button></td></tr>';
+            }).join('');
+        }).catch(() => {});
+    }
+    $('historyRows').addEventListener('click', (event) => {
+        const button = event.target.closest('[data-replay]');
+        if (!button) return;
+        button.disabled = true;
+        fetch('/api/events/' + button.dataset.replay + '/replay', { method: 'POST' })
+            .finally(() => setTimeout(() => { button.disabled = false; }, 1500));
+    });
+    $('btnClearHistory').addEventListener('click', () => {
+        fetch('/api/events/history', { method: 'DELETE' }).then(refreshHistory);
+    });
+    // Un test rapide apparaît tout de suite dans l'historique.
+    $('quickTests').addEventListener('click', () => setTimeout(refreshHistory, 300));
+
     refreshTwitch();
     refreshStats();
+    refreshHistory();
+    setInterval(refreshHistory, 3000);
     setInterval(refreshTwitch, 10000);
     setInterval(refreshStats, 5000);
 

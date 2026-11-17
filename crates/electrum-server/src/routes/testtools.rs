@@ -1,11 +1,12 @@
 //! Simulation d'événements (page /tests, plugin Stream Deck) : port de `src/routes/testtools.js`.
 
 use super::{body_or_empty, ok, ApiError, ApiResult};
-use crate::events::route_event;
+use crate::events::{replay, route_test_event};
 use crate::state::AppState;
 use axum::body::Bytes;
 use axum::extract::{Path, State};
-use axum::routing::post;
+use axum::routing::{get, post};
+use axum::Json;
 use axum::Router;
 use electrum_core::time::now_iso;
 use serde_json::{json, Map, Value};
@@ -14,6 +15,8 @@ pub fn router() -> Router<AppState> {
     Router::new()
         .route("/api/tests/trigger", post(trigger))
         .route("/api/panels/{panel}/show", post(show_panel))
+        .route("/api/events/history", get(history).delete(clear_history))
+        .route("/api/events/{id}/replay", post(replay_event))
 }
 
 fn with_broadcaster(state: &AppState, fields: Value) -> Value {
@@ -87,7 +90,7 @@ async fn trigger(State(state): State<AppState>, body: Bytes) -> ApiResult {
     let action = body.get("action").and_then(Value::as_str).unwrap_or_default();
     let (event_type, event) =
         build_test_event(&state, action).ok_or_else(|| ApiError::bad_request("Action de test inconnue"))?;
-    route_event(&state, event_type, &event);
+    route_test_event(&state, event_type, &event);
     ok()
 }
 
@@ -96,5 +99,23 @@ async fn show_panel(State(state): State<AppState>, Path(panel): Path<String>) ->
         return Err(ApiError::bad_request("Panneau inconnu (left ou bottom)"));
     }
     state.broadcast(&json!({ "type": "show-panel", "panel": panel }));
+    ok()
+}
+
+/// Dernières alertes reçues (du plus récent au plus ancien).
+async fn history(State(state): State<AppState>) -> Json<Value> {
+    Json(json!({ "events": state.history().list() }))
+}
+
+async fn clear_history(State(state): State<AppState>) -> ApiResult {
+    state.history().clear();
+    ok()
+}
+
+/// Rejoue une alerte sur les overlays.
+async fn replay_event(State(state): State<AppState>, Path(id): Path<u64>) -> ApiResult {
+    if !replay(&state, id) {
+        return Err(ApiError(axum::http::StatusCode::NOT_FOUND, "Événement introuvable (l'historique est vidé au redémarrage)".into()));
+    }
     ok()
 }

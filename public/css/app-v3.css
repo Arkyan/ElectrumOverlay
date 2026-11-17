@@ -434,3 +434,9 @@ input:focus, textarea:focus, select:focus { border-color: var(--accent); box-sha
 
 .table tbody tr:hover td { background: rgba(var(--accent-rgb), 0.05); }
 .table td.url { color: color-mix(in srgb, var(--accent) 40%, #d8dbe2); }
+
+/* Titre de carte avec un bouton à droite (Derniers événements...) */
+.card > h2.card-title.with-actions { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding-top: 8px; padding-bottom: 8px; min-height: 46px; }
+.card-title.with-actions .btn { text-transform: none; letter-spacing: 0; }
+.history-scroll { max-height: 340px; overflow-y: auto; }
+.table td.nowrap { white-space: nowrap; width: 1%; color: var(--text-muted); font-variant-numeric: tabular-nums; }

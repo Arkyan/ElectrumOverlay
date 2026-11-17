@@ -379,3 +379,34 @@ async fn toutes_les_pages_de_l_app_utilisent_la_nouvelle_interface() {
     let accent = send(&state, "GET", "/css/accent.css", None).await.text();
     assert!(accent.contains("--accent: #ef4444;"), "{accent}");
 }
+
+#[tokio::test]
+async fn historique_des_alertes_et_rejouer() {
+    let (state, _dir) = new_state();
+    let mut rx = state.subscribe();
+
+    send(&state, "POST", "/api/tests/trigger", Some(json!({ "action": "raid" }))).await;
+    send(&state, "POST", "/api/tests/trigger", Some(json!({ "action": "chat" }))).await;
+    electrum_server::events::route_event(&state, "channel.subscription.message", &json!({ "user_name": "Bob", "tier": "1000", "cumulative_months": 3 }));
+    while rx.try_recv().is_ok() {}
+
+    // Le message de chat n'est pas une alerte ; le resub est diffusé comme un sub.
+    let events = send(&state, "GET", "/api/events/history", None).await.json()["events"].clone();
+    assert_eq!(events.as_array().unwrap().len(), 2);
+    assert_eq!((events[0]["type"].as_str(), events[0]["detail"].as_str(), events[0]["test"].as_bool()), (Some("channel.subscribe"), Some("Resub 3 mois"), Some(false)));
+    assert_eq!((events[1]["user"].as_str(), events[1]["test"].as_bool()), (Some("TestRaider"), Some(true)));
+
+    // Rejouer rediffuse exactement le même événement, sans recompter les stats.
+    let subs = state.stats().subscribers;
+    let id = events[0]["id"].as_u64().unwrap();
+    assert_eq!(send(&state, "POST", &format!("/api/events/{id}/replay"), None).await.status, StatusCode::OK);
+    let replayed = next_event(&mut rx);
+    assert_eq!(replayed["type"], "channel.subscribe");
+    assert_eq!(replayed["data"]["cumulative_months"], 3);
+    assert_eq!(state.stats().subscribers, subs);
+    assert_eq!(send(&state, "GET", "/api/events/history", None).await.json()["events"].as_array().unwrap().len(), 2);
+
+    assert_eq!(send(&state, "POST", "/api/events/999/replay", None).await.status, StatusCode::NOT_FOUND);
+    send(&state, "DELETE", "/api/events/history", None).await;
+    assert!(send(&state, "GET", "/api/events/history", None).await.json()["events"].as_array().unwrap().is_empty());
+}
