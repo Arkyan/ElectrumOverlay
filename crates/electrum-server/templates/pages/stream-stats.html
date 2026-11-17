@@ -1,0 +1,69 @@
+
+        <html>
+            <head>
+                <title>Statistiques - ElectrumOverlay</title>
+                <meta charset="UTF-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <link rel="stylesheet" href="/css/app-v3.css">
+                <style>
+                    .grid {
+                        display: grid;
+                        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+                        gap: var(--space-3);
+                        margin-top: var(--space-4);
+                    }
+                    .mini-card { background: var(--surface-elevated); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: var(--space-4); text-align: center; }
+                    .mini-card .number { font-size: 30px; font-weight: 700; color: var(--accent); }
+                    .mini-card .label { font-size: 13px; color: var(--text-muted); margin-top: 4px; }
+                    .status-indicator { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: var(--space-2); }
+                    .status-indicator.live { background: var(--error); }
+                    .status-indicator.offline { background: var(--text-faint); }
+                </style>
+            </head>
+            <body>
+{{shell:open}}
+                <div class="page in-app">
+                    <h1>Statistiques du stream</h1>
+
+                    <div class="card">
+                        <h2 class="card-title" id="statusTitle">
+                            <span class="status-indicator" id="statusDot"></span>
+                            <span id="statusText"></span>
+                        </h2>
+                        <p id="statusDetails" class="hint"></p>
+                    </div>
+
+                    <div class="card">
+                        <h2 class="card-title">Ce stream</h2>
+                        <div class="grid">
+                            <div class="mini-card"><div class="number" id="statFollows">0</div><div class="label">Nouveaux follows</div></div>
+                            <div class="mini-card"><div class="number" id="statSubs">0</div><div class="label">Nouveaux abonnés</div></div>
+                            <div class="mini-card"><div class="number" id="statChat">0</div><div class="label">Messages de chat</div></div>
+                        </div>
+                    </div>
+
+                    <p class="hint">Mise à jour automatique toutes les 5 secondes.</p>
+                </div>
+
+                <script>
+                    function render(stats) {
+                        document.getElementById('statusDot').className = 'status-indicator ' + (stats.isLive ? 'live' : 'offline');
+                        document.getElementById('statusText').textContent = stats.isLive ? 'En direct' : 'Hors ligne';
+                        document.getElementById('statusDetails').textContent = stats.isLive
+                            ? [stats.streamDuration, stats.title, stats.game, stats.viewerCount ? stats.viewerCount + ' viewers' : ''].filter(Boolean).join(' • ')
+                            : '';
+                        document.getElementById('statFollows').textContent = stats.follows;
+                        document.getElementById('statSubs').textContent = stats.subscribers;
+                        document.getElementById('statChat').textContent = stats.chatMessages;
+                    }
+
+                    render({{expr:0}});
+
+                    setInterval(() => {
+                        fetch('/api/stream-stats').then(r => r.json()).then(render).catch(() => {});
+                    }, 5000);
+                </script>
+            {{shell:close}}
+</body>
+        </html>
+        

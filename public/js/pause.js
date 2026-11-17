@@ -96,7 +96,7 @@ function startMessageRotation() {
     const messageElements = messages.map((text, index) => {
         const el = document.createElement('div');
         el.className = 'pause-message' + (index === 0 ? ' active' : '');
-        el.textContent = text;
+        el.textContent = tr(text);
         container.appendChild(el);
         return el;
     });
@@ -139,7 +139,7 @@ function startProgressAnimation() {
     function updateProgress() {
         // Changer le texte aléatoirement
         const randomMessage = messages[Math.floor(Math.random() * messages.length)];
-        progressText.textContent = randomMessage;
+        progressText.textContent = tr(randomMessage);
 
         // Animation de la barre
         progressFill.style.animation = 'none';
@@ -247,7 +247,7 @@ function showPauseStats() {
         const progressText = document.querySelector('.pause-progress-text');
         if (progressText && pauseDuration > 60) {
             const minutes = Math.floor(pauseDuration / 60);
-            progressText.textContent = `En pause depuis ${minutes} minute${minutes > 1 ? 's' : ''}...`;
+            progressText.textContent = tr(minutes > 1 ? 'En pause depuis {n} minutes...' : 'En pause depuis {n} minute...', { n: minutes });
         }
     }
 }

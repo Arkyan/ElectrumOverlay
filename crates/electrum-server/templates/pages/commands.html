@@ -1,0 +1,145 @@
+
+<html>
+<head>
+    <title>Commandes - ElectrumOverlay</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="/css/app-v3.css">
+    <style>
+        textarea.cmd-reply-message { width: 100%; font-family: inherit; resize: vertical; }
+
+        .cmd-card { padding: 0; }
+        .cmd-summary {
+            list-style: none;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: var(--space-3);
+            padding: 10px var(--space-4);
+        }
+        .cmd-summary::-webkit-details-marker { display: none; }
+        .cmd-summary::before {
+            content: '▸';
+            display: inline-block;
+            margin-right: var(--space-2);
+            color: var(--text-muted);
+            transition: transform 0.15s ease;
+        }
+        .cmd-card[open] .cmd-summary::before { transform: rotate(90deg); }
+        .cmd-summary-trigger { font-weight: 600; font-size: 13px; margin-right: auto; }
+        .cmd-summary-tags { display: flex; gap: var(--space-2); }
+        .cmd-tag {
+            font-size: 11px;
+            padding: 2px 8px;
+            border-radius: 3px;
+            background: var(--surface-elevated);
+            border: 1px solid var(--border);
+            color: var(--text-muted);
+        }
+        .cmd-body { padding: 0 var(--space-4) var(--space-4); border-top: 1px solid var(--border); padding-top: var(--space-4); }
+    </style>
+</head>
+<body>
+{{shell:open}}
+    <div class="page in-app wide">
+        <h1>Commandes</h1>
+        <p class="hint">Réponse automatique dans le chat et/ou action sur l'overlay. Si les réponses n'arrivent pas, ré-autorise Twitch dans <a href="/setup">Configuration</a>.</p>
+
+        {{expr:0}}
+
+        <div class="section-label">Commandes existantes</div>
+        <div id="commandsList">
+            {{expr:1}}
+        </div>
+    </div>
+
+    <script>
+        function readCommandCard(card) {
+            return {
+                trigger: card.querySelector('.cmd-trigger').value.trim(),
+                enabled: card.querySelector('.cmd-enabled').checked,
+                permission: card.querySelector('.cmd-permission').value,
+                cooldownSeconds: Number(card.querySelector('.cmd-cooldown').value) || 0,
+                chatReply: {
+                    enabled: card.querySelector('.cmd-reply-enabled').checked,
+                    message: card.querySelector('.cmd-reply-message').value
+                },
+                overlayAction: {
+                    enabled: card.querySelector('.cmd-overlay-enabled').checked,
+                    panel: card.querySelector('.cmd-overlay-panel').value
+                }
+            };
+        }
+
+        function showMsg(card, text, ok) {
+            const msg = card.querySelector('.msg');
+            msg.textContent = text;
+            msg.className = 'msg ' + (ok ? 'success' : 'error');
+        }
+
+        document.querySelectorAll('.card[data-command-id]').forEach((card) => {
+            const id = card.dataset.commandId;
+            const isNew = id === 'new';
+
+            card.querySelector('.btn-save').addEventListener('click', async () => {
+                const body = readCommandCard(card);
+                try {
+                    const res = await fetch(isNew ? '/api/commands' : '/api/commands/' + id, {
+                        method: isNew ? 'POST' : 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(body)
+                    });
+                    const data = await res.json();
+                    if (data.ok) {
+                        showMsg(card, 'Enregistré.', true);
+                        setTimeout(() => window.location.reload(), 500);
+                    } else {
+                        showMsg(card, data.error || 'Erreur', false);
+                    }
+                } catch (err) {
+                    showMsg(card, 'Impossible de contacter le serveur.', false);
+                }
+            });
+
+            const deleteBtn = card.querySelector('.btn-delete');
+            if (isNew) {
+                deleteBtn.style.display = 'none';
+            } else {
+                deleteBtn.addEventListener('click', async () => {
+                    if (!confirm('Supprimer cette commande ?')) return;
+                    try {
+                        const res = await fetch('/api/commands/' + id, { method: 'DELETE' });
+                        const data = await res.json();
+                        if (data.ok) {
+                            card.remove();
+                        } else {
+                            showMsg(card, data.error || 'Erreur', false);
+                        }
+                    } catch (err) {
+                        showMsg(card, 'Impossible de contacter le serveur.', false);
+                    }
+                });
+            }
+
+            const testBtn = card.querySelector('.btn-test');
+            if (isNew) {
+                testBtn.style.display = 'none';
+            } else {
+                testBtn.addEventListener('click', async () => {
+                    testBtn.disabled = true;
+                    try {
+                        const res = await fetch('/api/commands/' + id + '/test', { method: 'POST' });
+                        const data = await res.json();
+                        showMsg(card, data.ok ? 'Testé — vérifie le chat/overlay.' : (data.error || 'Erreur'), data.ok);
+                    } catch (err) {
+                        showMsg(card, 'Impossible de contacter le serveur.', false);
+                    }
+                    testBtn.disabled = false;
+                });
+            }
+        });
+    </script>
+{{shell:close}}
+</body>
+</html>

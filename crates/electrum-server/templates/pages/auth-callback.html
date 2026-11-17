@@ -1,0 +1,47 @@
+
+            <html>
+                <head>
+                    <title>Autorisation - ElectrumOverlay</title>
+                    <meta charset="UTF-8">
+                    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                    <link rel="stylesheet" href="/css/app-v3.css">
+                </head>
+                <body>
+{{shell:standalone}}
+                    <div class="page in-app">
+                        <h1>Autorisation Twitch</h1>
+                        <div class="card" id="token-container">
+                            <p>Traitement en cours…</p>
+                        </div>
+                    </div>
+                    <script>
+                        const hash = window.location.hash.substring(1);
+                        const params = new URLSearchParams(hash);
+                        const token = params.get('access_token');
+                        const container = document.getElementById('token-container');
+
+                        if (token) {
+                            fetch('/api/oauth-callback', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ token })
+                            })
+                                .then(r => r.json())
+                                .then(data => {
+                                    if (data.ok) {
+                                        container.innerHTML = '<p class="msg success">Autorisation réussie pour <strong>' + data.login + '</strong> (ID ' + data.broadcasterId + ').</p><p class="hint">Vous pouvez fermer cet onglet et revenir à ElectrumOverlay.</p>';
+                                    } else {
+                                        container.innerHTML = '<p class="msg error">' + (data.error || 'Erreur inconnue') + '</p>';
+                                    }
+                                })
+                                .catch(() => {
+                                    container.innerHTML = '<p class="msg error">Impossible de contacter le serveur pour enregistrer le token.</p>';
+                                });
+                        } else {
+                            container.innerHTML = '<p class="msg error">Aucun token trouvé dans l\'URL. Vérifiez que l\'autorisation s\'est bien déroulée.</p>';
+                        }
+                    </script>
+                {{shell:standalone-close}}
+</body>
+            </html>
+        

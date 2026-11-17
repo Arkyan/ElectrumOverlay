@@ -232,7 +232,9 @@ Objet indexé par UUID (pas un tableau). Le nom `customTexts` est historique : l
 `type` (absent ⇒ `text`).
 
 Types : `text`, `image`, `box`, `clock`, `chat`, `chatTicker`, `alerts`, `spotify`, `keys`,
-`statBadge`, `badge`, `rotatingText`, `infoPanel`, `bottomBar`.
+`statBadge`, `badge`, `rotatingText`, `infoPanel`, `bottomBar`, et (version Rust uniquement)
+`goal`, `poll`, `prediction`, `hypetrain` (cartes Twitch, champs `size`, `color`, `font`,
+`opacity`, `width` ; `height` ignoré). La version Electron ne les affiche pas.
 `chat` et `alerts` : **un seul par page**.
 
 Champs communs : `type`, `top`, `left` (défaut 40/40), puis selon le type :
@@ -420,3 +422,16 @@ identiques. Convention : succès `{ "ok": true, ... }`, erreur HTTP 400/404/500 
 - [ ] Tests de non-régression : capturer avec la version Node des exemples réels (config, profils,
       exports, réponses API, messages WebSocket) et vérifier que la nouvelle version les relit et
       les reproduit à l'identique.
+
+## Profil partagé (`.electrumprofile.zip`, version Rust)
+
+Zip contenant :
+
+- `profile.json` : même contenu que l'export (`exportedFrom`, `exportVersion: 1`, `name`,
+  `display`, `audio`, `media`), plus `shared` (`author`, `description`, `exportedAt`,
+  `appVersion`). Dans `audio` / `media`, chaque entrée a `filename`, `mimeType` et `file`
+  (chemin dans le zip) au lieu de `dataBase64` ;
+- `audio/<type d'alerte>.<ext>`, `media/<type d'alerte>.<ext>` : les fichiers tels quels.
+
+L'import accepte ce zip et l'ancien `.electrumprofile.json` (sons/vidéos en base64). La version
+Electron n'importe que l'ancien format.

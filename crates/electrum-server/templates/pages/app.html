@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <title>Tableau de bord - ElectrumOverlay</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="/css/app-v3.css">
+</head>
+<body>
+{{shell:open}}
+<div class="page wide">
+    <div class="page-header">
+        <h1>Tableau de bord</h1>
+        <span class="spacer"></span>
+        <a class="btn btn-sm" href="/scene-editor">{{expr:0}}Éditeur de scène</a>
+    </div>
+
+    <div class="banner" id="updateBanner" hidden>
+        <p id="updateBannerText"></p>
+        <button type="button" class="btn btn-primary btn-sm" id="btnInstallUpdate" hidden>Installer et redémarrer</button>
+    </div>
+
+    <div class="grid grid-3">
+        <section class="card">
+            <h2 class="card-title">Twitch</h2>
+            <div class="metric-row"><span>Chaîne</span><strong id="twChannel">{{expr:1}}</strong></div>
+            <div class="metric-row"><span>Connexion</span><span class="tag" id="twState">…</span></div>
+            <div class="metric-row"><span>Événements suivis</span><strong id="twSubs">–</strong></div>
+            <p class="hint" id="twError" hidden></p>
+            <p class="hint" id="twMissing" hidden></p>
+            <div class="card-actions">
+                <a class="btn btn-sm" href="/setup">Configuration</a>
+            </div>
+        </section>
+
+        <section class="card">
+            <h2 class="card-title">Live</h2>
+            <div class="metric-row"><span>Statut</span><span class="tag" id="stLive">–</span></div>
+            <div class="metric-row"><span>Durée</span><strong id="stDuration">–</strong></div>
+            <div class="metric-grid">
+                <div><div class="metric-big" id="stViewers">–</div><span>viewers</span></div>
+                <div><div class="metric-big" id="stFollows">0</div><span>follows</span></div>
+                <div><div class="metric-big" id="stSubs">0</div><span>subs</span></div>
+                <div><div class="metric-big" id="stMessages">0</div><span>messages</span></div>
+            </div>
+        </section>
+
+        <section class="card">
+            <h2 class="card-title">Tester les overlays</h2>
+            <p class="hint" style="margin-top:0;">Déclenche un faux événement sur les overlays ouverts dans OBS.</p>
+            <div class="card-actions" id="quickTests">
+                <button type="button" class="btn btn-sm" data-action="follow">Follow</button>
+                <button type="button" class="btn btn-sm" data-action="sub">Sub</button>
+                <button type="button" class="btn btn-sm" data-action="raid">Raid</button>
+                <button type="button" class="btn btn-sm" data-action="bits">Bits</button>
+                <button type="button" class="btn btn-sm" data-action="chat">Message</button>
+                <a class="btn btn-sm btn-ghost" href="/tests">Plus…</a>
+            </div>
+        </section>
+    </div>
+
+    <section class="card">
+        <h2 class="card-title with-actions">Derniers événements <button type="button" class="btn btn-sm btn-ghost" id="btnClearHistory" hidden>Vider</button></h2>
+        <p class="hint" id="historyEmpty" style="margin:0;">Aucun événement depuis le lancement de l'app. Les follows, subs, bits et raids apparaîtront ici, avec un bouton pour rejouer l'alerte.</p>
+        <div class="history-scroll" id="historyWrap" hidden>
+            <table class="table">
+                <thead><tr><th>Heure</th><th>Événement</th><th>Viewer</th><th></th></tr></thead>
+                <tbody id="historyRows"></tbody>
+            </table>
+        </div>
+    </section>
+
+    <section class="card">
+        <h2 class="card-title">Sources pour OBS</h2>
+        <table class="table">
+            <thead><tr><th>Source</th><th>URL (source navigateur)</th><th></th></tr></thead>
+            <tbody>{{expr:2}}</tbody>
+        </table>
+    </section>
+
+    <details class="adv">
+        <summary>Diagnostic</summary>
+        <div class="adv-links">
+            <a href="/subscriptions" target="_blank">Abonnements EventSub (JSON)</a>
+            <a href="/status" target="_blank">Statut du serveur (JSON)</a>
+        </div>
+    </details>
+</div>
+
+<script>
+(function () {
+    const $ = (id) => document.getElementById(id);
+
+    // Copie d'une URL de source OBS.
+    document.querySelectorAll('[data-copy]').forEach((button) => {
+        button.addEventListener('click', async () => {
+            await navigator.clipboard.writeText(button.dataset.copy).catch(() => {});
+            const label = button.querySelector('span');
+            label.textContent = 'Copié';
+            setTimeout(() => { label.textContent = 'Copier'; }, 1500);
+        });
+    });
+
+    // Tests rapides.
+    $('quickTests').addEventListener('click', (event) => {
+        const action = event.target.closest('[data-action]')?.dataset.action;
+        if (!action) return;
+        fetch('/api/tests/trigger', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action }) });
+    });
+
+    function refreshTwitch() {
+        fetch('/status').then((r) => r.json()).then((s) => {
+            const e = s.eventsub || {};
+            const [cls, text] = !s.twitchAuthenticated ? ['bad', 'Non autorisé'] : e.connected ? ['ok', 'Connecté'] : e.needsAuthorization ? ['bad', 'À ré-autoriser'] : ['warn', 'Connexion…'];
+            $('twState').className = 'tag ' + cls;
+            $('twState').textContent = text;
+            $('twSubs').textContent = e.connected ? String(e.subscriptions) : '–';
+            $('twError').hidden = !e.lastError;
+            $('twError').textContent = e.lastError || '';
+            const missing = e.connected ? (e.missingFeatures || []) : [];
+            $('twMissing').hidden = missing.length === 0;
+            $('twMissing').innerHTML = missing.length ? 'Inactif : ' + missing.join(', ') + '. <a href="/auth-url">Ré-autoriser Twitch</a> pour les activer.' : '';
+        }).catch(() => {});
+    }
+
+    function refreshStats() {
+        fetch('/api/stream-stats').then((r) => r.json()).then((s) => {
+            $('stLive').className = 'tag' + (s.isLive ? ' live' : '');
+            $('stLive').textContent = s.isLive ? 'En direct' : 'Hors ligne';
+            $('stDuration').textContent = s.isLive ? s.streamDuration : '–';
+            $('stViewers').textContent = s.isLive ? String(s.viewerCount) : '–';
+            $('stFollows').textContent = String(s.follows);
+            $('stSubs').textContent = String(s.subscribers);
+            $('stMessages').textContent = String(s.chatMessages);
+        }).catch(() => {});
+    }
+
+    // Derniers événements + rejouer une alerte.
+    const KINDS = { 'channel.follow': ['Follow', ''], 'channel.subscribe': ['Sub', 'ok'], 'channel.subscription.gift': ['Subs offerts', 'ok'], 'channel.cheer': ['Bits', 'warn'], 'channel.raid': ['Raid', 'live'] };
+    const esc = (t) => String(t ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    let lastHistory = '';
+    function refreshHistory() {
+        fetch('/api/events/history').then((r) => r.json()).then(({ events }) => {
+            const key = events.map((e) => e.id).join(',');
+            if (key === lastHistory) return;
+            lastHistory = key;
+            $('historyEmpty').hidden = events.length > 0;
+            $('historyWrap').hidden = events.length === 0;
+            $('btnClearHistory').hidden = events.length === 0;
+            $('historyRows').innerHTML = events.map((e) => {
+                const [label, cls] = KINDS[e.type] || [e.type, ''];
+                const time = new Date(e.time).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+                return '<tr><td class="nowrap">' + time + '</td>'
+                    + '<td><span class="tag ' + cls + '">' + label + '</span> ' + (e.detail === label ? '' : esc(e.detail)) + (e.test ? ' <span class="tag">test</span>' : '') + '</td>'
+                    + '<td><strong>' + esc(e.user || '—') + '</strong></td>'
+                    + '<td class="actions"><button type="button" class="btn btn-sm" data-replay="' + e.id + '">Rejouer</button></td></tr>';
+            }).join('');
+        }).catch(() => {});
+    }
+    $('historyRows').addEventListener('click', (event) => {
+        const button = event.target.closest('[data-replay]');
+        if (!button) return;
+        button.disabled = true;
+        fetch('/api/events/' + button.dataset.replay + '/replay', { method: 'POST' })
+            .finally(() => setTimeout(() => { button.disabled = false; }, 1500));
+    });
+    $('btnClearHistory').addEventListener('click', () => {
+        fetch('/api/events/history', { method: 'DELETE' }).then(refreshHistory);
+    });
+    // Un test rapide apparaît tout de suite dans l'historique.
+    $('quickTests').addEventListener('click', () => setTimeout(refreshHistory, 300));
+
+    refreshTwitch();
+    refreshStats();
+    refreshHistory();
+    setInterval(refreshHistory, 3000);
+    setInterval(refreshTwitch, 10000);
+    setInterval(refreshStats, 5000);
+
+    // Mise à jour de l'app (uniquement dans l'app desktop).
+    const api = window.electronAPI;
+    if (api) {
+        function renderUpdater(state) {
+            const banner = $('updateBanner');
+            const install = $('btnInstallUpdate');
+            if (state.status === 'downloading') {
+                banner.hidden = false;
+                install.hidden = true;
+                $('updateBannerText').textContent = 'Téléchargement de la mise à jour v' + state.version + '… (' + (state.percent || 0) + ' %)';
+            } else if (state.status === 'downloaded') {
+                banner.hidden = false;
+                install.hidden = false;
+                $('updateBannerText').textContent = 'Mise à jour v' + state.version + ' prête à installer.';
+            } else {
+                banner.hidden = true;
+            }
+        }
+        api.getUpdaterStatus().then(renderUpdater);
+        api.onUpdaterStatusChange(renderUpdater);
+        $('btnInstallUpdate').addEventListener('click', () => api.installUpdate());
+    }
+})();
+</script>
+{{shell:close}}
+</body>
+</html>

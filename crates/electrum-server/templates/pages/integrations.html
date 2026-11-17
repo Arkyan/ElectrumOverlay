@@ -1,0 +1,229 @@
+
+<html>
+<head>
+    <title>Intégrations - ElectrumOverlay</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="/css/app-v3.css">
+    <style>
+        .spotify-now-playing {
+            display: flex; align-items: center; gap: var(--space-3);
+            background: var(--surface-elevated); border: 1px solid var(--border);
+            border-radius: var(--radius-sm); padding: var(--space-3);
+        }
+        .spotify-now-playing img { width: 56px; height: 56px; border-radius: 6px; object-fit: cover; flex-shrink: 0; }
+        .spotify-now-playing .np-title { font-weight: 600; font-size: 14px; }
+        .spotify-now-playing .np-artist { font-size: 12px; color: var(--text-muted); }
+    </style>
+</head>
+<body>
+{{shell:open}}
+    <div class="page in-app wide">
+        <h1>Intégrations</h1>
+        <p class="hint">Services optionnels. Chaque réglage est appliqué immédiatement.</p>
+
+        {{expr:0}}
+        {{expr:1}}
+
+        <div class="settings-layout">
+            <nav class="settings-nav" id="integrationsNav">
+                <button type="button" class="settings-nav-btn active" data-target="section-spotify">Spotify</button>
+                <button type="button" class="settings-nav-btn" data-target="section-trucky">Trucky</button>
+                <button type="button" class="settings-nav-btn" data-target="section-inputdisplay">Clavier/Souris</button>
+            </nav>
+            <div class="settings-content">
+
+                <div class="settings-section active" id="section-spotify">
+                    <h2>Spotify</h2>
+                    <p class="hint">Affiche le morceau en cours de lecture comme élément de scène (voir l'éditeur de scène — menu "+").</p>
+
+                    <div class="card">
+                        <h2 class="card-title">Application Spotify</h2>
+                        <p class="hint">Crée une application sur le <a href="https://developer.spotify.com/dashboard" target="_blank">tableau de bord développeur Spotify</a>, puis ajoute l'URI de redirection ci-dessous dans ses paramètres.</p>
+
+                        <div class="field">
+                            <label>URI de redirection à enregistrer sur Spotify</label>
+                            <input type="text" readonly value="{{expr:2}}" onclick="this.select()">
+                        </div>
+
+                        <div class="field">
+                            <label for="clientId">Client ID</label>
+                            <input type="text" id="clientId" value="{{expr:3}}">
+                        </div>
+                        <div class="field">
+                            <label for="clientSecret">Client Secret</label>
+                            <input type="password" id="clientSecret" value="{{expr:4}}">
+                        </div>
+                        <button type="button" class="btn btn-primary" id="btnSaveCreds">Enregistrer</button>
+                        <span class="msg" id="credsMsg"></span>
+                    </div>
+
+                    <div class="card">
+                        <h2 class="card-title">Connexion Spotify</h2>
+                        {{expr:5}}
+                    </div>
+                </div>
+
+                <div class="settings-section" id="section-trucky">
+                    <h2>Trucky</h2>
+                    <p class="hint">Statistiques de trajet/société ETS2/ATS pour le panneau d'informations (voir /settings — panneau gauche). Nécessite Google Chrome ou Microsoft Edge installé sur cette machine.</p>
+
+                    <div class="card">
+                        <h2 class="card-title">Trucky</h2>
+                        <label class="checkbox-row"><input type="checkbox" id="truckyEnabled" {{expr:6}}> Activer les statistiques Trucky</label>
+                        <div class="field" style="margin-top:var(--space-3);">
+                            <label for="truckyUserId">ID utilisateur Trucky</label>
+                            <input type="text" id="truckyUserId" value="{{expr:7}}">
+                        </div>
+                        <button type="button" class="btn btn-primary" id="btnSaveTrucky">Enregistrer</button>
+                        <span class="msg" id="truckyMsg"></span>
+                    </div>
+                </div>
+
+                <div class="settings-section" id="section-inputdisplay">
+                    <h2>Clavier/Souris</h2>
+                    <p class="hint">Affiche les touches pressées (WASD, flèches, Espace, Shift/Ctrl/Alt, Tab, Échap, Entrée, F1-F12, chiffres) et les clics souris comme élément de scène (voir l'éditeur de scène — menu "+", widget "Touches").</p>
+                    <p class="msg error">⚠️ Une fois activée, la capture tourne pour tout le PC (pas seulement le jeu au premier plan) tant que l'app est ouverte — seules les touches listées ci-dessus sont affichées, jamais les lettres/chiffres tapés ailleurs (chat, mots de passe...). Désactive ce réglage si tu veux couper la capture.</p>
+
+                    <div class="card">
+                        <h2 class="card-title">Affichage des touches</h2>
+                        <label class="checkbox-row"><input type="checkbox" id="inputDisplayEnabled" {{expr:8}}> Activer l'affichage des touches pressées</label>
+                        <button type="button" class="btn btn-primary" style="margin-top:var(--space-3);" id="btnSaveInputDisplay">Enregistrer</button>
+                        <span class="msg" id="inputDisplayMsg"></span>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ---------- Navigation entre sections (Spotify / Trucky) ----------
+        // Même pattern que /settings : une seule section affichée à la fois (sidebar bascule
+        // .settings-section.active), le reste reste dans le DOM. Section active mémorisée en
+        // sessionStorage (clé distincte de /settings) pour ne pas revenir sur Spotify après un
+        // location.reload() (ex: après avoir sauvegardé Trucky) si l'utilisateur consultait
+        // cette section-là.
+        function selectSection(sectionId) {
+            document.querySelectorAll('.settings-nav-btn').forEach((b) => {
+                b.classList.toggle('active', b.dataset.target === sectionId);
+            });
+            document.querySelectorAll('.settings-section').forEach((section) => {
+                section.classList.toggle('active', section.id === sectionId);
+            });
+            sessionStorage.setItem('integrationsActiveSection', sectionId);
+        }
+
+        document.querySelectorAll('.settings-nav-btn').forEach((btn) => {
+            btn.addEventListener('click', () => {
+                selectSection(btn.dataset.target);
+                document.querySelector('.settings-content').scrollTop = 0;
+            });
+        });
+
+        const savedIntegrationsSection = sessionStorage.getItem('integrationsActiveSection');
+        if (savedIntegrationsSection && document.getElementById(savedIntegrationsSection)) {
+            selectSection(savedIntegrationsSection);
+        }
+
+        document.getElementById('btnSaveCreds').addEventListener('click', async () => {
+            const clientId = document.getElementById('clientId').value.trim();
+            const clientSecret = document.getElementById('clientSecret').value.trim();
+            const msg = document.getElementById('credsMsg');
+            try {
+                const res = await fetch('/api/spotify/credentials', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ clientId, clientSecret })
+                });
+                const data = await res.json();
+                if (data.ok) {
+                    msg.textContent = 'Enregistré.';
+                    msg.className = 'msg success';
+                    setTimeout(() => window.location.reload(), 600);
+                } else {
+                    msg.textContent = data.error || 'Erreur';
+                    msg.className = 'msg error';
+                }
+            } catch (err) {
+                msg.textContent = 'Impossible de contacter le serveur.';
+                msg.className = 'msg error';
+            }
+        });
+
+        const btnDisconnect = document.getElementById('btnDisconnect');
+        if (btnDisconnect) {
+            btnDisconnect.addEventListener('click', async () => {
+                btnDisconnect.disabled = true;
+                await fetch('/api/spotify/disconnect', { method: 'POST' });
+                window.location.reload();
+            });
+        }
+
+        // Aperçu en direct du morceau en cours (best-effort, purement informatif sur cette page —
+        // le vrai overlay se met à jour via WebSocket, voir overlay-common.js).
+        async function pollNowPlaying() {
+            try {
+                const res = await fetch('/api/spotify/now-playing');
+                const data = await res.json();
+                const box = document.getElementById('nowPlaying');
+                const hint = document.getElementById('npHint');
+                if (!box) return;
+                if (data.track) {
+                    document.getElementById('npTitle').textContent = data.track.title;
+                    document.getElementById('npArtist').textContent = data.track.artist;
+                    const art = document.getElementById('npArt');
+                    if (data.track.albumArt) { art.src = data.track.albumArt; art.style.display = ''; } else { art.style.display = 'none'; }
+                    box.style.display = 'flex';
+                    hint.style.display = 'none';
+                } else {
+                    box.style.display = 'none';
+                    hint.style.display = '';
+                }
+            } catch (err) { /* best-effort */ }
+        }
+        if (document.getElementById('nowPlaying')) {
+            pollNowPlaying();
+            setInterval(pollNowPlaying, 5000);
+        }
+
+        document.getElementById('btnSaveTrucky').addEventListener('click', async () => {
+            const enabled = document.getElementById('truckyEnabled').checked;
+            const userId = document.getElementById('truckyUserId').value.trim();
+            const msg = document.getElementById('truckyMsg');
+            try {
+                const res = await fetch('/api/integrations/trucky', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ enabled, userId })
+                });
+                const data = await res.json();
+                msg.textContent = data.ok ? 'Enregistré.' : (data.error || 'Erreur');
+                msg.className = 'msg ' + (data.ok ? 'success' : 'error');
+            } catch (err) {
+                msg.textContent = 'Impossible de contacter le serveur.';
+                msg.className = 'msg error';
+            }
+        });
+
+        document.getElementById('btnSaveInputDisplay').addEventListener('click', async () => {
+            const enabled = document.getElementById('inputDisplayEnabled').checked;
+            const msg = document.getElementById('inputDisplayMsg');
+            try {
+                const res = await fetch('/api/integrations/input-display', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ enabled })
+                });
+                const data = await res.json();
+                msg.textContent = data.ok ? 'Enregistré.' : (data.error || 'Erreur');
+                msg.className = 'msg ' + (data.ok ? 'success' : 'error');
+            } catch (err) {
+                msg.textContent = 'Impossible de contacter le serveur.';
+                msg.className = 'msg error';
+            }
+        });
+    </script>
+{{shell:close}}
+</body>
+</html>

@@ -1,0 +1,48 @@
+
+    <details class="card cmd-card" data-command-id="{{expr:0}}" {{expr:1}}>
+        <summary class="cmd-summary">
+            <span class="cmd-summary-trigger">{{expr:2}}</span>
+            <span class="cmd-summary-tags">{{expr:3}}</span>
+        </summary>
+        <div class="cmd-body">
+            <div class="field-row">
+                <div class="field" style="flex:1;">
+                    <label>Déclencheur</label>
+                    <input type="text" class="cmd-trigger" value="{{expr:4}}" placeholder="!discord">
+                </div>
+                <div class="field">
+                    <label>Permission</label>
+                    <select class="cmd-permission">
+                        {{expr:5}}
+                    </select>
+                </div>
+                <div class="field">
+                    <label>Cooldown (s)</label>
+                    <input type="number" class="cmd-cooldown" min="0" value="{{expr:6}}">
+                </div>
+            </div>
+
+            <label class="checkbox-row"><input type="checkbox" class="cmd-enabled" {{expr:7}}> Commande activée</label>
+
+            <div class="field" style="margin-top:var(--space-3);">
+                <label class="checkbox-row"><input type="checkbox" class="cmd-reply-enabled" {{expr:8}}> Répondre dans le chat</label>
+                <textarea class="cmd-reply-message" rows="2" placeholder="Merci {user} ! Rejoins le Discord : https://discord.gg/...">{{expr:9}}</textarea>
+                <p class="hint">{user} est remplacé par le pseudo de la personne qui a tapé la commande.</p>
+            </div>
+
+            <div class="field">
+                <label class="checkbox-row"><input type="checkbox" class="cmd-overlay-enabled" {{expr:10}}> Déclencher une action overlay</label>
+                <select class="cmd-overlay-panel">
+                    <option value="left" {{expr:11}}>Panneau gauche</option>
+                    <option value="bottom" {{expr:12}}>Bandeau bas</option>
+                </select>
+            </div>
+
+            <div class="field-row" style="margin-top:var(--space-3);">
+                <button type="button" class="btn btn-primary btn-save">Enregistrer</button>
+                <button type="button" class="btn btn-test">Tester</button>
+                <button type="button" class="btn btn-danger btn-delete">Supprimer</button>
+                <span class="msg"></span>
+            </div>
+        </div>
+    </details>

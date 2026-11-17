@@ -1,0 +1,31 @@
+
+            <html>
+                <head>
+                    <title>Autorisation Twitch - ElectrumOverlay</title>
+                    <meta charset="UTF-8">
+                    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                    <link rel="stylesheet" href="/css/app-v3.css">
+                </head>
+                <body>
+{{shell:open}}
+                    <div class="page in-app">
+                        <h1>Autorisation Twitch requise</h1>
+                        <p>Pour utiliser EventSub avec les messages de chat, l'application doit être autorisée avec les bons scopes.</p>
+
+                        <div class="card">
+                            <h2 class="card-title">Scopes requis</h2>
+                            <ul class="requirements">
+                                <li><code>user:read:chat</code> — lire les messages de chat</li>
+                                <li><code>user:bot</code> — agir en tant que bot utilisateur</li>
+                                <li><code>channel:bot</code> — agir en tant que bot sur la chaîne</li>
+                            </ul>
+                        </div>
+
+                        <a href="{{expr:0}}" class="btn btn-primary" style="margin: var(--space-4) 0;">Autoriser l'application Twitch</a>
+
+                        <p class="hint">Vous serez redirigé vers Twitch, puis automatiquement ramené ici — le token est enregistré tout seul, rien à copier-coller.</p>
+                    </div>
+                {{shell:close}}
+</body>
+            </html>
+        

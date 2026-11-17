@@ -1,0 +1,6 @@
+# Les gabarits HTML et les données de test doivent rester identiques au caractère près sur tous
+# les systèmes (comparaison octet pour octet avec la version Node) : jamais de conversion \r\n.
+crates/electrum-server/templates/** text eol=lf
+crates/electrum-server/tests/node/** text eol=lf
+crates/electrum-core/tests/node/** text eol=lf
+src/templates/** text eol=lf

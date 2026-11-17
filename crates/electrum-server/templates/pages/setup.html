@@ -1,0 +1,176 @@
+
+<html>
+<head>
+    <title>Configuration - ElectrumOverlay</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="/css/app-v3.css">
+    <style>
+        ul.requirements { margin: 0 0 var(--space-4); padding-left: 20px; color: var(--text-muted); font-size: 13px; }
+        ul.requirements code {
+            background: var(--surface-elevated); padding: 1px 6px; border-radius: 4px; color: var(--text);
+        }
+    </style>
+</head>
+<body>
+{{shell:open}}
+    <div class="page in-app">
+        <h1>Configuration</h1>
+        <p class="hint">Chaque section s'enregistre séparément. Tout reste sur ce PC.</p>
+
+        <section class="card" id="step1">
+            <h2 class="card-title">Application Twitch</h2>
+            <p>Créez une application sur <a href="https://dev.twitch.tv/console/apps" target="_blank">dev.twitch.tv/console/apps</a> :</p>
+            <ul class="requirements">
+                <li>OAuth Redirect URL : <code>http://localhost:{{expr:0}}/auth-callback</code></li>
+                <li>Category : "Application Integration"</li>
+                <li>Client Type : "Confidential"</li>
+            </ul>
+            <div class="field">
+                <label for="clientId">Client ID</label>
+                <input type="text" id="clientId" autocomplete="off" value="{{expr:1}}">
+            </div>
+            <div class="field">
+                <label for="clientSecret">Client Secret</label>
+                <input type="password" id="clientSecret" autocomplete="off" placeholder="{{expr:2}}">
+            </div>
+            <button type="button" class="btn btn-primary" id="btnStep1">Enregistrer</button>
+            <div class="msg" id="msg1" role="status"></div>
+        </section>
+
+        <section class="card" id="step2">
+            <h2 class="card-title">Autorisation Twitch</h2>
+            <p>Autorisez l'application avec le compte Twitch qui streame. Ça s'ouvre dans votre navigateur habituel — revenez ici une fois l'autorisation faite.</p>
+            <div class="status-pill" id="authStatusPill">Vérification...</div>
+            <div class="field" style="margin-top:var(--space-3);">
+                <label for="broadcasterDisplay">Chaîne suivie (broadcaster ID)</label>
+                <input type="text" id="broadcasterDisplay" value="{{expr:3}}" readonly disabled>
+                <p class="hint">Déterminé automatiquement par le compte qui autorise ci-dessus — pas modifiable ici.</p>
+            </div>
+            <div class="field-row" style="margin-top:var(--space-3);">
+                <button type="button" class="btn btn-primary" id="btnAuth">Autoriser à nouveau</button>
+                <button type="button" class="btn" id="btnAuthCheck">Vérifier le statut</button>
+            </div>
+            <div class="msg" id="msg2" role="status"></div>
+        </section>
+
+        <section class="card" id="step3">
+            <h2 class="card-title">Image de marque</h2>
+            <div class="field">
+                <label for="accentColor">Couleur principale de l'overlay</label>
+                <input type="color" id="accentColor" value="{{expr:4}}">
+            </div>
+            <div class="field">
+                <label for="infoLine1">Ligne d'info 1 (ex : twitch.tv/votre_chaine)</label>
+                <input type="text" id="infoLine1" value="{{expr:5}}">
+            </div>
+            <div class="field">
+                <label for="infoLine2">Ligne d'info 2 (ex : discord.gg/votre_serveur)</label>
+                <input type="text" id="infoLine2" value="{{expr:6}}">
+            </div>
+            <div class="field">
+                <label for="infoLine3">Ligne d'info 3 (ex : votresite.fr)</label>
+                <input type="text" id="infoLine3" value="{{expr:7}}">
+            </div>
+            <div class="field">
+                <label for="scrollingText">Texte défilant</label>
+                <input type="text" id="scrollingText" value="{{expr:8}}">
+            </div>
+
+            <button type="button" class="btn btn-primary" id="btnFinish">Enregistrer</button>
+            <div class="hint">La connexion à Twitch est relancée après cette sauvegarde, sans redémarrage. Spotify et Trucky se configurent séparément depuis <a href="/integrations">Intégrations</a>, sans redémarrage.</div>
+            <div class="msg" id="msg3" role="status"></div>
+        </section>
+    </div>
+
+    <script>
+        const msg = (id, text, isError) => {
+            const el = document.getElementById(id);
+            el.textContent = text;
+            el.className = 'msg ' + (isError ? 'error' : 'success');
+        };
+
+        async function refreshAuthStatus() {
+            const pill = document.getElementById('authStatusPill');
+            const broadcasterDisplay = document.getElementById('broadcasterDisplay');
+            try {
+                const res = await fetch('/api/setup/auth-status');
+                const data = await res.json();
+                pill.innerHTML = data.authenticated
+                    ? '<span class="dot"></span> Autorisé (chaîne ID ' + data.broadcasterId + ')'
+                    : 'Pas encore autorisé';
+                broadcasterDisplay.value = data.broadcasterId
+                    ? (data.broadcasterLogin ? '@' + data.broadcasterLogin + ' — ID ' + data.broadcasterId : data.broadcasterId)
+                    : "Aucune — autorisez d'abord";
+            } catch (e) {
+                pill.textContent = 'Statut indisponible';
+            }
+        }
+        refreshAuthStatus();
+
+        document.getElementById('btnStep1').addEventListener('click', async () => {
+            const clientId = document.getElementById('clientId').value.trim();
+            const clientSecret = document.getElementById('clientSecret').value.trim();
+            const res = await fetch('/api/setup/credentials', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ clientId, clientSecret })
+            });
+            const data = await res.json();
+            if (data.ok) {
+                document.getElementById('clientSecret').value = '';
+                document.getElementById('clientSecret').placeholder = 'Déjà enregistré — laisser vide pour ne pas changer';
+                msg('msg1', 'Enregistré.', false);
+            } else {
+                msg('msg1', data.error || 'Erreur', true);
+            }
+        });
+
+        document.getElementById('btnAuth').addEventListener('click', async () => {
+            const res = await fetch('/api/setup/auth-url');
+            const data = await res.json();
+            if (data.url) {
+                window.open(data.url, '_blank');
+            } else {
+                msg('msg2', data.error || 'Erreur', true);
+            }
+        });
+
+        document.getElementById('btnAuthCheck').addEventListener('click', async () => {
+            await refreshAuthStatus();
+            const res = await fetch('/api/setup/auth-status');
+            const data = await res.json();
+            msg('msg2', data.authenticated
+                ? 'Autorisation confirmée (chaîne ID ' + data.broadcasterId + ')'
+                : "Pas encore autorisé. Vérifiez que vous avez bien cliqué sur \"Autoriser\" dans l'onglet Twitch.",
+                !data.authenticated);
+        });
+
+        document.getElementById('btnFinish').addEventListener('click', async () => {
+            const btn = document.getElementById('btnFinish');
+            btn.disabled = true;
+            const payload = {
+                infoLine1: document.getElementById('infoLine1').value.trim(),
+                infoLine2: document.getElementById('infoLine2').value.trim(),
+                infoLine3: document.getElementById('infoLine3').value.trim(),
+                scrollingText: document.getElementById('scrollingText').value.trim(),
+                accentColor: document.getElementById('accentColor').value
+            };
+            const res = await fetch('/api/setup/finish', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            const data = await res.json();
+            if (data.ok) {
+                msg('msg3', 'Configuration enregistrée, connexion à Twitch...', false);
+                setTimeout(() => { window.location.href = '/app'; }, 1500);
+            } else {
+                btn.disabled = false;
+                msg('msg3', data.error || 'Erreur', true);
+            }
+        });
+    </script>
+{{shell:close}}
+</body>
+</html>

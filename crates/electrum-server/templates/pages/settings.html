@@ -1,0 +1,955 @@
+
+<html>
+<head>
+    <title>Paramètres - ElectrumOverlay</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="/css/app-v3.css">
+    <style>
+        .page { padding-bottom: 72px; }
+        .save-bar {
+            position: fixed; left: var(--sidebar-width); right: 0; bottom: 0;
+            display: flex; align-items: center; gap: var(--space-3);
+            padding: var(--space-3) var(--page-gutter);
+            background: var(--surface-sunken);
+            border-top: 1px solid var(--border);
+            z-index: 20;
+        }
+    </style>
+</head>
+<body>
+{{shell:open}}
+    <div class="page in-app">
+        <h1>Paramètres</h1>
+        <p>{{expr:0}}</p>
+
+        <div class="settings-layout">
+            <nav class="settings-nav" id="settingsNav">
+                <button type="button" class="settings-nav-btn active" data-target="section-profiles">Profils</button>
+                <button type="button" class="settings-nav-btn" data-target="section-games">Profil par jeu</button>
+                <button type="button" class="settings-nav-btn" data-target="section-themes">Thèmes</button>
+                <button type="button" class="settings-nav-btn" data-target="section-alerts">Alertes</button>
+                <button type="button" class="settings-nav-btn" data-target="section-leftpanel">Panneau gauche</button>
+                <button type="button" class="settings-nav-btn" data-target="section-bottombar">Bandeau bas</button>
+                <button type="button" class="settings-nav-btn" data-target="section-animations">Animations</button>
+                <button type="button" class="settings-nav-btn" data-target="section-chat">Chat</button>
+                <button type="button" class="settings-nav-btn" data-target="section-stats">Statistiques</button>
+                <button type="button" class="settings-nav-btn" data-target="section-app">Application</button>
+                <button type="button" class="settings-nav-btn" data-target="section-backups">Sauvegardes</button>
+            </nav>
+            <div class="settings-content">
+
+        <div class="settings-section card active" id="section-profiles">
+            <h2>Profils</h2>
+                <p class="hint">Choisis un profil pour voir/modifier ses réglages ci-dessous. Un seul profil est actif (visible sur les overlays) à la fois.</p>
+                <div class="field-row">
+                    <div class="field">
+                        <label for="profileSelect">Profil affiché</label>
+                        <select id="profileSelect">
+                            {{expr:1}}
+                        </select>
+                    </div>
+                </div>
+                <div class="field-row" style="margin-top:var(--space-3);">
+                    <button type="button" class="btn btn-primary" id="btnProfileActivate" {{expr:2}}>{{expr:3}}</button>
+                    <button type="button" class="btn" id="btnProfileNew">Nouveau (copie de celui-ci)</button>
+                    <button type="button" class="btn" id="btnProfileRename">Renommer</button>
+                    <button type="button" class="btn" id="btnProfileExport">Partager…</button>
+                    <button type="button" class="btn" id="btnProfileImport">Importer…</button>
+                    <button type="button" class="btn" id="btnProfileSeedThemes">Ajouter les profils de thèmes</button>
+                    <button type="button" class="btn btn-danger" id="btnProfileDelete">Supprimer</button>
+                    <input type="file" id="profileImportFile" accept=".zip,.json,application/zip,application/json" style="display:none;">
+                </div>
+                <div class="field-row" id="profileNameForm" style="display:none; margin-top:var(--space-3);">
+                    <div class="field">
+                        <label for="profileNameInput" id="profileNameFormLabel">Nom</label>
+                        <input type="text" id="profileNameInput">
+                    </div>
+                    <button type="button" class="btn btn-primary" id="btnProfileNameConfirm">Valider</button>
+                    <button type="button" class="btn btn-ghost" id="btnProfileNameCancel">Annuler</button>
+                </div>
+                <p class="msg" id="profileMsg" role="status"></p>
+                <p class="hint" style="margin-bottom:0;">Partager crée un fichier .zip avec tout le profil (scènes, éléments, couleurs, alertes, sons et vidéos) à envoyer à un autre streamer. Pour importer, clique sur « Importer… » ou glisse le fichier ici (les anciens fichiers .json sont aussi acceptés).</p>
+        </div>
+
+        <div class="settings-section card" id="section-games">
+            <h2>Profil par jeu</h2>
+                <p class="hint">Quand tu changes de catégorie sur Twitch (ou au début du live), le profil associé au jeu devient actif tout seul : thème, scènes et alertes suivent le jeu.</p>
+                <label class="checkbox-row"><input type="checkbox" id="gamesEnabled"> Changer de profil automatiquement selon le jeu</label>
+                <p class="hint" id="gamesCurrent" style="margin:var(--space-3) 0 0;"></p>
+                <table class="table games-table" style="margin-top:var(--space-4);">
+                    <thead><tr><th>Jeu (catégorie Twitch)</th><th>Profil</th><th></th></tr></thead>
+                    <tbody id="gamesRows"></tbody>
+                </table>
+                <datalist id="gamesSuggestions"></datalist>
+                <div class="field-row" style="margin-top:var(--space-3);">
+                    <button type="button" class="btn btn-sm" id="btnGamesAdd">+ Ajouter un jeu</button>
+                </div>
+                <div class="field-row" style="margin-top:var(--space-4);">
+                    <div class="field">
+                        <label for="gamesFallback">Pour les autres jeux</label>
+                        <select id="gamesFallback"></select>
+                    </div>
+                </div>
+                <div class="field-row" style="margin-top:var(--space-4);">
+                    <button type="button" class="btn btn-primary" id="btnGamesSave">Enregistrer les règles</button>
+                </div>
+                <div class="msg" id="gamesMsg" role="status"></div>
+                <div class="sub-block" style="margin-top:var(--space-5); padding:var(--space-4); border-radius:var(--radius-sm);">
+                    <label for="gamesSimulate" style="display:block; margin-bottom:var(--space-2);">Tester sans changer de jeu sur Twitch</label>
+                    <div class="field-row" style="flex-wrap:nowrap;">
+                        <input type="text" id="gamesSimulate" list="gamesSuggestions" placeholder="Ex. : Euro Truck Simulator 2" style="flex:1;">
+                        <button type="button" class="btn" id="btnGamesSimulate">Simuler</button>
+                    </div>
+                </div>
+        </div>
+
+        <div class="settings-section card" id="section-themes">
+            <h2>Thèmes par page</h2>
+                {{expr:4}}
+        </div>
+
+        <div class="settings-section card" id="section-alerts">
+            <h2>Alertes</h2>
+                <div class="sub-block">
+                    <h4>Réglages globaux</h4>
+                    <div class="field-row">
+                        <div class="field"><label>&nbsp;</label><label class="checkbox-row"><input type="checkbox" id="alertsEnabled" {{expr:5}}> Activées</label></div>
+                        <div class="field"><label for="alertsDuration">Durée affichage (ms)</label><input type="number" id="alertsDuration" value="{{expr:6}}" min="500" step="500"></div>
+                        <div class="field"><label for="alertsQueueDelay">Délai entre alertes (ms)</label><input type="number" id="alertsQueueDelay" value="{{expr:7}}" min="0" step="100"></div>
+                        <div class="field"><label for="soundVolume">Volume des sons (%)</label><input type="number" id="soundVolume" value="{{expr:8}}" min="0" max="100" step="5"></div>
+                    </div>
+                    <div class="field-row" style="margin-top:var(--space-3);">
+                        <div class="field"><label>&nbsp;</label><label class="checkbox-row"><input type="checkbox" id="confettiEnabled" {{expr:9}}> Confettis</label></div>
+                        <div class="field"><label for="confettiParticles">Nombre</label><input type="number" id="confettiParticles" value="{{expr:10}}" min="0"></div>
+                        <div class="field"><label for="confettiSpread">Étendue</label><input type="number" id="confettiSpread" value="{{expr:11}}" min="0" max="360"></div>
+                        <div class="field"><label for="confettiVelocity">Vitesse</label><input type="number" id="confettiVelocity" value="{{expr:12}}" min="0"></div>
+                        <div class="field"><label for="confettiTicks">Durée</label><input type="number" id="confettiTicks" value="{{expr:13}}" min="0"></div>
+                    </div>
+                </div>
+                {{expr:14}}
+                <p class="hint">Sans média personnalisé, l'alerte garde son style compact avec icône. Avec une image/GIF, elle passe en grand format ("hero") au-dessus du texte. L'icône par défaut de chaque alerte reste réservée à l'édition manuelle de config/overlay-config.json.</p>
+                <p class="hint">Le bouton "Aperçu" déclenche l'alerte en vrai sur les overlays déjà ouverts (OBS ou un onglet sur <code>/</code>) — ouvre-en un pour voir le résultat.</p>
+        </div>
+
+        <div class="settings-section card" id="section-leftpanel">
+            <h2>Panneau gauche (index.html)</h2>
+                <label class="checkbox-row" style="margin-bottom:var(--space-4);"><input type="checkbox" id="leftPanelEnabled" {{expr:15}}> Activé</label>
+                <div class="field-row">
+                    <div class="field"><label for="leftPanelInterval">Intervalle (ms)</label><input type="number" id="leftPanelInterval" value="{{expr:16}}" min="0" step="1000"></div>
+                    <div class="field"><label for="leftPanelDuration">Durée affichage (ms)</label><input type="number" id="leftPanelDuration" value="{{expr:17}}" min="0" step="1000"></div>
+                    <div class="field"><label for="leftPanelFirstDelay">Premier délai (ms)</label><input type="number" id="leftPanelFirstDelay" value="{{expr:18}}" min="0" step="1000"></div>
+                    <div class="field"><label for="leftPanelTimerColor">Couleur minuteur</label><input type="color" id="leftPanelTimerColor" value="{{expr:19}}"></div>
+                </div>
+        </div>
+
+        <div class="settings-section card" id="section-bottombar">
+            <h2>Bandeau bas de page</h2>
+                <label class="checkbox-row" style="margin-bottom:var(--space-4);"><input type="checkbox" id="bottomBarEnabled" {{expr:20}}> Afficher le bandeau</label>
+                <div class="field"><label for="infoLine1">Ligne d'info 1</label><input type="text" id="infoLine1" value="{{expr:21}}"></div>
+                <div class="field"><label for="infoLine2">Ligne d'info 2</label><input type="text" id="infoLine2" value="{{expr:22}}"></div>
+                <div class="field"><label for="infoLine3">Ligne d'info 3</label><input type="text" id="infoLine3" value="{{expr:23}}"></div>
+                <div class="field"><label for="scrollingText">Texte défilant</label><input type="text" id="scrollingText" value="{{expr:24}}"></div>
+                <div class="field-row" style="margin-top:var(--space-3);">
+                    <div class="field"><label for="bottomBarInterval">Intervalle (ms)</label><input type="number" id="bottomBarInterval" value="{{expr:25}}" min="0" step="1000"></div>
+                    <div class="field"><label for="bottomBarDuration">Durée affichage (ms)</label><input type="number" id="bottomBarDuration" value="{{expr:26}}" min="0" step="1000"></div>
+                    <div class="field"><label for="bottomBarFirstDelay">Premier délai (ms)</label><input type="number" id="bottomBarFirstDelay" value="{{expr:27}}" min="0" step="1000"></div>
+                </div>
+        </div>
+
+        <div class="settings-section card" id="section-animations">
+            <h2>Animations</h2>
+                <label class="checkbox-row" style="margin-bottom:var(--space-4);"><input type="checkbox" id="animationsEnabled" {{expr:28}}> Activées globalement</label>
+
+                {{expr:29}}
+
+                <div class="sub-block">
+                    <label class="checkbox-row"><input type="checkbox" id="circuitLinesEnabled" {{expr:30}}> Lignes de circuit</label>
+                    <div class="field-row" style="margin-top:var(--space-3);">
+                        <div class="field"><label for="circuitLinesHorizontal">Horizontales</label><input type="number" id="circuitLinesHorizontal" value="{{expr:31}}" min="0"></div>
+                        <div class="field"><label for="circuitLinesVertical">Verticales</label><input type="number" id="circuitLinesVertical" value="{{expr:32}}" min="0"></div>
+                        <div class="field"><label for="circuitLinesDuration">Durée (s)</label><input type="number" id="circuitLinesDuration" value="{{expr:33}}" min="0" step="0.5"></div>
+                    </div>
+                </div>
+
+                <div class="sub-block">
+                    <label class="checkbox-row"><input type="checkbox" id="dvdLogoEnabled" {{expr:34}}> Logo DVD</label>
+                    <div class="field-row" style="margin-top:var(--space-3);">
+                        <div class="field"><label for="dvdLogoSpeed">Vitesse</label><input type="number" id="dvdLogoSpeed" value="{{expr:35}}" min="0" step="0.5"></div>
+                        <div class="field"><label for="dvdLogoUpdateInterval">Intervalle rafraîchissement (ms)</label><input type="number" id="dvdLogoUpdateInterval" value="{{expr:36}}" min="1"></div>
+                    </div>
+                </div>
+
+                <p class="hint">S'applique au prochain rafraîchissement de la source navigateur dans OBS (pas instantané, contrairement aux couleurs/textes).</p>
+        </div>
+
+        <div class="settings-section card" id="section-chat">
+            <h2>Chat</h2>
+                <div class="field-row" style="margin-bottom:var(--space-4);">
+                    <label class="checkbox-row"><input type="checkbox" id="chatEnabledStarting" {{expr:37}}> Afficher sur Starting</label>
+                    <label class="checkbox-row"><input type="checkbox" id="chatEnabledIndex" {{expr:38}}> Afficher sur Index</label>
+                    <label class="checkbox-row"><input type="checkbox" id="chatEnabledEnding" {{expr:39}}> Afficher sur Ending</label>
+                </div>
+                <div class="field-row">
+                    <div class="field"><label for="chatColor">Couleur par défaut</label><input type="color" id="chatColor" value="{{expr:40}}"></div>
+                    <div class="field"><label for="chatMaxMessages">Messages max affichés</label><input type="number" id="chatMaxMessages" value="{{expr:41}}" min="1" max="200"></div>
+                </div>
+        </div>
+
+        <div class="settings-section card" id="section-stats">
+            <h2>Statistiques (ending.html)</h2>
+                <div class="field-row">
+                    <div class="field"><label for="statsAnimationDuration">Durée animation compteurs (ms)</label><input type="number" id="statsAnimationDuration" value="{{expr:42}}" min="0" step="100"></div>
+                    <div class="field"><label for="statsUpdateInterval">Intervalle de mise à jour (ms)</label><input type="number" id="statsUpdateInterval" value="{{expr:43}}" min="0" step="1000"></div>
+                </div>
+                <label class="checkbox-row" style="margin-top:var(--space-3);"><input type="checkbox" id="statsSimulateData" {{expr:44}}> Simuler des données (tests, sans vrai stream)</label>
+        </div>
+
+        <div class="settings-section card" id="section-app">
+            <h2>Application</h2>
+                <p class="hint">Appliqué tout de suite, sans passer par « Enregistrer ».</p>
+                <div class="field-row" style="margin-bottom:var(--space-4);">
+                    <div class="field">
+                        <label for="appLanguage">Langue de l'interface</label>
+                        <select id="appLanguage"></select>
+                    </div>
+                </div>
+                <p class="hint" style="margin-top:calc(-1 * var(--space-2));">La page se recharge dans la nouvelle langue. Les textes que tu as personnalisés ne changent pas.</p>
+                <div id="autostartUnavailable" class="hint">Disponible dans l'app ElectrumOverlay pour Windows.</div>
+                <div id="autostartForm" hidden>
+                    <label class="checkbox-row"><input type="checkbox" id="autostartEnabled"> Lancer ElectrumOverlay au démarrage de Windows</label>
+                    <label class="checkbox-row" style="margin-top:var(--space-3); padding-left:27px;"><input type="checkbox" id="autostartMinimized"> Démarrer réduit dans la zone de notification (les overlays fonctionnent, la fenêtre s'ouvre d'un clic sur l'icône)</label>
+                    <div class="msg" id="autostartMsg" role="status"></div>
+                </div>
+        </div>
+
+        <div class="settings-section card" id="section-backups">
+            <h2>Sauvegardes</h2>
+                <p class="hint">Une sauvegarde automatique est faite une fois par jour quand la config a changé (les 10 dernières sont gardées), en plus de celles que tu crées. Elles contiennent tous les profils avec leurs sons et vidéos. Restaurer garde tes connexions Twitch et Spotify actuelles, et sauvegarde d'abord l'état actuel : une restauration peut toujours être annulée.</p>
+                <div class="field-row">
+                    <button type="button" class="btn btn-primary" id="btnBackupNow">Sauvegarder maintenant</button>
+                </div>
+                <div class="msg" id="backupMsg" role="status"></div>
+                <table class="table" style="margin-top:var(--space-4);">
+                    <thead><tr><th>Date</th><th>Type</th><th>Profils</th><th>Taille</th><th></th></tr></thead>
+                    <tbody id="backupRows"><tr><td colspan="5" class="hint">Chargement…</td></tr></tbody>
+                </table>
+                <p class="hint" id="backupDir" style="margin-bottom:0;"></p>
+        </div>
+
+            </div>
+        </div>
+
+        <div class="modal-backdrop" id="shareModal" hidden>
+            <div class="modal" role="dialog" aria-labelledby="shareTitle">
+                <div class="modal-head"><h2 id="shareTitle">Partager le profil</h2><button type="button" class="modal-close" data-close>×</button></div>
+                <div class="modal-body">
+                    <div class="field"><label for="shareName">Nom du profil partagé</label><input type="text" id="shareName"></div>
+                    <div class="field"><label for="shareAuthor">Auteur</label><input type="text" id="shareAuthor" placeholder="Ton pseudo"></div>
+                    <div class="field"><label for="shareDescription">Description</label><textarea id="shareDescription" placeholder="Ex. : thème néon violet, scènes Démarrage, En direct et Pause"></textarea></div>
+                    <label class="checkbox-row"><input type="checkbox" id="shareAssets" checked> <span id="shareAssetsLabel">Inclure les sons et vidéos d'alerte</span></label>
+                    <p class="hint" style="margin-bottom:0;">Les images des éléments « Image » sont des liens : elles ne sont pas copiées dans le fichier.</p>
+                    <div class="msg" id="shareMsg" role="status"></div>
+                </div>
+                <div class="modal-foot">
+                    <button type="button" class="btn btn-ghost" data-close>Annuler</button>
+                    <button type="button" class="btn btn-primary" id="btnShareSave">Enregistrer le fichier</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="modal-backdrop" id="importModal" hidden>
+            <div class="modal" role="dialog" aria-labelledby="importTitle">
+                <div class="modal-head"><h2 id="importTitle">Importer un profil</h2><button type="button" class="modal-close" data-close>×</button></div>
+                <div class="modal-body"><div class="share-preview" id="importPreview"></div>
+                    <label class="checkbox-row" style="margin-top:16px;"><input type="checkbox" id="importActivate" checked> Activer ce profil après l'import</label>
+                    <div class="msg" id="importMsg" role="status"></div>
+                </div>
+                <div class="modal-foot">
+                    <button type="button" class="btn btn-ghost" data-close>Annuler</button>
+                    <button type="button" class="btn btn-primary" id="btnImportConfirm">Importer</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="save-bar">
+            <button type="button" class="btn btn-primary" id="btnSave">Enregistrer</button>
+            <div class="msg" id="msg" role="status"></div>
+        </div>
+    </div>
+
+    <script>
+        const THEME_PAGES = {{expr:45}};
+        const ALERT_TYPES = {{expr:46}};
+        const ALERT_PREVIEW_ACTION = {{expr:47}};
+        const PARTICLE_ANIMATIONS = {{expr:48}};
+        const VIEWED_PROFILE_ID = {{expr:49}};
+
+        // ---------- Onglets (thèmes par page, types d'alertes) ----------
+        // La section/l'onglet actifs sont mémorisés en sessionStorage et réappliqués au chargement
+        // (voir plus bas) : sans ça, le moindre location.reload() (upload de son/média, activation
+        // de profil...) ramène l'utilisateur sur la première section/onglet par défaut au lieu de
+        // le laisser là où il travaillait.
+        function selectTab(groupName, tabKey) {
+            document.querySelectorAll('.tab-bar[data-tabgroup="' + groupName + '"] .tab-btn').forEach((b) => {
+                b.classList.toggle('active', b.dataset.tab === tabKey);
+            });
+            document.querySelectorAll('.tab-panel[data-tabgroup="' + groupName + '"]').forEach((panel) => {
+                panel.classList.toggle('active', panel.dataset.tab === tabKey);
+            });
+            sessionStorage.setItem('settingsActiveTab:' + groupName, tabKey);
+        }
+
+        document.querySelectorAll('[data-tabgroup].tab-bar').forEach((bar) => {
+            const groupName = bar.dataset.tabgroup;
+            bar.querySelectorAll('.tab-btn').forEach((btn) => {
+                btn.addEventListener('click', () => selectTab(groupName, btn.dataset.tab));
+            });
+        });
+
+        // ---------- Navigation entre sections ----------
+        // Une seule section affichée à la fois (pas d'accordéon) : la sidebar bascule
+        // .settings-section.active, le reste reste dans le DOM (le formulaire de sauvegarde
+        // lit tous les champs quelle que soit la section visible).
+        function selectSection(sectionId) {
+            document.querySelectorAll('.settings-nav-btn').forEach((b) => {
+                b.classList.toggle('active', b.dataset.target === sectionId);
+            });
+            document.querySelectorAll('.settings-section').forEach((section) => {
+                section.classList.toggle('active', section.id === sectionId);
+            });
+            sessionStorage.setItem('settingsActiveSection', sectionId);
+            // Application et Sauvegardes s'appliquent tout de suite : pas de bouton Enregistrer.
+            document.querySelector('.save-bar').style.display = ['section-app', 'section-backups', 'section-games'].includes(sectionId) ? 'none' : '';
+        }
+
+        document.querySelectorAll('.settings-nav-btn').forEach((btn) => {
+            btn.addEventListener('click', () => {
+                selectSection(btn.dataset.target);
+                document.querySelector('.settings-content').scrollTop = 0;
+            });
+        });
+
+        // Restaure la section/les onglets actifs d'avant le dernier rechargement, s'il y en a un
+        // (sinon on garde l'état par défaut déjà posé côté serveur : Profils + premier onglet).
+        const savedSection = sessionStorage.getItem('settingsActiveSection');
+        if (savedSection && document.getElementById(savedSection)) {
+            selectSection(savedSection);
+        }
+        document.querySelectorAll('[data-tabgroup].tab-bar').forEach((bar) => {
+            const groupName = bar.dataset.tabgroup;
+            const savedTab = sessionStorage.getItem('settingsActiveTab:' + groupName);
+            if (savedTab && bar.querySelector('.tab-btn[data-tab="' + savedTab + '"]')) {
+                selectTab(groupName, savedTab);
+            }
+        });
+
+        // ---------- Profil par jeu ----------
+        (function () {
+            const rows = document.getElementById('gamesRows');
+            const msg = document.getElementById('gamesMsg');
+            const esc = (t) => String(t ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+            let profiles = [];
+            function say(text, ok) { msg.textContent = text; msg.className = 'msg ' + (ok ? 'success' : 'error'); }
+            function profileOptions(selected, withNone) {
+                return (withNone ? '<option value="">Ne rien changer</option>' : '')
+                    + profiles.map((p) => '<option value="' + esc(p.id) + '"' + (p.id === selected ? ' selected' : '') + '>' + esc(p.name) + '</option>').join('');
+            }
+            function addRow(game, profileId) {
+                const tr = document.createElement('tr');
+                tr.innerHTML = '<td><input type="text" class="game-name" list="gamesSuggestions" placeholder="Ex. : Euro Truck Simulator 2" value="' + esc(game) + '" style="width:100%;"></td>'
+                    + '<td><select class="game-profile">' + profileOptions(profileId, false) + '</select></td>'
+                    + '<td class="actions"><button type="button" class="btn btn-sm btn-ghost" data-remove>Supprimer</button></td>';
+                rows.appendChild(tr);
+                return tr;
+            }
+            function render(data) {
+                profiles = data.profiles || [];
+                const settings = data.settings || {};
+                document.getElementById('gamesEnabled').checked = !!settings.enabled;
+                document.getElementById('gamesFallback').innerHTML = profileOptions(settings.fallbackProfileId || '', true);
+                document.getElementById('gamesCurrent').textContent = data.currentGame ? 'Jeu en cours sur Twitch : ' + data.currentGame : '';
+                rows.innerHTML = '';
+                (settings.rules || []).forEach((rule) => addRow(rule.game, rule.profileId));
+                if (!(settings.rules || []).length) addRow('', profiles[0]?.id);
+            }
+            function load() { fetch('/api/app/game-profiles').then((r) => r.json()).then(render).catch(() => {}); }
+
+            rows.addEventListener('click', (e) => { if (e.target.closest('[data-remove]')) e.target.closest('tr').remove(); });
+            document.getElementById('btnGamesAdd').addEventListener('click', () => addRow('', profiles[0]?.id).querySelector('input').focus());
+
+            // Suggestions : recherche des catégories Twitch pendant la saisie.
+            let searchTimer = null;
+            document.addEventListener('input', (e) => {
+                if (!e.target.matches('.game-name, #gamesSimulate')) return;
+                clearTimeout(searchTimer);
+                const q = e.target.value.trim();
+                if (q.length < 2) return;
+                searchTimer = setTimeout(() => {
+                    fetch('/api/twitch/categories?q=' + encodeURIComponent(q)).then((r) => r.json()).then(({ categories }) => {
+                        document.getElementById('gamesSuggestions').innerHTML = (categories || []).map((c) => '<option value="' + esc(c.name) + '">').join('');
+                    }).catch(() => {});
+                }, 250);
+            });
+
+            document.getElementById('btnGamesSave').addEventListener('click', async () => {
+                const rules = [...rows.querySelectorAll('tr')].map((tr) => ({
+                    game: tr.querySelector('.game-name').value.trim(),
+                    profileId: tr.querySelector('.game-profile').value
+                })).filter((r) => r.game && r.profileId);
+                try {
+                    const data = await fetch('/api/app/game-profiles', {
+                        method: 'POST', headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ enabled: document.getElementById('gamesEnabled').checked, rules, fallbackProfileId: document.getElementById('gamesFallback').value })
+                    }).then((r) => r.json());
+                    if (data.error) throw new Error(data.error);
+                    say(data.activated ? 'Enregistré — profil « ' + data.activated + ' » activé pour le jeu en cours.' : 'Enregistré.', true);
+                    load();
+                } catch (error) { say(error.message, false); }
+            });
+
+            document.getElementById('btnGamesSimulate').addEventListener('click', async () => {
+                const game = document.getElementById('gamesSimulate').value.trim();
+                if (!game) return;
+                try {
+                    const data = await fetch('/api/app/game-profiles/simulate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ game }) }).then((r) => r.json());
+                    if (data.error) throw new Error(data.error);
+                    say(data.activated ? 'Profil « ' + data.activated + ' » activé.' : 'Aucun changement (règles désactivées, pas de règle pour ce jeu, ou profil déjà actif).', true);
+                    load();
+                } catch (error) { say(error.message, false); }
+            });
+            load();
+        })();
+
+        // ---------- Application : langue ----------
+        (function () {
+            const select = document.getElementById('appLanguage');
+            fetch('/api/app/language').then((r) => r.json()).then(({ language, languages }) => {
+                select.innerHTML = languages.map((l) => '<option value="' + l.code + '"' + (l.code === language ? ' selected' : '') + '>' + l.name + '</option>').join('');
+            }).catch(() => {});
+            select.addEventListener('change', () => {
+                fetch('/api/app/language', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ language: select.value }) })
+                    .then(() => window.electronAPI?.refreshTray?.())
+                    .finally(() => location.reload());
+            });
+        })();
+
+        // ---------- Application : démarrage avec Windows ----------
+        (function () {
+            const api = window.electronAPI;
+            if (!api || !api.getAutostart) return;
+            const enabled = document.getElementById('autostartEnabled');
+            const minimized = document.getElementById('autostartMinimized');
+            const msg = document.getElementById('autostartMsg');
+            function render(status) {
+                document.getElementById('autostartUnavailable').hidden = status.available;
+                document.getElementById('autostartForm').hidden = !status.available;
+                enabled.checked = status.enabled;
+                minimized.checked = status.minimized;
+                minimized.disabled = !status.enabled;
+            }
+            function apply() {
+                api.setAutostart(enabled.checked, minimized.checked).then((status) => {
+                    render(status);
+                    msg.textContent = status.enabled ? 'Enregistré : l\'app se lancera avec Windows.' : 'Enregistré : l\'app ne se lancera plus avec Windows.';
+                    msg.className = 'msg success';
+                }).catch((error) => {
+                    msg.textContent = String(error);
+                    msg.className = 'msg error';
+                    api.getAutostart().then(render);
+                });
+            }
+            enabled.addEventListener('change', apply);
+            minimized.addEventListener('change', apply);
+            api.getAutostart().then(render);
+        })();
+
+        // ---------- Sauvegardes ----------
+        (function () {
+            const rows = document.getElementById('backupRows');
+            const msg = document.getElementById('backupMsg');
+            const REASONS = { auto: 'Automatique', manual: 'Manuelle', 'before-restore': 'Avant restauration' };
+            const esc = (t) => String(t ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+            const size = (n) => n >= 1048576 ? (n / 1048576).toFixed(1).replace('.', ',') + ' Mo' : Math.max(1, Math.round(n / 1024)) + ' Ko';
+            function say(text, ok) {
+                msg.textContent = text;
+                msg.className = 'msg ' + (ok ? 'success' : 'error');
+            }
+            function load() {
+                fetch('/api/backups').then((r) => r.json()).then(({ backups, dir }) => {
+                    document.getElementById('backupDir').textContent = 'Dossier : ' + dir;
+                    rows.innerHTML = backups.length ? backups.map((b) => {
+                        const date = new Date(b.createdAt).toLocaleString('fr-FR', { dateStyle: 'medium', timeStyle: 'short' });
+                        const profiles = (b.profiles || []).map(esc).join(', ');
+                        return '<tr><td class="nowrap">' + date + '</td><td><span class="tag' + (b.reason === 'manual' ? ' ok' : '') + '">' + (REASONS[b.reason] || esc(b.reason)) + '</span></td>'
+                            + '<td>' + profiles + '</td><td class="nowrap">' + size(b.size || 0) + '</td>'
+                            + '<td class="actions"><button type="button" class="btn btn-sm" data-restore="' + esc(b.id) + '" data-date="' + esc(date) + '">Restaurer</button> '
+                            + '<button type="button" class="btn btn-sm btn-ghost" data-delete="' + esc(b.id) + '">Supprimer</button></td></tr>';
+                    }).join('') : '<tr><td colspan="5" class="hint">Aucune sauvegarde pour l\'instant.</td></tr>';
+                }).catch(() => {});
+            }
+            document.getElementById('btnBackupNow').addEventListener('click', (event) => {
+                event.target.disabled = true;
+                fetch('/api/backups', { method: 'POST' }).then((r) => r.json()).then((data) => {
+                    if (data.error) throw new Error(data.error);
+                    say('Sauvegarde créée.', true);
+                    load();
+                }).catch((error) => say(error.message, false)).finally(() => { event.target.disabled = false; });
+            });
+            rows.addEventListener('click', (event) => {
+                const restore = event.target.closest('[data-restore]');
+                const remove = event.target.closest('[data-delete]');
+                if (restore) {
+                    if (!confirm('Restaurer la sauvegarde du ' + restore.dataset.date + ' ?\n\nLes profils et réglages actuels seront remplacés (une sauvegarde de l\'état actuel est faite avant).')) return;
+                    fetch('/api/backups/' + encodeURIComponent(restore.dataset.restore) + '/restore', { method: 'POST' }).then((r) => r.json()).then((data) => {
+                        if (data.error) throw new Error(data.error);
+                        sessionStorage.setItem('settingsActiveSection', 'section-backups');
+                        location.href = '/settings';
+                    }).catch((error) => say(error.message, false));
+                } else if (remove) {
+                    if (!confirm('Supprimer cette sauvegarde ?')) return;
+                    fetch('/api/backups/' + encodeURIComponent(remove.dataset.delete), { method: 'DELETE' }).then(load);
+                }
+            });
+            load();
+        })();
+
+        // ---------- Profils ----------
+        const profileSelect = document.getElementById('profileSelect');
+        const profileMsg = document.getElementById('profileMsg');
+
+        function setProfileMsg(text, ok) {
+            profileMsg.textContent = text;
+            profileMsg.className = 'msg ' + (ok ? 'success' : 'error');
+        }
+
+        // computeRedirect(data) : où naviguer après succès (ex: vers le profil nouvellement créé).
+        // Sans elle, on recharge simplement la page courante (même ?profile=...).
+        async function callProfileApi(url, options, computeRedirect) {
+            try {
+                const res = await fetch(url, options);
+                const data = await res.json();
+                if (data.ok) {
+                    if (computeRedirect) {
+                        window.location.href = computeRedirect(data);
+                    } else {
+                        location.reload();
+                    }
+                } else {
+                    setProfileMsg(data.error || 'Erreur', false);
+                }
+            } catch (e) {
+                setProfileMsg('Impossible de contacter le serveur.', false);
+            }
+        }
+
+        // Changer de profil dans la liste charge immédiatement SES réglages (voir GET /settings) —
+        // ça ne l'active pas, ça permet juste de le consulter/modifier.
+        profileSelect.addEventListener('change', () => {
+            window.location.href = '/settings?profile=' + encodeURIComponent(profileSelect.value);
+        });
+
+        document.getElementById('btnProfileActivate').addEventListener('click', () => {
+            callProfileApi('/api/profiles/' + VIEWED_PROFILE_ID + '/activate', { method: 'POST' });
+        });
+
+        // Electron n'implémente pas window.prompt() (l'appel échoue silencieusement, aucune boîte
+        // de dialogue ne s'affiche) — on utilise donc un petit champ inline plutôt qu'un prompt().
+        const profileNameForm = document.getElementById('profileNameForm');
+        const profileNameInput = document.getElementById('profileNameInput');
+        const profileNameFormLabel = document.getElementById('profileNameFormLabel');
+        let pendingProfileAction = null;
+
+        function openProfileNameForm(mode, label, prefill) {
+            pendingProfileAction = mode;
+            profileNameFormLabel.textContent = label;
+            profileNameInput.value = prefill || '';
+            profileNameForm.style.display = '';
+            profileNameInput.focus();
+        }
+
+        function closeProfileNameForm() {
+            profileNameForm.style.display = 'none';
+            pendingProfileAction = null;
+        }
+
+        document.getElementById('btnProfileNew').addEventListener('click', () => {
+            openProfileNameForm('new', 'Nom du nouveau profil (copie de celui affiché)', '');
+        });
+
+        document.getElementById('btnProfileRename').addEventListener('click', () => {
+            const current = profileSelect.options[profileSelect.selectedIndex]?.text.replace(' (actif)', '') || '';
+            openProfileNameForm('rename', 'Nouveau nom', current);
+        });
+
+        document.getElementById('btnProfileNameCancel').addEventListener('click', closeProfileNameForm);
+
+        document.getElementById('btnProfileNameConfirm').addEventListener('click', () => {
+            const name = profileNameInput.value.trim();
+            if (!name) return;
+            if (pendingProfileAction === 'new') {
+                callProfileApi('/api/profiles', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name, basedOn: VIEWED_PROFILE_ID })
+                }, (data) => '/settings?profile=' + encodeURIComponent(data.profile.id));
+            } else if (pendingProfileAction === 'rename') {
+                callProfileApi('/api/profiles/' + VIEWED_PROFILE_ID, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name })
+                });
+            }
+            closeProfileNameForm();
+        });
+
+        profileNameInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') document.getElementById('btnProfileNameConfirm').click();
+            if (e.key === 'Escape') closeProfileNameForm();
+        });
+
+        document.getElementById('btnProfileDelete').addEventListener('click', () => {
+            if (!confirm('Supprimer ce profil ? Cette action est irréversible.')) return;
+            callProfileApi('/api/profiles/' + VIEWED_PROFILE_ID, { method: 'DELETE' }, () => '/settings');
+        });
+
+        document.getElementById('btnProfileSeedThemes').addEventListener('click', () => {
+            callProfileApi('/api/profiles/seed-theme-presets', { method: 'POST' });
+        });
+
+        // ---------- Partage / import de profil ----------
+        const escHtml = (t) => String(t ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+        const formatSize = (n) => n >= 1048576 ? (n / 1048576).toFixed(1).replace('.', ',') + ' Mo' : Math.max(1, Math.round(n / 1024)) + ' Ko';
+        function openModal(id) { document.getElementById(id).hidden = false; }
+        function closeModal(id) { document.getElementById(id).hidden = true; }
+        document.querySelectorAll('.modal-backdrop').forEach((backdrop) => {
+            backdrop.addEventListener('click', (e) => {
+                if (e.target === backdrop || e.target.closest('[data-close]')) backdrop.hidden = true;
+            });
+        });
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') document.querySelectorAll('.modal-backdrop').forEach((m) => { m.hidden = true; });
+        });
+        function setModalMsg(id, text, ok) {
+            const el = document.getElementById(id);
+            el.textContent = text;
+            el.className = 'msg ' + (ok ? 'success' : 'error');
+        }
+
+        document.getElementById('btnProfileExport').addEventListener('click', async () => {
+            setModalMsg('shareMsg', '', true);
+            try {
+                const info = await fetch('/api/profiles/' + VIEWED_PROFILE_ID + '/share-info').then((r) => r.json());
+                document.getElementById('shareName').value = info.name || '';
+                if (!document.getElementById('shareAuthor').value) document.getElementById('shareAuthor').value = info.author || '';
+                document.getElementById('shareAssetsLabel').textContent = info.assetsCount
+                    ? 'Inclure les sons et vidéos d\'alerte (' + info.assetsCount + ' fichier' + (info.assetsCount > 1 ? 's' : '') + ', ' + formatSize(info.assetsSize) + ')'
+                    : 'Inclure les sons et vidéos d\'alerte (aucun sur ce profil)';
+            } catch (e) { /* valeurs par défaut */ }
+            openModal('shareModal');
+            document.getElementById('shareName').focus();
+        });
+
+        document.getElementById('btnShareSave').addEventListener('click', async () => {
+            const params = {
+                name: document.getElementById('shareName').value,
+                author: document.getElementById('shareAuthor').value,
+                description: document.getElementById('shareDescription').value,
+                assets: document.getElementById('shareAssets').checked ? '1' : '0'
+            };
+            const api = window.electronAPI;
+            if (api && api.saveSharedProfile) {
+                // App : fenêtre « Enregistrer sous » de Windows.
+                try {
+                    const path = await api.saveSharedProfile(VIEWED_PROFILE_ID, params);
+                    if (path) {
+                        closeModal('shareModal');
+                        setProfileMsg('Profil enregistré : ' + path, true);
+                    }
+                } catch (error) {
+                    setModalMsg('shareMsg', String(error), false);
+                }
+            } else {
+                // Navigateur : téléchargement classique.
+                window.location.href = '/api/profiles/' + VIEWED_PROFILE_ID + '/share?' + new URLSearchParams(params);
+                closeModal('shareModal');
+            }
+        });
+
+        // Import : aperçu du fichier avant de l'importer.
+        let pendingImport = null;
+        async function previewImport(file) {
+            // Lu par le serveur : zip (.electrumprofile.zip) ou ancien JSON.
+            let preview = null;
+            try {
+                const formData = new FormData();
+                formData.append('file', file);
+                preview = await fetch('/api/profiles/import-preview', { method: 'POST', body: formData }).then((r) => r.json());
+            } catch (e) { preview = null; }
+            const data = preview && preview.ok ? preview.profile : null;
+            if (!data || !data.display) {
+                setProfileMsg((preview && preview.error) || 'Ce fichier n\'est pas un profil ElectrumOverlay.', false);
+                return;
+            }
+            {
+                pendingImport = file;
+                const display = data.display || {};
+                const shared = data.shared || {};
+                const themes = display.themes || {};
+                const THEME_NAMES = { starting: 'Démarrage', index: 'En direct', pause: 'Pause', ending: 'Fin' };
+                const swatches = Object.entries(THEME_NAMES).filter(([key]) => themes[key]).map(([key, label]) => {
+                    const t = themes[key];
+                    const colors = [t.primary, t.secondary, t.accent].filter(Boolean).map((c) => '<i style="background:' + escHtml(c) + '"></i>').join('');
+                    return '<div class="share-swatch"><span>' + colors + '</span>' + label + '</div>';
+                }).join('');
+                const customScenes = Object.entries(display.scenes || {}).filter(([key]) => !THEME_NAMES[key]).map(([, scene]) => scene.name || 'Scène');
+                const elements = Object.values(display.customTexts || {}).reduce((n, page) => n + Object.keys(page || {}).length, 0);
+                const assets = preview.assets;
+                const meta = [shared.author ? 'Partagé par ' + escHtml(shared.author) : '', shared.exportedAt ? 'Exporté le ' + new Date(shared.exportedAt).toLocaleDateString('fr-FR') : '', formatSize(file.size)].filter(Boolean).join(' · ');
+                document.getElementById('importPreview').innerHTML =
+                    '<div><div class="share-title">' + escHtml(data.name || 'Profil importé') + '</div><div class="share-meta">' + meta + '</div></div>'
+                    + (shared.description ? '<div class="share-desc">' + escHtml(shared.description) + '</div>' : '')
+                    + (swatches ? '<div class="share-swatches">' + swatches + '</div>' : '')
+                    + '<div class="share-stats">'
+                    + '<div><strong>' + (4 + customScenes.length) + '</strong><span>scènes</span></div>'
+                    + '<div><strong>' + elements + '</strong><span>éléments ajoutés</span></div>'
+                    + '<div><strong>' + assets + '</strong><span>sons et vidéos</span></div>'
+                    + '</div>'
+                    + (customScenes.length ? '<div class="share-meta">Scènes personnalisées : ' + customScenes.map(escHtml).join(', ') + '</div>' : '');
+                setModalMsg('importMsg', '', true);
+                openModal('importModal');
+            }
+        }
+
+        document.getElementById('btnProfileImport').addEventListener('click', () => {
+            document.getElementById('profileImportFile').value = '';
+            document.getElementById('profileImportFile').click();
+        });
+        document.getElementById('profileImportFile').addEventListener('change', (e) => {
+            if (e.target.files[0]) previewImport(e.target.files[0]);
+        });
+
+        // Glisser-déposer un fichier de profil sur la section Profils.
+        const profilesSection = document.getElementById('section-profiles');
+        profilesSection.addEventListener('dragover', (e) => { e.preventDefault(); profilesSection.classList.add('drop-hint'); });
+        profilesSection.addEventListener('dragleave', () => profilesSection.classList.remove('drop-hint'));
+        profilesSection.addEventListener('drop', (e) => {
+            e.preventDefault();
+            profilesSection.classList.remove('drop-hint');
+            const file = e.dataTransfer.files[0];
+            if (file) previewImport(file);
+        });
+
+        document.getElementById('btnImportConfirm').addEventListener('click', async (e) => {
+            if (!pendingImport) return;
+            const button = e.currentTarget;
+            button.disabled = true;
+            setModalMsg('importMsg', 'Import en cours…', true);
+            try {
+                const formData = new FormData();
+                formData.append('file', pendingImport);
+                const data = await fetch('/api/profiles/import', { method: 'POST', body: formData }).then((r) => r.json());
+                if (!data.ok) throw new Error(data.error || 'Import impossible');
+                if (document.getElementById('importActivate').checked) {
+                    await fetch('/api/profiles/' + encodeURIComponent(data.profile.id) + '/activate', { method: 'POST' });
+                }
+                window.location.href = '/settings?profile=' + encodeURIComponent(data.profile.id);
+            } catch (error) {
+                setModalMsg('importMsg', error.message, false);
+                button.disabled = false;
+            }
+        });
+
+        // ---------- Sons d'alerte (upload immédiat, indépendant du bouton Enregistrer) ----------
+        // Portent sur le profil affiché (VIEWED_PROFILE_ID), pas forcément l'actif — comme le
+        // reste des réglages de cette page.
+        document.querySelectorAll('.alert-sound-input').forEach((input) => {
+            input.addEventListener('change', (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                const formData = new FormData();
+                formData.append('file', file);
+                callProfileApi('/api/profiles/' + VIEWED_PROFILE_ID + '/audio/' + input.dataset.alertType, {
+                    method: 'POST',
+                    body: formData
+                });
+            });
+        });
+
+        document.querySelectorAll('.alert-sound-remove').forEach((btn) => {
+            btn.addEventListener('click', () => {
+                callProfileApi('/api/profiles/' + VIEWED_PROFILE_ID + '/audio/' + btn.dataset.alertType, { method: 'DELETE' });
+            });
+        });
+
+        // ---------- Média (image/GIF) d'alerte — même principe que les sons ----------
+        document.querySelectorAll('.alert-media-input').forEach((input) => {
+            input.addEventListener('change', (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                const formData = new FormData();
+                formData.append('file', file);
+                callProfileApi('/api/profiles/' + VIEWED_PROFILE_ID + '/media/' + input.dataset.alertType, {
+                    method: 'POST',
+                    body: formData
+                });
+            });
+        });
+
+        document.querySelectorAll('.alert-media-remove').forEach((btn) => {
+            btn.addEventListener('click', () => {
+                callProfileApi('/api/profiles/' + VIEWED_PROFILE_ID + '/media/' + btn.dataset.alertType, { method: 'DELETE' });
+            });
+        });
+
+        // ---------- Aperçu d'alerte ----------
+        // Déclenche une vraie simulation d'événement (même chemin que /tests) pour voir le
+        // résultat sur les overlays déjà ouverts, sans quitter /settings.
+        document.querySelectorAll('.alert-preview-btn').forEach((btn) => {
+            btn.addEventListener('click', async () => {
+                const action = ALERT_PREVIEW_ACTION[btn.dataset.alertType];
+                if (!action) return;
+                btn.disabled = true;
+                try {
+                    const res = await fetch('/api/tests/trigger', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ action })
+                    });
+                    const data = await res.json();
+                    msgAlertPreview(btn, data.ok ? 'Aperçu envoyé.' : (data.error || 'Erreur'), data.ok);
+                } catch (e) {
+                    msgAlertPreview(btn, 'Impossible de contacter le serveur.', false);
+                }
+                btn.disabled = false;
+            });
+        });
+
+        function msgAlertPreview(btn, text, ok) {
+            let el = btn.nextElementSibling;
+            if (!el || !el.classList.contains('alert-preview-msg')) {
+                el = document.createElement('span');
+                el.className = 'alert-preview-msg hint';
+                el.style.marginLeft = 'var(--space-2)';
+                btn.after(el);
+            }
+            el.textContent = text;
+            el.style.color = ok ? 'var(--success)' : 'var(--error)';
+        }
+
+        // ---------- Réglages d'affichage ----------
+        document.getElementById('btnSave').addEventListener('click', async () => {
+            const themes = {};
+            for (const key of THEME_PAGES) {
+                themes[key] = {
+                    primary: document.getElementById('theme_' + key + '_primary').value,
+                    secondary: document.getElementById('theme_' + key + '_secondary').value,
+                    accent: document.getElementById('theme_' + key + '_accent').value,
+                    panelBorder: document.getElementById('theme_' + key + '_panelBorder').value,
+                    background: document.getElementById('theme_' + key + '_background').value,
+                    surface: document.getElementById('theme_' + key + '_surface').value,
+                    panelBg: document.getElementById('theme_' + key + '_panelBg').value,
+                    text: document.getElementById('theme_' + key + '_text').value,
+                    mutedText: document.getElementById('theme_' + key + '_mutedText').value
+                };
+            }
+
+            const alerts = {};
+            for (const key of ALERT_TYPES) {
+                alerts[key] = {
+                    title: document.getElementById('alert_' + key + '_title').value,
+                    defaultMessage: document.getElementById('alert_' + key + '_message').value,
+                    border: document.getElementById('alert_' + key + '_border').value,
+                    gradientStart: document.getElementById('alert_' + key + '_gradientStart').value,
+                    gradientEnd: document.getElementById('alert_' + key + '_gradientEnd').value,
+                    animationStyle: document.getElementById('alert_' + key + '_animationStyle').value
+                };
+            }
+
+            const payload = {
+                profileId: VIEWED_PROFILE_ID,
+                themes,
+                alerts,
+                alertsEnabled: document.getElementById('alertsEnabled').checked,
+                alertsDuration: document.getElementById('alertsDuration').value,
+                alertsQueueDelay: document.getElementById('alertsQueueDelay').value,
+                soundVolume: document.getElementById('soundVolume').value,
+                confettiEnabled: document.getElementById('confettiEnabled').checked,
+                confettiParticles: document.getElementById('confettiParticles').value,
+                confettiSpread: document.getElementById('confettiSpread').value,
+                confettiVelocity: document.getElementById('confettiVelocity').value,
+                confettiTicks: document.getElementById('confettiTicks').value,
+
+                leftPanelEnabled: document.getElementById('leftPanelEnabled').checked,
+                leftPanelInterval: document.getElementById('leftPanelInterval').value,
+                leftPanelDuration: document.getElementById('leftPanelDuration').value,
+                leftPanelFirstDelay: document.getElementById('leftPanelFirstDelay').value,
+                leftPanelTimerColor: document.getElementById('leftPanelTimerColor').value,
+
+                bottomBarEnabled: document.getElementById('bottomBarEnabled').checked,
+                bottomBarInterval: document.getElementById('bottomBarInterval').value,
+                bottomBarDuration: document.getElementById('bottomBarDuration').value,
+                bottomBarFirstDelay: document.getElementById('bottomBarFirstDelay').value,
+                infoTexts: [
+                    document.getElementById('infoLine1').value,
+                    document.getElementById('infoLine2').value,
+                    document.getElementById('infoLine3').value
+                ],
+                scrollingText: document.getElementById('scrollingText').value,
+
+                animationsEnabled: document.getElementById('animationsEnabled').checked,
+                circuitLinesEnabled: document.getElementById('circuitLinesEnabled').checked,
+                circuitLinesHorizontal: document.getElementById('circuitLinesHorizontal').value,
+                circuitLinesVertical: document.getElementById('circuitLinesVertical').value,
+                circuitLinesDuration: document.getElementById('circuitLinesDuration').value,
+                dvdLogoEnabled: document.getElementById('dvdLogoEnabled').checked,
+                dvdLogoSpeed: document.getElementById('dvdLogoSpeed').value,
+                dvdLogoUpdateInterval: document.getElementById('dvdLogoUpdateInterval').value,
+
+                chatEnabledStarting: document.getElementById('chatEnabledStarting').checked,
+                chatEnabledIndex: document.getElementById('chatEnabledIndex').checked,
+                chatEnabledEnding: document.getElementById('chatEnabledEnding').checked,
+                chatColor: document.getElementById('chatColor').value,
+                chatMaxMessages: document.getElementById('chatMaxMessages').value,
+
+                statsAnimationDuration: document.getElementById('statsAnimationDuration').value,
+                statsUpdateInterval: document.getElementById('statsUpdateInterval').value,
+                statsSimulateData: document.getElementById('statsSimulateData').checked
+            };
+
+            for (const key of PARTICLE_ANIMATIONS) {
+                payload[key + 'Enabled'] = document.getElementById(key + 'Enabled').checked;
+                payload[key + 'Count'] = document.getElementById(key + 'Count').value;
+                payload[key + 'DurationMin'] = document.getElementById(key + 'DurationMin').value;
+                payload[key + 'DurationMax'] = document.getElementById(key + 'DurationMax').value;
+            }
+
+            const btn = document.getElementById('btnSave');
+            btn.disabled = true;
+            const msg = document.getElementById('msg');
+            try {
+                const res = await fetch('/api/settings', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const data = await res.json();
+                if (data.ok) {
+                    msg.textContent = (VIEWED_PROFILE_ID === {{expr:50}})
+                        ? 'Enregistré — les overlays ouverts se mettent à jour.'
+                        : 'Enregistré sur ce profil (non actif — les overlays ne changent pas).';
+                    msg.className = 'msg success';
+                } else {
+                    msg.textContent = data.error || 'Erreur';
+                    msg.className = 'msg error';
+                }
+            } catch (e) {
+                msg.textContent = 'Impossible de contacter le serveur.';
+                msg.className = 'msg error';
+            }
+            btn.disabled = false;
+        });
+    </script>
+{{shell:close}}
+</body>
+</html>

@@ -1,0 +1,101 @@
+
+<html>
+<head>
+    <title>Tests - ElectrumOverlay</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="/css/app-v3.css">
+</head>
+<body>
+{{shell:open}}
+    <div class="page in-app">
+        <h1>Tests</h1>
+        <p class="hint">Faux événements Twitch, visibles sur les overlays ouverts dans OBS.</p>
+
+        <div class="card">
+            <h2 class="card-title">Alertes</h2>
+            <div class="field-row">
+                <button type="button" class="btn" data-action="follow">Follow</button>
+                <button type="button" class="btn" data-action="sub">Sub</button>
+                <button type="button" class="btn" data-action="subgift">Sub Gift (x5)</button>
+                <button type="button" class="btn" data-action="raid">Raid (42 viewers)</button>
+                <button type="button" class="btn" data-action="bits">Bits (100)</button>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2 class="card-title">Chat et panneaux</h2>
+            <div class="field-row">
+                <button type="button" class="btn" data-action="chat">Message de chat</button>
+                <button type="button" class="btn" data-action="info">Afficher le panneau info (!info)</button>
+                <button type="button" class="btn" id="btnShowLeftPanel">Panneau gauche (direct)</button>
+                <button type="button" class="btn" id="btnShowBottomBar">Bandeau bas (direct)</button>
+            </div>
+            <p class="hint">Les deux premiers boutons simulent un vrai événement Twitch (utile pour tester le chemin complet) ; les deux derniers déclenchent l'affichage directement, sans passer par un faux message — et s'affichent même si le panneau concerné est désactivé dans les réglages.</p>
+        </div>
+
+        <div class="card">
+            <h2 class="card-title">Objectif, sondage, prédiction, hype train</h2>
+            <div class="field-row">
+                <button type="button" class="btn" data-action="goal">Objectif (842 / 1000)</button>
+                <button type="button" class="btn" data-action="poll">Sondage</button>
+                <button type="button" class="btn" data-action="prediction">Prédiction</button>
+                <button type="button" class="btn" data-action="hypetrain">Hype train</button>
+            </div>
+            <p class="hint">Visibles sur les scènes où les éléments Objectif Twitch, Sondage, Prédiction ou Hype train ont été ajoutés depuis l'éditeur de scène. Le sondage, la prédiction et le hype train se déroulent en entier en une quinzaine de secondes.</p>
+        </div>
+
+        <div class="card">
+            <h2 class="card-title">Stream</h2>
+            <div class="field-row">
+                <button type="button" class="btn" data-action="streamOnline">Stream en ligne</button>
+                <button type="button" class="btn" data-action="streamOffline">Stream hors ligne</button>
+            </div>
+        </div>
+
+        <div class="msg" id="msg" role="status"></div>
+    </div>
+
+    <script>
+        const msg = document.getElementById('msg');
+
+        async function callTestApi(url, btn) {
+            btn.disabled = true;
+            try {
+                const res = await fetch(url, { method: 'POST' });
+                const data = await res.json();
+                msg.textContent = data.ok ? 'Envoyé : ' + btn.textContent : (data.error || 'Erreur');
+                msg.className = 'msg ' + (data.ok ? 'success' : 'error');
+            } catch (e) {
+                msg.textContent = 'Impossible de contacter le serveur.';
+                msg.className = 'msg error';
+            }
+            btn.disabled = false;
+        }
+
+        document.querySelectorAll('button[data-action]').forEach((btn) => {
+            btn.addEventListener('click', async () => {
+                btn.disabled = true;
+                try {
+                    const res = await fetch('/api/tests/trigger', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ action: btn.dataset.action })
+                    });
+                    const data = await res.json();
+                    msg.textContent = data.ok ? 'Envoyé : ' + btn.textContent : (data.error || 'Erreur');
+                    msg.className = 'msg ' + (data.ok ? 'success' : 'error');
+                } catch (e) {
+                    msg.textContent = 'Impossible de contacter le serveur.';
+                    msg.className = 'msg error';
+                }
+                btn.disabled = false;
+            });
+        });
+
+        document.getElementById('btnShowLeftPanel').addEventListener('click', (e) => callTestApi('/api/panels/left/show', e.target));
+        document.getElementById('btnShowBottomBar').addEventListener('click', (e) => callTestApi('/api/panels/bottom/show', e.target));
+    </script>
+{{shell:close}}
+</body>
+</html>

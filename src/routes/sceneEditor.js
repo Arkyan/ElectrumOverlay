@@ -1,4 +1,6 @@
 const express = require('express');
+const fs = require('fs');
+const path = require('path');
 const config = require('../config/store');
 
 // Les 4 pages d'overlay intégrées — les scènes personnalisées (display.scenes du profil actif)
@@ -97,51 +99,10 @@ function createSceneEditorRoutes() {
     return router;
 }
 
-const CUSTOM_SCENE_HTML = (name) => `
-<!DOCTYPE html>
-<html lang="fr">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>${esc(name)} - ElectrumOverlay</title>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-    <link rel="stylesheet" href="/css/overlay-common.css">
-    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1"></script>
-    <style>
-        /* Fond transparent par défaut (source navigateur OBS par-dessus le jeu) — PAS de
-           !important : applySceneSettingsFromConfig() (overlay-common.js) pose le fond choisi
-           dans l'éditeur (couleur/dégradé) en style inline, qui doit pouvoir gagner.
-           color-scheme:dark aligné sur l'éditeur (/scene-editor, app-ui.css) : quand les
-           color-scheme de l'iframe et de la page hôte diffèrent, Chrome peint un fond opaque
-           blanc à la place de la transparence — l'aperçu perdait son fond noir. */
-        :root { color-scheme: dark; }
-        html, body { margin: 0; width: 100vw; height: 100vh; overflow: hidden; background: transparent; }
-    </style>
-</head>
-<body>
-    <!-- Même attirail que les pages intégrées : halos d'ambiance (visibles seulement sur fond
-         opaque, voir applySceneSettingsFromConfig), conteneurs d'animations (peuplés par
-         initCommonOverlay selon les effets activés sur la scène) et logo DVD rebondissant.
-         Tout reste vide/masqué tant que la scène n'active rien. -->
-    <div class="background-animation" style="display: none;"></div>
-    <div class="breathing-effect" style="display: none;"></div>
-    <div class="stars" id="stars"></div>
-    <div class="meteors" id="meteors"></div>
-    <div class="circuit-lines" id="circuitLines"></div>
-    <div class="particles" id="particles"></div>
-    <div style="position: absolute; display: none;" id="logoContainer">
-        <img id="dvdLogo" src="/logo.png" alt="DVD Logo">
-    </div>
-
-    <!-- overlay-common.js s'auto-initialise au DOMContentLoaded : rendu des éléments custom
-         (textes, images, chat, alertes...), WebSocket temps réel et animations de la scène. -->
-    <script src="/js/config.js"></script>
-    <script src="/js/overlay-common.js"></script>
-    <script src="/js/scene-editor-bridge.js"></script>
-</body>
-</html>
-`;
+// Modèle partagé avec la version Rust (crates/electrum-server) : un seul fichier HTML, le titre
+// (nom de scène saisi par l'utilisateur, donc échappé) est le seul élément variable.
+const CUSTOM_SCENE_TEMPLATE = fs.readFileSync(path.join(__dirname, '..', 'templates', 'custom-scene.html'), 'utf-8');
+const CUSTOM_SCENE_HTML = (name) => CUSTOM_SCENE_TEMPLATE.replace('{{title}}', () => esc(name));
 
 const SCENE_EDITOR_HTML = ({ activeId, themes, pause, scenes, animDefaults }) => `
 <html>
