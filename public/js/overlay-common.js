@@ -1249,7 +1249,36 @@ function setTwitchInteraction(kind, data, phase) {
     }
 }
 
+/**
+ * Rendu des cartes (js/twitch-widgets.js + css/twitch-widgets.css) : normalement chargé par la
+ * page, mais une page restée en cache d'avant son ajout (fenêtre de l'app, OBS) ne l'a pas — on le
+ * charge alors à la demande, puis on redessine les cartes.
+ */
+let twitchWidgetsLibRequested = false;
+function ensureTwitchWidgetsLib() {
+    if (globalThis.TwitchWidgets || twitchWidgetsLibRequested) return;
+    twitchWidgetsLibRequested = true;
+    if (!document.querySelector('link[href$="twitch-widgets.css"]')) {
+        const link = document.createElement('link');
+        link.rel = 'stylesheet';
+        link.href = '/css/twitch-widgets.css';
+        document.head.appendChild(link);
+    }
+    const script = document.createElement('script');
+    script.src = '/js/twitch-widgets.js';
+    script.onload = () => {
+        const cfg = getOverlayConfig();
+        const theme = cfg.themes?.[getThemeKeyFromLocation()] || cfg.themes?.index || {};
+        document.querySelectorAll('.tw-widget').forEach((el) => {
+            TwitchWidgets.setAccent(el, el.dataset.colorValue || theme.primary || '#a855f7');
+            renderTwitchWidget(el);
+        });
+    };
+    document.head.appendChild(script);
+}
+
 function ensureTwitchInteractions() {
+    ensureTwitchWidgetsLib();
     if (twitchInteractionsLoaded) return;
     twitchInteractionsLoaded = true;
     fetch('/api/interactions').then((r) => r.ok ? r.json() : null).then((state) => {
