@@ -38,6 +38,7 @@ Application Windows qui gère tes overlays de stream Twitch : alertes en temps r
 - Quatre scènes prêtes à l'emploi (Démarrage, En direct, Pause, Fin) et autant de scènes personnalisées que tu veux
 
 ### 🎨 Personnalisation
+- **Profil automatique selon le jeu** : la catégorie Twitch change, le thème et les scènes suivent
 - Profils de thèmes (plusieurs prêts à l'emploi), couleurs par page, animations (particules, étoiles, météores, logo DVD), alertes, chat, panneaux
 - Les changements s'appliquent tout de suite aux overlays ouverts dans OBS
 - L'app prend la couleur principale du profil actif

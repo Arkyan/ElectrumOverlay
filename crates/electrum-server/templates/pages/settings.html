@@ -26,6 +26,7 @@
         <div class="settings-layout">
             <nav class="settings-nav" id="settingsNav">
                 <button type="button" class="settings-nav-btn active" data-target="section-profiles">Profils</button>
+                <button type="button" class="settings-nav-btn" data-target="section-games">Profil par jeu</button>
                 <button type="button" class="settings-nav-btn" data-target="section-themes">Thèmes</button>
                 <button type="button" class="settings-nav-btn" data-target="section-alerts">Alertes</button>
                 <button type="button" class="settings-nav-btn" data-target="section-leftpanel">Panneau gauche</button>
@@ -69,6 +70,38 @@
                 </div>
                 <p class="msg" id="profileMsg" role="status"></p>
                 <p class="hint" style="margin-bottom:0;">Partager crée un fichier .zip avec tout le profil (scènes, éléments, couleurs, alertes, sons et vidéos) à envoyer à un autre streamer. Pour importer, clique sur « Importer… » ou glisse le fichier ici (les anciens fichiers .json sont aussi acceptés).</p>
+        </div>
+
+        <div class="settings-section card" id="section-games">
+            <h2>Profil par jeu</h2>
+                <p class="hint">Quand tu changes de catégorie sur Twitch (ou au début du live), le profil associé au jeu devient actif tout seul : thème, scènes et alertes suivent le jeu.</p>
+                <label class="checkbox-row"><input type="checkbox" id="gamesEnabled"> Changer de profil automatiquement selon le jeu</label>
+                <p class="hint" id="gamesCurrent" style="margin:var(--space-3) 0 0;"></p>
+                <table class="table games-table" style="margin-top:var(--space-4);">
+                    <thead><tr><th>Jeu (catégorie Twitch)</th><th>Profil</th><th></th></tr></thead>
+                    <tbody id="gamesRows"></tbody>
+                </table>
+                <datalist id="gamesSuggestions"></datalist>
+                <div class="field-row" style="margin-top:var(--space-3);">
+                    <button type="button" class="btn btn-sm" id="btnGamesAdd">+ Ajouter un jeu</button>
+                </div>
+                <div class="field-row" style="margin-top:var(--space-4);">
+                    <div class="field">
+                        <label for="gamesFallback">Pour les autres jeux</label>
+                        <select id="gamesFallback"></select>
+                    </div>
+                </div>
+                <div class="field-row" style="margin-top:var(--space-4);">
+                    <button type="button" class="btn btn-primary" id="btnGamesSave">Enregistrer les règles</button>
+                </div>
+                <div class="msg" id="gamesMsg" role="status"></div>
+                <div class="sub-block" style="margin-top:var(--space-5); padding:var(--space-4); border-radius:var(--radius-sm);">
+                    <label for="gamesSimulate" style="display:block; margin-bottom:var(--space-2);">Tester sans changer de jeu sur Twitch</label>
+                    <div class="field-row" style="flex-wrap:nowrap;">
+                        <input type="text" id="gamesSimulate" list="gamesSuggestions" placeholder="Ex. : Euro Truck Simulator 2" style="flex:1;">
+                        <button type="button" class="btn" id="btnGamesSimulate">Simuler</button>
+                    </div>
+                </div>
         </div>
 
         <div class="settings-section card" id="section-themes">
@@ -287,7 +320,7 @@
             });
             sessionStorage.setItem('settingsActiveSection', sectionId);
             // Application et Sauvegardes s'appliquent tout de suite : pas de bouton Enregistrer.
-            document.querySelector('.save-bar').style.display = ['section-app', 'section-backups'].includes(sectionId) ? 'none' : '';
+            document.querySelector('.save-bar').style.display = ['section-app', 'section-backups', 'section-games'].includes(sectionId) ? 'none' : '';
         }
 
         document.querySelectorAll('.settings-nav-btn').forEach((btn) => {
@@ -310,6 +343,83 @@
                 selectTab(groupName, savedTab);
             }
         });
+
+        // ---------- Profil par jeu ----------
+        (function () {
+            const rows = document.getElementById('gamesRows');
+            const msg = document.getElementById('gamesMsg');
+            const esc = (t) => String(t ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+            let profiles = [];
+            function say(text, ok) { msg.textContent = text; msg.className = 'msg ' + (ok ? 'success' : 'error'); }
+            function profileOptions(selected, withNone) {
+                return (withNone ? '<option value="">Ne rien changer</option>' : '')
+                    + profiles.map((p) => '<option value="' + esc(p.id) + '"' + (p.id === selected ? ' selected' : '') + '>' + esc(p.name) + '</option>').join('');
+            }
+            function addRow(game, profileId) {
+                const tr = document.createElement('tr');
+                tr.innerHTML = '<td><input type="text" class="game-name" list="gamesSuggestions" placeholder="Ex. : Euro Truck Simulator 2" value="' + esc(game) + '" style="width:100%;"></td>'
+                    + '<td><select class="game-profile">' + profileOptions(profileId, false) + '</select></td>'
+                    + '<td class="actions"><button type="button" class="btn btn-sm btn-ghost" data-remove>Supprimer</button></td>';
+                rows.appendChild(tr);
+                return tr;
+            }
+            function render(data) {
+                profiles = data.profiles || [];
+                const settings = data.settings || {};
+                document.getElementById('gamesEnabled').checked = !!settings.enabled;
+                document.getElementById('gamesFallback').innerHTML = profileOptions(settings.fallbackProfileId || '', true);
+                document.getElementById('gamesCurrent').textContent = data.currentGame ? 'Jeu en cours sur Twitch : ' + data.currentGame : '';
+                rows.innerHTML = '';
+                (settings.rules || []).forEach((rule) => addRow(rule.game, rule.profileId));
+                if (!(settings.rules || []).length) addRow('', profiles[0]?.id);
+            }
+            function load() { fetch('/api/app/game-profiles').then((r) => r.json()).then(render).catch(() => {}); }
+
+            rows.addEventListener('click', (e) => { if (e.target.closest('[data-remove]')) e.target.closest('tr').remove(); });
+            document.getElementById('btnGamesAdd').addEventListener('click', () => addRow('', profiles[0]?.id).querySelector('input').focus());
+
+            // Suggestions : recherche des catégories Twitch pendant la saisie.
+            let searchTimer = null;
+            document.addEventListener('input', (e) => {
+                if (!e.target.matches('.game-name, #gamesSimulate')) return;
+                clearTimeout(searchTimer);
+                const q = e.target.value.trim();
+                if (q.length < 2) return;
+                searchTimer = setTimeout(() => {
+                    fetch('/api/twitch/categories?q=' + encodeURIComponent(q)).then((r) => r.json()).then(({ categories }) => {
+                        document.getElementById('gamesSuggestions').innerHTML = (categories || []).map((c) => '<option value="' + esc(c.name) + '">').join('');
+                    }).catch(() => {});
+                }, 250);
+            });
+
+            document.getElementById('btnGamesSave').addEventListener('click', async () => {
+                const rules = [...rows.querySelectorAll('tr')].map((tr) => ({
+                    game: tr.querySelector('.game-name').value.trim(),
+                    profileId: tr.querySelector('.game-profile').value
+                })).filter((r) => r.game && r.profileId);
+                try {
+                    const data = await fetch('/api/app/game-profiles', {
+                        method: 'POST', headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ enabled: document.getElementById('gamesEnabled').checked, rules, fallbackProfileId: document.getElementById('gamesFallback').value })
+                    }).then((r) => r.json());
+                    if (data.error) throw new Error(data.error);
+                    say(data.activated ? 'Enregistré — profil « ' + data.activated + ' » activé pour le jeu en cours.' : 'Enregistré.', true);
+                    load();
+                } catch (error) { say(error.message, false); }
+            });
+
+            document.getElementById('btnGamesSimulate').addEventListener('click', async () => {
+                const game = document.getElementById('gamesSimulate').value.trim();
+                if (!game) return;
+                try {
+                    const data = await fetch('/api/app/game-profiles/simulate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ game }) }).then((r) => r.json());
+                    if (data.error) throw new Error(data.error);
+                    say(data.activated ? 'Profil « ' + data.activated + ' » activé.' : 'Aucun changement (règles désactivées, pas de règle pour ce jeu, ou profil déjà actif).', true);
+                    load();
+                } catch (error) { say(error.message, false); }
+            });
+            load();
+        })();
 
         // ---------- Application : langue ----------
         (function () {

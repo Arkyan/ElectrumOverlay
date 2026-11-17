@@ -20,6 +20,13 @@ fn broadcast_alert(state: &AppState, event_type: &str, event: &Value, test: bool
     broadcast_raw(state, event_type, event);
 }
 
+/// Profil automatique selon le jeu (catégorie de l'événement).
+fn apply_game_profile(state: &AppState, event: &Value) {
+    if let Some(game) = text(event, "category_name").filter(|g| !g.is_empty()).or_else(|| text(event, "game_name")) {
+        crate::game_profiles::apply(state, game);
+    }
+}
+
 /// Rejoue une alerte de l'historique (sans recompter les stats).
 pub fn replay(state: &AppState, id: u64) -> bool {
     let Some(entry) = state.history().get(id) else { return false };
@@ -76,6 +83,7 @@ fn route(state: &AppState, event_type: &str, event: &Value, test: bool) {
                 text(event, "category_name").filter(|g| !g.is_empty()).or_else(|| text(event, "game_name")),
             );
             broadcast_raw(state, "stream.online", event);
+            apply_game_profile(state, event);
         }
         "stream.offline" => {
             state.stats().end_stream();
@@ -87,6 +95,7 @@ fn route(state: &AppState, event_type: &str, event: &Value, test: bool) {
                 text(event, "category_name").filter(|g| !g.is_empty()).or_else(|| text(event, "game_name")),
             );
             broadcast_raw(state, "channel.update", event);
+            apply_game_profile(state, event);
         }
         "channel.follow" => {
             state.stats().add_follow();

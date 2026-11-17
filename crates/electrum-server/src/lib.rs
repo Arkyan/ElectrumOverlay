@@ -8,6 +8,7 @@
 
 pub mod commands;
 pub mod events;
+pub mod game_profiles;
 pub mod history;
 pub mod i18n;
 pub mod input;

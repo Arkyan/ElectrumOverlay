@@ -17,6 +17,9 @@ pub fn router() -> Router<AppState> {
     Router::new()
         .route("/api/app/language", get(get_language).post(set_language))
         .route("/js/i18n.js", get(overlay_dictionary))
+        .route("/api/app/game-profiles", get(get_game_profiles).post(set_game_profiles))
+        .route("/api/app/game-profiles/simulate", axum::routing::post(simulate_game))
+        .route("/api/twitch/categories", get(search_categories))
 }
 
 impl AppState {
@@ -41,6 +44,76 @@ async fn set_language(State(state): State<AppState>, body: Bytes) -> ApiResult {
     // Les overlays ouverts se rechargent pour prendre leurs textes dans la nouvelle langue.
     state.broadcast(&json!({ "type": "language-changed", "language": language }));
     Ok(Json(json!({ "ok": true, "language": language })))
+}
+
+/// Profil par jeu : réglages, jeu en cours et liste des profils.
+async fn get_game_profiles(State(state): State<AppState>) -> Json<serde_json::Value> {
+    let (settings, profiles, active) = {
+        let store = state.store();
+        (
+            crate::game_profiles::settings(store.config()),
+            store.list_profiles().unwrap_or_default(),
+            store.active_profile_id().map(str::to_string),
+        )
+    };
+    let game = state.stats().game.clone();
+    Json(json!({ "settings": settings, "currentGame": game, "profiles": profiles, "activeProfileId": active }))
+}
+
+async fn set_game_profiles(State(state): State<AppState>, body: Bytes) -> ApiResult {
+    let body = body_or_empty(&body);
+    let rules: Vec<serde_json::Value> = body["rules"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|rule| {
+            let game = rule["game"].as_str()?.trim();
+            let profile = rule["profileId"].as_str()?.trim();
+            (!game.is_empty() && !profile.is_empty()).then(|| json!({ "game": game, "profileId": profile }))
+        })
+        .collect();
+    let settings = json!({
+        "enabled": body["enabled"].as_bool().unwrap_or(false),
+        "rules": rules,
+        "fallbackProfileId": body["fallbackProfileId"].as_str().unwrap_or_default(),
+    });
+    // Remplacement complet (une règle supprimée doit disparaître, pas être fusionnée).
+    {
+        let mut store = state.store();
+        store.save_config(&json!({ "app": { "gameProfiles": null } }))?;
+        store.save_config(&json!({ "app": { "gameProfiles": settings } }))?;
+    }
+    // Appliqué tout de suite au jeu en cours.
+    let game = state.stats().game.clone();
+    let activated = crate::game_profiles::apply(&state, &game);
+    Ok(Json(json!({ "ok": true, "activated": activated })))
+}
+
+/// Simule un changement de jeu (bouton « Tester » des réglages).
+async fn simulate_game(State(state): State<AppState>, body: Bytes) -> ApiResult {
+    let body = body_or_empty(&body);
+    let game = body["game"].as_str().unwrap_or_default().trim().to_string();
+    if game.is_empty() {
+        return Err(ApiError::bad_request("Indique un jeu"));
+    }
+    state.stats().update_stream_info(None, Some(&game));
+    let activated = crate::game_profiles::apply(&state, &game);
+    Ok(Json(json!({ "ok": true, "activated": activated })))
+}
+
+/// Recherche de catégories Twitch (saisie du jeu dans les règles).
+async fn search_categories(State(state): State<AppState>, axum::extract::Query(params): axum::extract::Query<std::collections::HashMap<String, String>>) -> ApiResult {
+    let query = params.get("q").map(|q| q.trim()).unwrap_or_default().to_string();
+    if query.len() < 2 {
+        return Ok(Json(json!({ "categories": [] })));
+    }
+    let creds = crate::twitch::credentials(&state);
+    if !creds.is_complete() {
+        return Ok(Json(json!({ "categories": [] })));
+    }
+    let found = state.twitch.api.search_categories(&creds, &query).await.unwrap_or_default();
+    let categories: Vec<_> = found.iter().map(|c| json!({ "name": c["name"], "image": c["box_art_url"] })).collect();
+    Ok(Json(json!({ "categories": categories })))
 }
 
 /// Dictionnaire des overlays (`globalThis.OVERLAY_I18N`), chargé avant overlay-common.js.

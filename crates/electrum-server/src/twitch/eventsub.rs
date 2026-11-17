@@ -212,6 +212,10 @@ async fn session(state: &AppState, creds: &Credentials, options: &Options) -> En
                     if scopes.iter().any(|s| s == "channel:read:goals") {
                         load_current_goal(state, creds).await;
                     }
+                    // Profil du jeu en cours dès la connexion (pas seulement au prochain changement).
+                    if let Ok(game) = state.twitch.api.current_game(creds).await {
+                        crate::game_profiles::apply(state, &game);
+                    }
                     subscribed = true;
                 }
                 state.twitch.set_status(|s| {

@@ -562,3 +562,38 @@ async fn interface_en_anglais() {
     send(&state, "POST", "/api/app/language", Some(json!({ "language": "fr" }))).await;
     assert!(send(&state, "GET", "/app", None).await.text().contains("Tableau de bord"));
 }
+
+#[tokio::test]
+async fn profil_automatique_selon_le_jeu() {
+    let (state, _dir) = new_state();
+    let mut rx = state.subscribe();
+    let default_id = active_id(&state);
+    let truck = send(&state, "POST", "/api/profiles", Some(json!({ "name": "Camion" }))).await.json()["profile"]["id"].as_str().unwrap().to_string();
+    assert_eq!(active_id(&state), default_id, "créer un profil ne l'active pas");
+
+    let saved = send(&state, "POST", "/api/app/game-profiles", Some(json!({
+        "enabled": true,
+        "rules": [{ "game": "Euro Truck Simulator 2", "profileId": truck }, { "game": "", "profileId": truck }],
+        "fallbackProfileId": default_id
+    }))).await.json();
+    assert_eq!(saved["ok"], true);
+    let settings = send(&state, "GET", "/api/app/game-profiles", None).await.json();
+    assert_eq!(settings["settings"]["rules"].as_array().unwrap().len(), 1, "règle sans jeu ignorée");
+
+    // Changement de catégorie sur Twitch → profil du jeu activé et overlays prévenus.
+    while rx.try_recv().is_ok() {}
+    electrum_server::events::route_event(&state, "channel.update", &json!({ "title": "Livraison", "category_name": "euro truck simulator 2" }));
+    assert_eq!(active_id(&state), truck);
+    assert!(std::iter::from_fn(|| rx.try_recv().ok()).any(|e| e.contains("config-updated")));
+
+    // Autre jeu → profil par défaut ; simulation depuis les réglages.
+    let simulated = send(&state, "POST", "/api/app/game-profiles/simulate", Some(json!({ "game": "Just Chatting" }))).await.json();
+    assert_eq!(simulated["activated"], "Défaut");
+    assert_eq!(active_id(&state), default_id);
+
+    // Désactivé → plus rien ne change ; les règles sont remplacées, pas fusionnées.
+    send(&state, "POST", "/api/app/game-profiles", Some(json!({ "enabled": false, "rules": [] }))).await;
+    electrum_server::events::route_event(&state, "channel.update", &json!({ "category_name": "Euro Truck Simulator 2" }));
+    assert_eq!(active_id(&state), default_id);
+    assert!(send(&state, "GET", "/api/app/game-profiles", None).await.json()["settings"]["rules"].as_array().unwrap().is_empty());
+}

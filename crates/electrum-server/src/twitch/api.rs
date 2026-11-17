@@ -183,6 +183,18 @@ impl TwitchApi {
         Ok(data["data"][0]["viewer_count"].as_u64().unwrap_or(0))
     }
 
+    /// Jeu (catégorie) actuel de la chaîne.
+    pub async fn current_game(&self, creds: &Credentials) -> Result<String, TwitchError> {
+        let data = self.helix_get(creds, &format!("/channels?broadcaster_id={}", creds.broadcaster_id)).await?;
+        Ok(data["data"][0]["game_name"].as_str().unwrap_or_default().to_string())
+    }
+
+    /// Catégories Twitch correspondant à une recherche (noms et jaquettes).
+    pub async fn search_categories(&self, creds: &Credentials, query: &str) -> Result<Vec<Value>, TwitchError> {
+        let data = self.helix_get(creds, &format!("/search/categories?first=8&query={}", form_encode(query))).await?;
+        Ok(data["data"].as_array().cloned().unwrap_or_default())
+    }
+
     /// Objectifs actifs de la chaîne (scope `channel:read:goals`).
     pub async fn goals(&self, creds: &Credentials) -> Result<Vec<Value>, TwitchError> {
         let data = self.helix_get(creds, &format!("/goals?broadcaster_id={}", creds.broadcaster_id)).await?;

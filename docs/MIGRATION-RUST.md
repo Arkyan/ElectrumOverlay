@@ -109,6 +109,7 @@ $env:ELECTRUM_CONFIG_DIR = "C:\chemin\vers\une\copie\config"
 | Sauvegardes automatiques quotidiennes + manuelles, restauration, Paramètres › Sauvegardes | ✅ testé |
 | Partage de profil en `.zip` (auteur, description, sons en option, aperçu avant import ; ancien `.json` accepté) | ✅ testé |
 | Interface en anglais (Paramètres › Application), langue de Windows au premier lancement | ✅ testé |
+| Profil automatique selon le jeu (Paramètres › Profil par jeu) | ✅ testé (à valider avec une vraie catégorie Twitch) |
 | Première pré-version Rust, test réel de la bascule 2.5.2 → 3.0 | ⏳ voir [RELEASE-RUST.md](RELEASE-RUST.md) |
 
 ## Différences volontaires avec la version Node
@@ -149,6 +150,9 @@ $env:ELECTRUM_CONFIG_DIR = "C:\chemin\vers\une\copie\config"
 - Sauvegardes dans `%APPDATA%\ElectrumOverlay\backups` (à côté de `config`) : JSON copiés,
   sons/vidéos stockés une seule fois par contenu (`backups/files`). Une restauration garde les
   sections `twitch` et `spotify` actuelles et sauvegarde l'état d'avant.
+- Profil par jeu : `app.gameProfiles` (`enabled`, `rules: [{ game, profileId }]`,
+  `fallbackProfileId`) dans `overlay-config.json`. Appliqué sur `channel.update`, `stream.online`
+  et à la connexion à Twitch (catégorie actuelle lue via Helix).
 - Langue : `app.language` (`fr`/`en`) dans `overlay-config.json`. Le français reste le texte de
   référence ; en anglais, `crates/electrum-server/i18n/en.json` est appliqué aux pages de l'app et
   aux erreurs de l'API, et `i18n/en-overlay.json` aux textes intégrés des overlays (via

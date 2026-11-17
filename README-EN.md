@@ -40,6 +40,7 @@ A Windows app that runs your Twitch stream overlays: real-time alerts (follow, s
 - Four ready-made scenes (Starting, Live, Pause, Ending) plus as many custom scenes as you like
 
 ### 🎨 Customization
+- **Automatic profile per game**: when the Twitch category changes, the theme and scenes follow
 - Theme profiles (several ready-made ones), colors per page, animations (particles, stars, meteors, DVD logo), alerts, chat, panels
 - Changes apply immediately to the overlays open in OBS
 - The app itself takes the main color of the active profile
