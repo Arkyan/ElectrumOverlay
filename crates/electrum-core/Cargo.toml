@@ -16,5 +16,4 @@ uuid = { version = "1", features = ["v4"] }
 zip = { version = "2", default-features = false, features = ["deflate"] }
 
 [dev-dependencies]
-regex = "1.13.1"
 tempfile = "3"

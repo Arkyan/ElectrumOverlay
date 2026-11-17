@@ -183,8 +183,9 @@ crates/electrum-core/      # config, profils, éditeur de scène, sauvegardes (s
 crates/electrum-server/    # serveur HTTP + WebSocket, Twitch EventSub, Spotify, Trucky, pages de l'app
 src-tauri/                 # application Windows (fenêtre, icône, mises à jour, démarrage)
 public/                    # overlays OBS (HTML/CSS/JS)
-streamdeck-plugin/         # plugin Stream Deck
-electron/, server.js, src/ # ancienne version 2.x (Electron), conservée pendant la transition
+streamdeck-plugin/         # plugin Stream Deck : manifeste, icônes, réglages
+crates/electrum-deck/      # plugin Stream Deck (exécutable natif)
+xtask/                     # cargo xtask release / plugin
 ```
 
 ### Lancer depuis les sources

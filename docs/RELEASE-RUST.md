@@ -1,4 +1,4 @@
-# Releases de la version Rust (Tauri) et bascule depuis Electron
+# Releases (et bascule depuis l'ancienne version Electron)
 
 ## 1. Une seule fois : la clé de signature des mises à jour
 
@@ -35,6 +35,7 @@ gh auth login
 ```
 
 Version : `version` de `[workspace.package]` dans `Cargo.toml` (ex. `3.0.0`, ou `3.0.0-beta.1`).
+Notes affichées sur GitHub : `docs/notes/<version>.md` s'il existe.
 
 ```bash
 $env:TAURI_SIGNING_PRIVATE_KEY = Get-Content -Raw "$env:USERPROFILE\.tauri\electrumoverlay.key"
@@ -45,7 +46,7 @@ $env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD = "ton mot de passe"
 ```
 
 ```bash
-node scripts/release-rust.js
+cargo xtask release
 ```
 
 Le script compile l'installateur signé et le plugin Stream Deck, prépare les fichiers de mise à

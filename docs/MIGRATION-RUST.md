@@ -1,20 +1,26 @@
 # Migration vers Rust (Tauri)
 
-Branche : `migration/rust`. L'app Node/Electron continue de fonctionner normalement pendant
-toute la migration : le code Rust vit à côté (`crates/`, `src-tauri/`) et n'est pas inclus dans
-le build Electron.
+Historique de la migration de la version 2.x (Node/Electron) vers la 3.0 (Rust/Tauri), fusionnée
+dans `main`. **L'ancien code Node/Electron a été retiré du dépôt** après la migration ; le dépôt
+n'a plus aucune dépendance npm (le plugin Stream Deck est lui aussi en Rust).
 
-Le contrat à respecter (fichiers sur disque, export de profil, API, WebSocket) est dans
-[`FORMATS.md`](FORMATS.md).
+Pendant la migration, des tests de parité comparaient la version Rust à l'ancien code Node
+(mêmes fichiers écrits octet pour octet, mêmes réponses de l'API). Ils ont été retirés avec le
+code Node : les tests Rust (`cargo test`) couvrent désormais le comportement directement.
+
+Le contrat des fichiers sur disque (config, profils, export) est dans [`FORMATS.md`](FORMATS.md).
 
 ## Organisation
 
 ```
 Cargo.toml                 # workspace Rust
-crates/electrum-core/      # cœur sans interface : config, profils, formats (testable partout)
-crates/electrum-server/    # serveur HTTP + WebSocket des overlays (axum, testable partout)
+crates/electrum-core/      # cœur sans interface : config, profils, formats, sauvegardes
+crates/electrum-server/    # serveur HTTP + WebSocket, Twitch, pages de l'app, traductions
+crates/electrum-deck/      # plugin Stream Deck (exécutable natif)
 src-tauri/                 # application Tauri : lance le serveur et ouvre la fenêtre
-src/templates/             # modèles HTML partagés par les versions Node et Rust
+xtask/                     # cargo xtask release / plugin
+src/config/                # defaults.json, theme-presets.json (intégrés à la compilation)
+src/templates/             # modèle HTML des scènes personnalisées
 ```
 
 ## Lancer
@@ -27,40 +33,7 @@ cargo test
 cargo tauri dev
 ```
 
-`cargo test` lance aussi deux tests de parité avec la version Node (il faut `node` installé,
-sinon ils sont ignorés) :
-
-- `crates/electrum-core/tests/node_parity.rs` : le même scénario est joué par
-  `src/config/store.js` et par la version Rust, puis les résultats et **tous les fichiers écrits**
-  sont comparés octet pour octet (UUID et dates normalisés) ;
-- `crates/electrum-server/tests/routes_parity.rs` : les appels de `tests/node/calls.json` sont
-  joués sur les vrais handlers de `src/routes/profiles.js` / `settings.js` et sur le serveur Rust ;
-  réponses, diffusions WebSocket et config obtenue doivent être identiques ;
-- les pages de l'app (HTML) ne sont plus comparées à Node depuis la refonte de l'interface
-  (voir plus bas) : elles appartiennent désormais à la version Rust.
-
-`crates/electrum-server/tests/eventsub.rs` fait tourner la connexion EventSub contre un faux
-serveur Twitch local qui joue le protocole officiel : création des abonnements, notification en
-double, `session_reconnect`, keepalive dépassé, token refusé puis ré-autorisation.
-
-### Interface de l'app
-
-Depuis la refonte (style « outil pro », façon OBS), les pages de l'app appartiennent à la version
-Rust : `crates/electrum-server/templates/pages/*.html` (contenu), `src/pages/shell.rs` (barre de
-titre, barre latérale, icônes) et `public/css/app-v3.css` (styles). La version Electron garde son
-ancienne interface (`app-ui.css`) jusqu'à la bascule. Les overlays OBS ne changent pas.
-
-`cargo tauri dev` ouvre la config existante (`%APPDATA%\ElectrumOverlay\config`, la même que la
-version Electron), démarre le serveur sur les ports configurés (8080 / 8081 par défaut) et ouvre
-la fenêtre dessus. **Ferme la version Electron avant** : les deux ne peuvent pas utiliser les
-mêmes ports en même temps (un message l'indique si c'est le cas).
-
-Les sources OBS existantes (`http://localhost:8080/...`) fonctionnent telles quelles avec la
-version Rust.
-
-⚠️ La version Rust lit **et écrit** dans ce dossier (migration au premier lancement, comme la
-version Node). Fais une sauvegarde de `%APPDATA%\ElectrumOverlay\config` avant, ou fais pointer
-la version Rust vers une copie :
+L'app lit **et écrit** `%APPDATA%\ElectrumOverlay\config`. Pour travailler sur une copie :
 
 ```bash
 $env:ELECTRUM_CONFIG_DIR = "C:\chemin\vers\une\copie\config"
@@ -101,7 +74,9 @@ $env:ELECTRUM_CONFIG_DIR = "C:\chemin\vers\une\copie\config"
 | Arrêt / redémarrage du serveur (ports libérés, overlays déconnectés) | ✅ testé |
 | Mises à jour automatiques (signées), entrée « Installer la mise à jour » dans le menu | ✅ (clé de signature à générer, voir RELEASE-RUST.md) |
 | Installateur : désinstalle l'ancienne version Electron, reprend la config | ✅ testé sous Wine |
-| Script de release (installateur, `latest.json`, `latest.yml` pour la bascule Electron) | ✅ `latest.yml` vérifié avec electron-updater |
+| Release (`cargo xtask release` : installateur, `latest.json`, `latest.yml` pour la bascule Electron, plugin Stream Deck) | ✅ `latest.yml` vérifié avec electron-updater |
+| Plugin Stream Deck en Rust (exécutable natif, sans Node) | ✅ testé contre un faux Stream Deck (à valider sur un vrai) |
+| Retrait du code Node/Electron et de npm | ✅ |
 | Couleur de l'app = couleur principale des overlays du profil actif (`/css/accent.css`) | ✅ testé |
 | Tableau de bord : derniers événements (follow, sub, bits, raid) avec « Rejouer » | ✅ testé |
 | Objectifs, sondages, prédictions, hype train (EventSub, scopes facultatifs) + éléments de l'éditeur de scène | ✅ testé contre un faux Twitch (à valider avec un vrai compte) |
