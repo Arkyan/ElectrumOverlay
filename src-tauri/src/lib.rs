@@ -26,6 +26,8 @@ use tauri_plugin_dialog::{DialogExt, MessageDialogKind};
 const WINDOW: &str = "main";
 const TRAY: &str = "tray";
 const BRIDGE: &str = include_str!("bridge.js");
+/// Argument ajouté au lancement automatique avec Windows (entrée « Run » du registre).
+const AUTOSTART_ARG: &str = "--autostart";
 
 /// État de l'app desktop, accessible partout via `app.state::<Desktop>()`.
 pub struct Desktop {
@@ -258,6 +260,45 @@ pub(crate) fn refresh_tray_later(app: &AppHandle) {
 // Commandes du pont window.electronAPI (src/bridge.js)
 // ------------------------------------------------------------------------------------------------
 
+/// Démarrage avec Windows : `{ enabled, minimized, available }`. `enabled` est lu dans Windows
+/// (l'utilisateur peut aussi le couper depuis le Gestionnaire des tâches), `minimized` dans la
+/// config (`desktop.startMinimized`, oui par défaut).
+#[tauri::command]
+fn autostart_status(app: AppHandle) -> Value {
+    use tauri_plugin_autostart::ManagerExt;
+    let enabled = app.autolaunch().is_enabled().unwrap_or(false);
+    serde_json::json!({ "enabled": enabled, "minimized": start_minimized(&app), "available": cfg!(windows) })
+}
+
+#[tauri::command]
+fn autostart_set(app: AppHandle, enabled: bool, minimized: bool) -> Result<Value, String> {
+    use tauri_plugin_autostart::ManagerExt;
+    let launcher = app.autolaunch();
+    let result = if enabled { launcher.enable() } else { launcher.disable() };
+    result.map_err(|error| format!("Réglage du démarrage avec Windows impossible : {error}"))?;
+    let desktop = app.state::<Desktop>();
+    desktop
+        .state
+        .store()
+        .save_config(&serde_json::json!({ "desktop": { "startMinimized": minimized } }))
+        .map_err(|error| error.to_string())?;
+    desktop.state.log(
+        "info",
+        match (enabled, minimized) {
+            (false, _) => "🚀 Démarrage avec Windows désactivé".to_string(),
+            (true, true) => "🚀 Démarrage avec Windows activé (dans la zone de notification)".to_string(),
+            (true, false) => "🚀 Démarrage avec Windows activé (fenêtre ouverte)".to_string(),
+        },
+    );
+    Ok(autostart_status(app))
+}
+
+fn start_minimized(app: &AppHandle) -> bool {
+    let desktop = app.state::<Desktop>();
+    let store = desktop.state.store();
+    store.config()["desktop"]["startMinimized"].as_bool().unwrap_or(true)
+}
+
 #[tauri::command]
 fn app_version(app: AppHandle) -> String {
     app.package_info().version.to_string()
@@ -373,7 +414,14 @@ fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     }
     app.add_capability(capability)?;
 
-    create_window(app.handle(), "/app")?;
+    // Lancé par Windows à l'ouverture de session : directement dans la zone de notification si
+    // c'est le réglage choisi (les overlays sont servis, la fenêtre s'ouvre d'un clic sur l'icône).
+    let autostarted = std::env::args().any(|arg| arg == AUTOSTART_ARG);
+    if autostarted && start_minimized(app.handle()) {
+        app.state::<Desktop>().state.log("info", "🚀 Lancé avec Windows : app réduite dans la zone de notification");
+    } else {
+        create_window(app.handle(), "/app")?;
+    }
 
     let icon = app.default_window_icon().cloned().ok_or("icône de l'app introuvable")?;
     TrayIconBuilder::with_id(TRAY)
@@ -390,6 +438,7 @@ fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     tauri::async_runtime::block_on(refresh_tray(&handle));
 
     input::spawn(handle.clone());
+    tauri::async_runtime::spawn(electrum_server::routes::backups::auto_backup_loop(app.state::<Desktop>().state.clone()));
     updater::spawn(handle);
     Ok(())
 }
@@ -398,11 +447,14 @@ pub fn run() {
     let app = tauri::Builder::default()
         // En premier : une deuxième instance ramène la fenêtre de la première, puis se ferme.
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| show(app, None)))
+        .plugin(tauri_plugin_autostart::Builder::new().app_name("ElectrumOverlay").args([AUTOSTART_ARG]).build())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .invoke_handler(tauri::generate_handler![
             app_version,
+            autostart_status,
+            autostart_set,
             window_minimize,
             window_toggle_maximize,
             window_close,

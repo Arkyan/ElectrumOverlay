@@ -449,3 +449,32 @@ async fn objectif_sondage_prediction_hype_train() {
     let home = send(&state, "GET", "/app", None).await.text();
     assert!(home.contains("http://localhost:8080/interactions.html") && home.contains("http://localhost:8080/goal.html"));
 }
+
+#[tokio::test]
+async fn sauvegardes_et_restauration() {
+    // Config dans un sous-dossier : les sauvegardes vont dans le dossier voisin `backups`.
+    let dir = tempfile::tempdir().unwrap();
+    let mut store = Store::open(dir.path().join("config")).unwrap();
+    store.save_config(&json!({ "twitch": { "CLIENT_ID": "test", "CLIENT_SECRET": "s", "BROADCASTER_ID": "1", "USER_ACCESS_TOKEN": "t" } })).unwrap();
+    let assets = Assets { public_dir: repo().join("public"), templates_dir: repo().join("src").join("templates") };
+    let state = AppState::new(store, assets);
+    let mut rx = state.subscribe();
+
+    let id = active_id(&state);
+    send(&state, "PATCH", &format!("/api/profiles/{id}/theme/index"), Some(json!({ "primary": "#111111" }))).await;
+    let created = send(&state, "POST", "/api/backups", None).await.json();
+    let backup_id = created["backup"]["id"].as_str().unwrap().to_string();
+    let listed = send(&state, "GET", "/api/backups", None).await.json();
+    assert_eq!(listed["backups"][0]["id"], backup_id.as_str());
+    assert!(listed["dir"].as_str().unwrap().ends_with("backups"));
+
+    send(&state, "PATCH", &format!("/api/profiles/{id}/theme/index"), Some(json!({ "primary": "#222222" }))).await;
+    while rx.try_recv().is_ok() {}
+    assert_eq!(send(&state, "POST", &format!("/api/backups/{backup_id}/restore"), None).await.status, StatusCode::OK);
+    assert_eq!(state.store().config()["display"]["themes"]["index"]["primary"], "#111111", "config rechargée");
+    assert!(std::iter::from_fn(|| rx.try_recv().ok()).any(|e| e.contains("config-updated")), "overlays prévenus");
+    assert_eq!(send(&state, "GET", "/api/backups", None).await.json()["backups"][0]["reason"], "before-restore");
+
+    assert_eq!(send(&state, "POST", "/api/backups/../restore", None).await.status, StatusCode::BAD_REQUEST);
+    assert_eq!(send(&state, "DELETE", &format!("/api/backups/{backup_id}"), None).await.status, StatusCode::OK);
+}

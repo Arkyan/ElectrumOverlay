@@ -33,6 +33,8 @@
                 <button type="button" class="settings-nav-btn" data-target="section-animations">Animations</button>
                 <button type="button" class="settings-nav-btn" data-target="section-chat">Chat</button>
                 <button type="button" class="settings-nav-btn" data-target="section-stats">Statistiques</button>
+                <button type="button" class="settings-nav-btn" data-target="section-app">Application</button>
+                <button type="button" class="settings-nav-btn" data-target="section-backups">Sauvegardes</button>
             </nav>
             <div class="settings-content">
 
@@ -169,6 +171,31 @@
                 <label class="checkbox-row" style="margin-top:var(--space-3);"><input type="checkbox" id="statsSimulateData" {{expr:44}}> Simuler des données (tests, sans vrai stream)</label>
         </div>
 
+        <div class="settings-section card" id="section-app">
+            <h2>Application</h2>
+                <p class="hint">Appliqué tout de suite, sans passer par « Enregistrer ».</p>
+                <div id="autostartUnavailable" class="hint">Disponible dans l'app ElectrumOverlay pour Windows.</div>
+                <div id="autostartForm" hidden>
+                    <label class="checkbox-row"><input type="checkbox" id="autostartEnabled"> Lancer ElectrumOverlay au démarrage de Windows</label>
+                    <label class="checkbox-row" style="margin-top:var(--space-3); padding-left:27px;"><input type="checkbox" id="autostartMinimized"> Démarrer réduit dans la zone de notification (les overlays fonctionnent, la fenêtre s'ouvre d'un clic sur l'icône)</label>
+                    <div class="msg" id="autostartMsg" role="status"></div>
+                </div>
+        </div>
+
+        <div class="settings-section card" id="section-backups">
+            <h2>Sauvegardes</h2>
+                <p class="hint">Une sauvegarde automatique est faite une fois par jour quand la config a changé (les 10 dernières sont gardées), en plus de celles que tu crées. Elles contiennent tous les profils avec leurs sons et vidéos. Restaurer garde tes connexions Twitch et Spotify actuelles, et sauvegarde d'abord l'état actuel : une restauration peut toujours être annulée.</p>
+                <div class="field-row">
+                    <button type="button" class="btn btn-primary" id="btnBackupNow">Sauvegarder maintenant</button>
+                </div>
+                <div class="msg" id="backupMsg" role="status"></div>
+                <table class="table" style="margin-top:var(--space-4);">
+                    <thead><tr><th>Date</th><th>Type</th><th>Profils</th><th>Taille</th><th></th></tr></thead>
+                    <tbody id="backupRows"><tr><td colspan="5" class="hint">Chargement…</td></tr></tbody>
+                </table>
+                <p class="hint" id="backupDir" style="margin-bottom:0;"></p>
+        </div>
+
             </div>
         </div>
 
@@ -219,6 +246,8 @@
                 section.classList.toggle('active', section.id === sectionId);
             });
             sessionStorage.setItem('settingsActiveSection', sectionId);
+            // Application et Sauvegardes s'appliquent tout de suite : pas de bouton Enregistrer.
+            document.querySelector('.save-bar').style.display = ['section-app', 'section-backups'].includes(sectionId) ? 'none' : '';
         }
 
         document.querySelectorAll('.settings-nav-btn').forEach((btn) => {
@@ -241,6 +270,86 @@
                 selectTab(groupName, savedTab);
             }
         });
+
+        // ---------- Application : démarrage avec Windows ----------
+        (function () {
+            const api = window.electronAPI;
+            if (!api || !api.getAutostart) return;
+            const enabled = document.getElementById('autostartEnabled');
+            const minimized = document.getElementById('autostartMinimized');
+            const msg = document.getElementById('autostartMsg');
+            function render(status) {
+                document.getElementById('autostartUnavailable').hidden = status.available;
+                document.getElementById('autostartForm').hidden = !status.available;
+                enabled.checked = status.enabled;
+                minimized.checked = status.minimized;
+                minimized.disabled = !status.enabled;
+            }
+            function apply() {
+                api.setAutostart(enabled.checked, minimized.checked).then((status) => {
+                    render(status);
+                    msg.textContent = status.enabled ? 'Enregistré : l\'app se lancera avec Windows.' : 'Enregistré : l\'app ne se lancera plus avec Windows.';
+                    msg.className = 'msg success';
+                }).catch((error) => {
+                    msg.textContent = String(error);
+                    msg.className = 'msg error';
+                    api.getAutostart().then(render);
+                });
+            }
+            enabled.addEventListener('change', apply);
+            minimized.addEventListener('change', apply);
+            api.getAutostart().then(render);
+        })();
+
+        // ---------- Sauvegardes ----------
+        (function () {
+            const rows = document.getElementById('backupRows');
+            const msg = document.getElementById('backupMsg');
+            const REASONS = { auto: 'Automatique', manual: 'Manuelle', 'before-restore': 'Avant restauration' };
+            const esc = (t) => String(t ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+            const size = (n) => n >= 1048576 ? (n / 1048576).toFixed(1).replace('.', ',') + ' Mo' : Math.max(1, Math.round(n / 1024)) + ' Ko';
+            function say(text, ok) {
+                msg.textContent = text;
+                msg.className = 'msg ' + (ok ? 'success' : 'error');
+            }
+            function load() {
+                fetch('/api/backups').then((r) => r.json()).then(({ backups, dir }) => {
+                    document.getElementById('backupDir').textContent = 'Dossier : ' + dir;
+                    rows.innerHTML = backups.length ? backups.map((b) => {
+                        const date = new Date(b.createdAt).toLocaleString('fr-FR', { dateStyle: 'medium', timeStyle: 'short' });
+                        const profiles = (b.profiles || []).map(esc).join(', ');
+                        return '<tr><td class="nowrap">' + date + '</td><td><span class="tag' + (b.reason === 'manual' ? ' ok' : '') + '">' + (REASONS[b.reason] || esc(b.reason)) + '</span></td>'
+                            + '<td>' + profiles + '</td><td class="nowrap">' + size(b.size || 0) + '</td>'
+                            + '<td class="actions"><button type="button" class="btn btn-sm" data-restore="' + esc(b.id) + '" data-date="' + esc(date) + '">Restaurer</button> '
+                            + '<button type="button" class="btn btn-sm btn-ghost" data-delete="' + esc(b.id) + '">Supprimer</button></td></tr>';
+                    }).join('') : '<tr><td colspan="5" class="hint">Aucune sauvegarde pour l\'instant.</td></tr>';
+                }).catch(() => {});
+            }
+            document.getElementById('btnBackupNow').addEventListener('click', (event) => {
+                event.target.disabled = true;
+                fetch('/api/backups', { method: 'POST' }).then((r) => r.json()).then((data) => {
+                    if (data.error) throw new Error(data.error);
+                    say('Sauvegarde créée.', true);
+                    load();
+                }).catch((error) => say(error.message, false)).finally(() => { event.target.disabled = false; });
+            });
+            rows.addEventListener('click', (event) => {
+                const restore = event.target.closest('[data-restore]');
+                const remove = event.target.closest('[data-delete]');
+                if (restore) {
+                    if (!confirm('Restaurer la sauvegarde du ' + restore.dataset.date + ' ?\n\nLes profils et réglages actuels seront remplacés (une sauvegarde de l\'état actuel est faite avant).')) return;
+                    fetch('/api/backups/' + encodeURIComponent(restore.dataset.restore) + '/restore', { method: 'POST' }).then((r) => r.json()).then((data) => {
+                        if (data.error) throw new Error(data.error);
+                        sessionStorage.setItem('settingsActiveSection', 'section-backups');
+                        location.href = '/settings';
+                    }).catch((error) => say(error.message, false));
+                } else if (remove) {
+                    if (!confirm('Supprimer cette sauvegarde ?')) return;
+                    fetch('/api/backups/' + encodeURIComponent(remove.dataset.delete), { method: 'DELETE' }).then(load);
+                }
+            });
+            load();
+        })();
 
         // ---------- Profils ----------
         const profileSelect = document.getElementById('profileSelect');

@@ -23,6 +23,10 @@
     window.electronAPI = {
         getAppVersion: () => invoke('app_version'),
 
+        // Propre à la version Tauri : démarrage avec Windows.
+        getAutostart: () => invoke('autostart_status'),
+        setAutostart: (enabled, minimized) => invoke('autostart_set', { enabled, minimized }),
+
         minimize: () => invoke('window_minimize'),
         maximize: () => invoke('window_toggle_maximize'),
         close: () => invoke('window_close'),

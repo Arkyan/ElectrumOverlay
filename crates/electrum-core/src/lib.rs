@@ -5,6 +5,7 @@
 //! serveur HTTP : il se teste seul (`cargo test -p electrum-core`).
 
 pub mod assets;
+pub mod backup;
 pub mod commands;
 pub mod error;
 pub mod frontend;

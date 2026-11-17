@@ -3,6 +3,8 @@
 /// pages de notre propre serveur local.
 const COMMANDS: &[&str] = &[
     "app_version",
+    "autostart_status",
+    "autostart_set",
     "window_minimize",
     "window_toggle_maximize",
     "window_close",

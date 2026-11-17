@@ -42,3 +42,12 @@
   Pop $1
   Pop $0
 !macroend
+
+; Désinstallation (pas lors d'une mise à jour, qui passe aussi par le désinstalleur avec /UPDATE) :
+; retire l'entrée « démarrer avec Windows » créée depuis Paramètres › Application.
+!macro NSIS_HOOK_POSTUNINSTALL
+  ${If} $UpdateMode <> 1
+    DeleteRegValue HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "ElectrumOverlay"
+    DeleteRegValue HKCU "Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run" "ElectrumOverlay"
+  ${EndIf}
+!macroend
