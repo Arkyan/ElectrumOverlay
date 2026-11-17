@@ -478,3 +478,20 @@ async fn sauvegardes_et_restauration() {
     assert_eq!(send(&state, "POST", "/api/backups/../restore", None).await.status, StatusCode::BAD_REQUEST);
     assert_eq!(send(&state, "DELETE", &format!("/api/backups/{backup_id}"), None).await.status, StatusCode::OK);
 }
+
+#[tokio::test]
+async fn cartes_twitch_dans_l_editeur_de_scene() {
+    let (state, _dir) = new_state();
+    let id = active_id(&state);
+    for kind in ["goal", "poll", "prediction", "hypetrain"] {
+        let added = send(&state, "POST", &format!("/api/profiles/{id}/custom-text/index"), Some(json!({ "type": kind }))).await.json();
+        let element = added["elementId"].as_str().unwrap().to_string();
+        let item = state.store().config()["display"]["customTexts"]["index"][&element].clone();
+        assert_eq!((item["type"].as_str(), item["size"].as_f64()), (Some(kind), Some(2.0)), "{kind}");
+    }
+    // Les pages d'overlay chargent le rendu des cartes.
+    for page in ["/", "/starting.html", "/pause.html", "/ending.html"] {
+        let html = send(&state, "GET", page, None).await.text();
+        assert!(html.contains("js/twitch-widgets.js") && html.contains("css/twitch-widgets.css"), "{page}");
+    }
+}

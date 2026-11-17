@@ -5,62 +5,39 @@
     <title>Objectif - ElectrumOverlay</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="css/widgets.css">
+    <link rel="stylesheet" href="css/twitch-widgets.css">
     <style>
-        body { padding: calc(12px * var(--w-scale)); }
+        body { padding: calc(12px * var(--w-scale)); font-size: calc(20px * var(--w-scale)); }
         #goal[hidden] { display: none; }
-        #goal .w-bar { height: calc(38px * var(--w-scale)); margin: 0.5em 0 0; }
-        #goal .w-bar-text { font-size: 0.95em; }
-        #goal.achieved .w-bar-fill { background: linear-gradient(90deg, #f59e0b, #fde047); }
     </style>
 </head>
 <body>
-    <!-- Objectif Twitch en cours (Gestionnaire de stream › Objectifs). Source conseillée : 900×140. -->
-    <div class="w-card" id="goal" hidden>
-        <div class="w-row-head">
-            <span class="w-label" id="goalLabel">Objectif</span>
-            <span class="w-timer" id="goalPercent"></span>
-        </div>
-        <div class="w-bar">
-            <div class="w-bar-fill" id="goalFill"></div>
-            <div class="w-bar-text"><span id="goalDescription"></span><span id="goalAmount"></span></div>
-        </div>
-    </div>
+    <!-- Objectif Twitch en cours (Gestionnaire de stream › Objectifs). Source conseillée : 900×140.
+         Aussi disponible comme élément « Objectif Twitch » dans l'éditeur de scène. -->
+    <div class="tw-card" id="goal" hidden></div>
 
     <script src="js/config.js"></script>
+    <script src="js/twitch-widgets.js"></script>
     <script src="js/widgets.js"></script>
     <script>
     (function () {
-        const W = Widgets;
-        const $ = (id) => document.getElementById(id);
+        const card = document.getElementById('goal');
         let hideTimer = null;
 
         function render(goal, phase) {
             clearTimeout(hideTimer);
-            const card = $('goal');
-            if (!goal) {
-                card.hidden = true;
-                return;
-            }
-            const percent = goal.target > 0 ? Math.min(100, Math.round((goal.current / goal.target) * 100)) : 0;
-            const done = goal.achieved || (goal.target > 0 && goal.current >= goal.target);
-            card.hidden = false;
-            card.classList.toggle('achieved', done);
-            $('goalLabel').textContent = done ? 'Objectif atteint !' : 'Objectif';
-            $('goalDescription').textContent = goal.description || (goal.unit ? goal.unit.charAt(0).toUpperCase() + goal.unit.slice(1) : '');
-            $('goalAmount').textContent = `${W.formatNumber(goal.current)} / ${W.formatNumber(goal.target)}`;
-            $('goalPercent').textContent = `${percent} %`;
-            $('goalFill').style.width = percent + '%';
-            // Objectif terminé sur Twitch : on le laisse affiché un moment puis on le retire.
-            if (phase === 'end') {
-                hideTimer = setTimeout(() => { card.hidden = true; }, 15000);
-            }
+            card.hidden = !goal;
+            if (!goal) return;
+            card.innerHTML = TwitchWidgets.html('goal', goal, phase);
+            // Objectif terminé sur Twitch : affiché encore un moment, puis retiré.
+            if (phase === 'end') hideTimer = setTimeout(() => { card.hidden = true; }, TwitchWidgets.LINGER.goal);
         }
 
-        W.on((message) => {
+        Widgets.on((message) => {
             if (message.type === 'interaction' && message.kind === 'goal') render(message.data, message.phase);
         });
         fetch('/api/interactions').then((r) => r.json()).then((state) => render(state.goal, 'progress')).catch(() => {});
-        W.start();
+        Widgets.start();
     })();
     </script>
 </body>

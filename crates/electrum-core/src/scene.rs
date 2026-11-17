@@ -12,9 +12,11 @@ use crate::time::now_iso;
 use serde_json::{json, Map, Value};
 
 /// Types d'éléments ajoutables depuis l'éditeur (`type` absent ou inconnu ⇒ `text`).
-pub const CUSTOM_ELEMENT_TYPES: [&str; 14] = [
+/// Les quatre derniers (cartes Twitch) sont propres à la version Rust.
+pub const CUSTOM_ELEMENT_TYPES: [&str; 18] = [
     "text", "image", "box", "clock", "chat", "chatTicker", "alerts", "spotify", "keys",
     "statBadge", "badge", "rotatingText", "infoPanel", "bottomBar",
+    "goal", "poll", "prediction", "hypetrain",
 ];
 
 /// Données live affichables par un `statBadge`.
@@ -331,6 +333,10 @@ fn new_custom_element(args: &Value) -> Value {
             e.insert("scrolling".into(), json!(""));
             e.insert("size".into(), json!(1.6));
             e.insert("autoShow".into(), json!(true));
+        }
+        // Cartes Twitch : taille par la police ; sans couleur, celle du thème de la page.
+        "goal" | "poll" | "prediction" | "hypetrain" => {
+            e.insert("size".into(), json!(2));
         }
         "keys" => {
             e.insert("color".into(), color_or("#f59e0b"));

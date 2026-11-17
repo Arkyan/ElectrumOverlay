@@ -52,8 +52,16 @@
         badge: 'Badge',
         rotatingText: 'Messages rotatifs',
         infoPanel: 'Panneau Trucky',
-        bottomBar: 'Bandeau bas'
+        bottomBar: 'Bandeau bas',
+        goal: 'Objectif Twitch',
+        poll: 'Sondage',
+        prediction: 'Prédiction',
+        hypetrain: 'Hype train'
     };
+
+    // Cartes Twitch (objectif, sondage, prédiction, hype train) : hauteur = contenu, seule la
+    // largeur se règle (voir renderCustomTextsFromConfig).
+    const TWITCH_CARD_TYPES = ['goal', 'poll', 'prediction', 'hypetrain'];
 
     function customLabel(el) {
         return CUSTOM_TYPE_LABELS[el.dataset.customType] || 'Texte';
@@ -125,6 +133,9 @@
                l'œil : celui-ci pose un display:none inline !important, prioritaire sur cette règle
                (style attribute > feuille de style, à importance égale). */
             .scene-auto-hidden { display: flex !important; }
+            /* Cartes Twitch (objectif, sondage...) : invisibles tant que rien n'est en cours sur
+               Twitch — en édition, un exemple est affiché (fillWidgetPreview) pour les placer. */
+            .tw-widget.tw-idle { display: block !important; }
             [data-scene-alert-zone]:not(.show) .alert-box { display: none !important; }
             [data-scene-alert-zone]:not(.show)::after {
                 content: "Zone d'alerte — l'alerte s'y ajuste au plus grand";
@@ -695,6 +706,10 @@
                 }
             }
         }
+        if (TWITCH_CARD_TYPES.includes(el.dataset.customType) && el.classList.contains('tw-idle') && globalThis.TwitchWidgets) {
+            const sample = TwitchWidgets.sample(el.dataset.customType);
+            el.innerHTML = TwitchWidgets.html(el.dataset.customType, sample.data, sample.phase);
+        }
         if (el.dataset.customType === 'chatTicker') {
             // Bandeau FIGÉ en édition (advanceTicker respecte ce dataset) : sinon les messages
             // d'exemple défileraient hors du cadre en quelques secondes, laissant un bandeau vide
@@ -743,12 +758,18 @@
             // voir renderCustomTextsFromConfig) — il n'a donc pas de poignées, l'échelle (%) dans
             // le panneau de propriétés est son seul réglage de taille. En laisser aurait écrit une
             // largeur/hauteur désormais ignorée au rendu : redimensionnement sans aucun effet.
-            if (el.dataset.customType !== 'keys') {
-                addResizeHandle(el, id, 'both');
-                addResizeHandle(el, id, 'x');
-                addResizeHandle(el, id, 'y');
-            }
+            decorateResize(el, id);
         });
+    }
+
+    function decorateResize(el, id) {
+        if (TWITCH_CARD_TYPES.includes(el.dataset.customType)) {
+            addResizeHandle(el, id, 'x');
+        } else if (el.dataset.customType !== 'keys') {
+            addResizeHandle(el, id, 'both');
+            addResizeHandle(el, id, 'x');
+            addResizeHandle(el, id, 'y');
+        }
     }
 
     /**
@@ -939,6 +960,15 @@
         wireStaticElements();
         wireCustomTexts();
         reportReady();
+        // Carte Twitch mise à jour en direct (test lancé depuis l'aperçu, vrai sondage...) : son
+        // contenu a été remplacé, étiquette et poignée avec — on les remet.
+        window.addEventListener('scene-widget-refreshed', (event) => {
+            const el = event.detail;
+            if (!el || !el.isConnected) return;
+            fillWidgetPreview(el); // redevenu vide (fin du sondage...) : l'exemple revient
+            addLabel(el, customLabel(el));
+            decorateResize(el, el.dataset.sceneEl);
+        });
         window.addEventListener('scene-custom-texts-rendered', () => {
             wireCustomTexts();
             reportReady();

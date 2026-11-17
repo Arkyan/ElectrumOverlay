@@ -635,7 +635,9 @@ function renderCustomTextsFromConfig() {
         const sizeFromContent = (type === 'keys');
         if (!sizeFromContent) {
             if (typeof item.width === 'number' && item.width > 0) el.style.width = (item.width / zoom) + 'vw';
-            if (typeof item.height === 'number' && item.height > 0) el.style.height = (item.height / zoom) + 'vh';
+            // Cartes Twitch (objectif, sondage...) : hauteur toujours celle du contenu (le nombre
+            // de choix varie d'un sondage à l'autre), seule la largeur se règle.
+            if (typeof item.height === 'number' && item.height > 0 && !TWITCH_WIDGET_TYPES.includes(type)) el.style.height = (item.height / zoom) + 'vh';
         }
 
         if (type === 'text') {
@@ -916,6 +918,20 @@ function renderCustomTextsFromConfig() {
                 el.classList.add('scene-auto-hidden');
                 ensureSceneAutoShow();
             }
+        } else if (TWITCH_WIDGET_TYPES.includes(type)) {
+            // Objectif / sondage / prédiction / hype train (js/twitch-widgets.js) : invisibles tant
+            // que rien n'est en cours sur Twitch (classe .tw-idle), remplis par
+            // renderTwitchWidgets() au chargement (/api/interactions) et à chaque message
+            // WebSocket 'interaction'. Couleur d'accent : celle de l'élément, sinon la couleur
+            // principale du thème de la page.
+            el.className = 'tw-widget tw-card';
+            applySceneWidgetStyle(el, item, 2);
+            const theme = cfg.themes?.[pageKey] || cfg.themes?.index || {};
+            if (globalThis.TwitchWidgets) TwitchWidgets.setAccent(el, item.color || theme.primary || '#a855f7');
+            el.style.textShadow = '';
+            if (!el.style.width) el.style.width = type === 'goal' ? '36vw' : '24vw';
+            renderTwitchWidget(el);
+            ensureTwitchInteractions();
         }
         // Après les branches par type, pour que l'ordre choisi dans l'éditeur ait le dernier mot.
         applyStackOrder(el, layoutEntry, CUSTOM_BASE_Z[type] ?? CUSTOM_BASE_Z_DEFAULT);
@@ -1187,6 +1203,61 @@ function ensureSceneAutoShow() {
     };
     plan('infoPanel', cfg.panels?.left, 30000, 300000);
     plan('bottomBar', cfg.panels?.bottom, 10000, 180000);
+}
+
+/**
+ * Objectif, sondage, prédiction, hype train en cours (éléments de scène du même nom). Tenu à jour
+ * par le WebSocket ('interaction') et chargé une fois depuis /api/interactions dès qu'un de ces
+ * éléments existe sur la page. kind -> { data, phase } ; absent = rien en cours.
+ */
+const TWITCH_WIDGET_TYPES = ['goal', 'poll', 'prediction', 'hypetrain'];
+const twitchInteractions = {};
+const twitchInteractionTimers = {};
+let twitchInteractionsLoaded = false;
+
+function renderTwitchWidget(el) {
+    const current = twitchInteractions[el.dataset.customType];
+    if (!current || !globalThis.TwitchWidgets) {
+        el.classList.add('tw-idle');
+        el.innerHTML = '';
+    } else {
+        el.classList.remove('tw-idle');
+        el.innerHTML = TwitchWidgets.html(el.dataset.customType, current.data, current.phase);
+    }
+    // En mode édition, le bridge ajoute étiquette et poignées dans l'élément : innerHTML vient
+    // de les effacer, on les lui redemande.
+    window.dispatchEvent(new CustomEvent('scene-widget-refreshed', { detail: el }));
+}
+
+function renderTwitchWidgets(kind) {
+    document.querySelectorAll('.tw-widget[data-custom-type="' + kind + '"]').forEach(renderTwitchWidget);
+}
+
+function setTwitchInteraction(kind, data, phase) {
+    if (!TWITCH_WIDGET_TYPES.includes(kind)) return;
+    clearTimeout(twitchInteractionTimers[kind]);
+    const entry = data ? { data, phase } : null;
+    if (entry) twitchInteractions[kind] = entry;
+    else delete twitchInteractions[kind];
+    renderTwitchWidgets(kind);
+    // Fini : le résultat reste affiché un moment, puis l'élément disparaît.
+    if (entry && phase === 'end') {
+        const linger = globalThis.TwitchWidgets?.LINGER?.[kind] ?? 15000;
+        twitchInteractionTimers[kind] = setTimeout(() => {
+            if (twitchInteractions[kind] === entry) setTwitchInteraction(kind, null);
+        }, linger);
+    }
+}
+
+function ensureTwitchInteractions() {
+    if (twitchInteractionsLoaded) return;
+    twitchInteractionsLoaded = true;
+    fetch('/api/interactions').then((r) => r.ok ? r.json() : null).then((state) => {
+        if (!state) return;
+        TWITCH_WIDGET_TYPES.forEach((kind) => {
+            if (state[kind] && !twitchInteractions[kind]) setTwitchInteraction(kind, state[kind], 'progress');
+        });
+    }).catch(() => {});
 }
 
 /**
@@ -1816,6 +1887,11 @@ function initWebSocket() {
 
         if (data.type === 'spotify-track-updated') {
             applySpotifyTrack(data.track);
+            return;
+        }
+
+        if (data.type === 'interaction') {
+            setTwitchInteraction(data.kind, data.data, data.phase);
             return;
         }
 

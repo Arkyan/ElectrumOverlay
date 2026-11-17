@@ -263,6 +263,10 @@
                             <button type="button" data-type="rotatingText">🔁&nbsp;&nbsp;Messages rotatifs</button>
                             <button type="button" data-type="infoPanel">📋&nbsp;&nbsp;Panneau Trucky</button>
                             <button type="button" data-type="bottomBar">📢&nbsp;&nbsp;Bandeau bas</button>
+                            <button type="button" data-type="goal">🎯&nbsp;&nbsp;Objectif Twitch</button>
+                            <button type="button" data-type="poll">📊&nbsp;&nbsp;Sondage</button>
+                            <button type="button" data-type="prediction">🔮&nbsp;&nbsp;Prédiction</button>
+                            <button type="button" data-type="hypetrain">🚂&nbsp;&nbsp;Hype train</button>
                         </div>
                         <button type="button" class="se-icon-btn" id="btnAddElement" title="Ajouter un élément">+</button>
                         <button type="button" class="se-icon-btn" id="btnDeleteElement" title="Supprimer l'élément sélectionné (un élément intégré est retiré de la scène, rétablissable)">−</button>
@@ -505,7 +509,8 @@
         const TYPE_ICONS = {
             text: 'T', image: '▨', box: '■', clock: '◷', chat: '💬', chatTicker: '🎞️',
             alerts: '🔔', spotify: '🎵', keys: '⌨️',
-            statBadge: '📈', badge: '🏷️', rotatingText: '🔁', infoPanel: '📋', bottomBar: '📢'
+            statBadge: '📈', badge: '🏷️', rotatingText: '🔁', infoPanel: '📋', bottomBar: '📢',
+            goal: '🎯', poll: '📊', prediction: '🔮', hypetrain: '🚂'
         };
 
         function renderSources() {
@@ -669,6 +674,12 @@
             { value: 'instagram', label: 'Instagram' }, { value: 'tiktok', label: 'TikTok' }
         ];
 
+        const TWITCH_CARD_SPECS = [
+            { prop: 'size', label: 'Taille (vh)', kind: 'number', def: 2, step: 0.1, min: 0.5, max: 30 },
+            { prop: 'color', label: "Couleur d'accent", kind: 'color', def: '#a855f7' },
+            { prop: 'font', label: 'Police', kind: 'font' },
+            { prop: 'opacity', label: 'Opacité du fond (%)', kind: 'number', def: 90, step: 5, min: 0, max: 100 }
+        ];
         const PROP_SPECS = {
             text: [
                 { prop: 'text', label: 'Texte', kind: 'text' },
@@ -764,6 +775,12 @@
                 { prop: 'font', label: 'Police', kind: 'font' },
                 { prop: 'glow', label: 'Effet néon', kind: 'check' }
             ],
+            // Cartes Twitch : taille par la police (tout en em), largeur à la poignée, hauteur
+            // = contenu. Sans couleur choisie, elles prennent la couleur principale du thème.
+            goal: TWITCH_CARD_SPECS,
+            poll: TWITCH_CARD_SPECS,
+            prediction: TWITCH_CARD_SPECS,
+            hypetrain: TWITCH_CARD_SPECS,
             infoPanel: [
                 { prop: 'showTrip', label: 'Section « trajet »', kind: 'check', def: true },
                 { prop: 'title1', label: 'Titre section 1', kind: 'text', placeholder: 'TRAJET ACTUEL' },
@@ -872,6 +889,9 @@
                 }
                 if (item.customType === 'infoPanel') {
                     note += '<p class="hint">Trajet en cours et statistiques VTC du compte Trucky configuré — active l\'intégration depuis la page <a href="/integrations" target="_blank">Intégrations</a>.</p>';
+                }
+                if (['goal', 'poll', 'prediction', 'hypetrain'].includes(item.customType)) {
+                    note += '<p class="hint">Invisible sur l\'overlay tant que rien n\'est en cours sur Twitch (un exemple est affiché ici pour le placer). Teste-le depuis la page <a href="/tests" target="_blank">Tests</a>. Nécessite d\'avoir autorisé Twitch avec les objectifs, sondages, prédictions et hype train (voir le tableau de bord).</p>';
                 }
                 if (item.customType === 'keys') {
                     note += '<p class="hint">Affiche les touches clavier/souris pressées (WASD, flèches, Espace, modificateurs, F1-F12, chiffres, clics) — active la capture depuis la page <a href="/integrations" target="_blank">Intégrations</a>.</p>';

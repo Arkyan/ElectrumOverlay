@@ -1,0 +1,80 @@
+/* Cartes objectif / sondage / prédiction / hype train (js/twitch-widgets.js). Tout en em : la
+   taille se règle par la police de la carte (éléments de scène : « Taille (vh) »). */
+
+.tw-card {
+    font-family: var(--widget-font, 'Inter', Arial, sans-serif);
+    color: #f1f5f9;
+    background: rgba(var(--theme-panel-bg-rgb, 15, 23, 42), var(--widget-bg-opacity, 0.9));
+    border: 0.11em solid rgba(var(--tw-accent-rgb, 168, 85, 247), 0.55);
+    border-radius: 0.9em;
+    box-shadow: 0 0.55em 1.6em rgba(0, 0, 0, 0.35), 0 0 1.3em rgba(var(--tw-accent-rgb, 168, 85, 247), 0.18);
+    padding: 0.9em 1.1em;
+    box-sizing: border-box;
+    line-height: 1.25;
+    -webkit-font-smoothing: antialiased;
+}
+
+.tw-head { display: flex; align-items: center; justify-content: space-between; gap: 1em; }
+.tw-label { font-size: 0.66em; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; color: var(--tw-accent, #a855f7); }
+.tw-timer { font-variant-numeric: tabular-nums; font-weight: 700; font-size: 0.8em; color: #94a3b8; }
+.tw-title { font-weight: 700; font-size: 1.1em; margin: 0.2em 0 0.7em; overflow-wrap: anywhere; }
+.tw-title-tight { margin: 0.1em 0 0; }
+.tw-foot { font-size: 0.8em; font-weight: 600; color: #94a3b8; margin-top: 0.3em; }
+.tw-top { display: flex; gap: 1.2em; }
+.tw-top strong { color: #f1f5f9; }
+.tw-grow { flex: 1; min-width: 0; }
+
+.tw-bar {
+    position: relative;
+    height: 1.7em;
+    border-radius: 0.5em;
+    background: rgba(255, 255, 255, 0.08);
+    overflow: hidden;
+    margin: 0.45em 0 0;
+}
+.tw-bar + .tw-bar { margin-top: 0.45em; }
+.tw-bar-fill {
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: 0;
+    background: linear-gradient(90deg, rgba(var(--tw-accent-rgb, 168, 85, 247), 0.75), var(--tw-accent, #a855f7));
+    transition: width 0.8s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.tw-bar-text {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.8em;
+    height: 100%;
+    padding: 0 0.7em;
+    font-size: 0.82em;
+    font-weight: 600;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+}
+.tw-bar-text span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tw-bar-text span:last-child { flex-shrink: 0; font-variant-numeric: tabular-nums; }
+
+.tw-blue .tw-bar-fill { background: linear-gradient(90deg, #1d4ed8, #387aff); }
+.tw-pink .tw-bar-fill { background: linear-gradient(90deg, #be185d, #f5009b); }
+.tw-gold .tw-bar-fill { background: linear-gradient(90deg, #f59e0b, #fde047); }
+.tw-loser { opacity: 0.45; }
+.tw-winner { box-shadow: 0 0 0 0.12em var(--tw-accent, #a855f7); }
+
+.tw-hype-head { display: flex; align-items: center; gap: 0.8em; }
+.tw-level {
+    display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;
+    width: 2.6em; height: 2.6em; border-radius: 50%;
+    background: linear-gradient(135deg, rgba(var(--tw-accent-rgb, 168, 85, 247), 0.7), var(--tw-accent, #a855f7));
+    font-weight: 800; box-shadow: 0 0 1em rgba(var(--tw-accent-rgb, 168, 85, 247), 0.6);
+}
+.tw-level.tw-golden { background: linear-gradient(135deg, #f59e0b, #fde047); color: #1f1300; }
+
+/* Élément de scène sans rien en cours : invisible (l'éditeur de scène le force visible, avec un
+   exemple, pour pouvoir le placer). */
+.tw-widget.tw-idle { display: none; }
+
+.tw-enter { animation: tw-in 0.45s cubic-bezier(0.22, 1, 0.36, 1) both; }
+.tw-leave { animation: tw-out 0.4s ease-in both; }
+@keyframes tw-in { from { opacity: 0; transform: translateY(0.9em) scale(0.98); } to { opacity: 1; transform: none; } }
+@keyframes tw-out { to { opacity: 0; transform: translateY(0.7em) scale(0.98); } }

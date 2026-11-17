@@ -30,6 +30,10 @@
             const triplet = rgb(value);
             if (triplet) root.setProperty(`--w-${name}-rgb`, triplet);
         }
+        // Cartes objectif/sondage/prédiction/hype train (css/twitch-widgets.css).
+        if (globalThis.TwitchWidgets && theme.primary) TwitchWidgets.setAccent(document.documentElement, theme.primary);
+        const panel = rgb(theme.panelBg);
+        if (panel) root.setProperty('--theme-panel-bg-rgb', panel);
         const scale = parseFloat(params.get('scale'));
         if (scale > 0) root.setProperty('--w-scale', String(scale));
     }

@@ -5,137 +5,58 @@
     <title>Sondages, prédictions, hype train - ElectrumOverlay</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="css/widgets.css">
+    <link rel="stylesheet" href="css/twitch-widgets.css">
     <style>
-        body { padding: calc(12px * var(--w-scale)); }
-        #stack { display: flex; flex-direction: column; gap: calc(14px * var(--w-scale)); }
-        .w-bar.blue .w-bar-fill { background: linear-gradient(90deg, #1d4ed8, #387aff); }
-        .w-bar.pink .w-bar-fill { background: linear-gradient(90deg, #be185d, #f5009b); }
-        .w-result { font-size: 0.8em; font-weight: 600; color: var(--w-muted); margin-top: 0.3em; }
-        .hype-level {
-            display: inline-flex; align-items: center; justify-content: center;
-            min-width: 2.6em; height: 2.6em; border-radius: 50%;
-            background: linear-gradient(135deg, var(--w-secondary), var(--w-primary));
-            font-weight: 800; font-size: 1em; box-shadow: 0 0 18px rgba(var(--w-primary-rgb), 0.6);
-        }
-        .hype-head { display: flex; align-items: center; gap: 0.8em; margin-bottom: 0.7em; }
-        .hype-head .w-title { margin: 0; }
-        .golden .hype-level { background: linear-gradient(135deg, #f59e0b, #fde047); color: #1f1300; }
-        .hype-top { display: flex; gap: 1.2em; font-size: 0.78em; color: var(--w-muted); margin-top: 0.2em; }
-        .hype-top strong { color: var(--w-text); }
+        body { padding: calc(12px * var(--w-scale)); font-size: calc(18px * var(--w-scale)); }
+        #stack { display: flex; flex-direction: column; gap: 0.8em; }
     </style>
 </head>
 <body>
     <!-- Sondages, prédictions et hype train en cours. Source conseillée : 560×720.
-         ?only=poll,prediction,hypetrain pour n'en garder que certains. -->
+         ?only=poll,prediction,hypetrain pour n'en garder que certains.
+         Aussi disponibles comme éléments séparés dans l'éditeur de scène. -->
     <div id="stack"></div>
 
     <script src="js/config.js"></script>
+    <script src="js/twitch-widgets.js"></script>
     <script src="js/widgets.js"></script>
     <script>
     (function () {
-        const W = Widgets;
-        const esc = W.escapeHtml;
-        const only = (W.params.get('only') || 'poll,prediction,hypetrain').split(',').map((s) => s.trim());
+        const only = (Widgets.params.get('only') || 'poll,prediction,hypetrain').split(',').map((s) => s.trim());
         const ORDER = ['hypetrain', 'poll', 'prediction'];
-        const cards = {};   // kind -> { el, data, phase, hideTimer }
-
-        function bar(label, value, percent, extraClass = '') {
-            return `<div class="w-bar ${extraClass}"><div class="w-bar-fill" style="width:${percent}%"></div>`
-                + `<div class="w-bar-text"><span>${esc(label)}</span><span>${value}</span></div></div>`;
-        }
-
-        function pollHtml(poll, phase) {
-            const total = poll.choices.reduce((sum, c) => sum + c.votes, 0);
-            const max = Math.max(0, ...poll.choices.map((c) => c.votes));
-            const ended = phase === 'end';
-            const rows = poll.choices.map((c) => {
-                const percent = total ? Math.round((c.votes / total) * 100) : 0;
-                const cls = ended && total ? (c.votes === max ? 'winner' : 'loser') : '';
-                return bar(c.title, `${percent} %`, percent, cls);
-            }).join('');
-            const timer = ended ? 'Terminé' : W.formatCountdown(W.secondsUntil(poll.endsAt));
-            return `<div class="w-row-head"><span class="w-label">Sondage</span><span class="w-timer" data-ends="${ended ? '' : esc(poll.endsAt)}">${timer}</span></div>`
-                + `<div class="w-title">${esc(poll.title)}</div>${rows}`
-                + `<div class="w-result">${W.formatNumber(total)} vote${total > 1 ? 's' : ''}</div>`;
-        }
-
-        function predictionHtml(prediction, phase) {
-            const total = prediction.outcomes.reduce((sum, o) => sum + o.points, 0);
-            const resolved = phase === 'end' && prediction.status === 'resolved';
-            const rows = prediction.outcomes.map((o) => {
-                const percent = total ? Math.round((o.points / total) * 100) : 0;
-                const ratio = o.points ? (total / o.points).toFixed(2).replace('.', ',') : '–';
-                const cls = [o.color === 'pink' ? 'pink' : 'blue', resolved ? (o.id === prediction.winningOutcomeId ? 'winner' : 'loser') : ''].join(' ');
-                return bar(o.title, `${percent} % · 1:${ratio}`, percent, cls);
-            }).join('');
-            let status;
-            if (phase === 'end') status = prediction.status === 'canceled' ? 'Annulée' : 'Résultat';
-            else if (phase === 'lock') status = 'Verrouillée';
-            else status = W.formatCountdown(W.secondsUntil(prediction.locksAt));
-            const live = phase === 'begin' || phase === 'progress';
-            return `<div class="w-row-head"><span class="w-label">Prédiction</span><span class="w-timer" data-ends="${live ? esc(prediction.locksAt) : ''}">${status}</span></div>`
-                + `<div class="w-title">${esc(prediction.title)}</div>${rows}`
-                + `<div class="w-result">${W.formatNumber(total)} points de chaîne en jeu</div>`;
-        }
-
-        function hypeHtml(hype, phase) {
-            const ended = phase === 'end';
-            const percent = hype.goal ? Math.min(100, Math.round((hype.progress / hype.goal) * 100)) : 100;
-            const top = (hype.topContributions || []).slice(0, 2)
-                .map((c) => `<span>${c.type === 'bits' ? 'Bits' : 'Subs'} : <strong>${esc(c.user)}</strong></span>`).join('');
-            return `<div class="hype-head"><span class="hype-level">${hype.level}</span>`
-                + `<div style="flex:1"><div class="w-row-head"><span class="w-label">${hype.golden ? 'Golden Kappa Train' : 'Hype train'}</span>`
-                + `<span class="w-timer" data-ends="${ended ? '' : esc(hype.expiresAt)}">${ended ? 'Terminé' : W.formatCountdown(W.secondsUntil(hype.expiresAt))}</span></div>`
-                + `<div class="w-title">${ended ? `Niveau ${hype.level} atteint !` : `Niveau ${hype.level}`}</div></div></div>`
-                + (ended ? '' : bar(`Vers le niveau ${hype.level + 1}`, `${percent} %`, percent))
-                + (top ? `<div class="hype-top">${top}</div>` : '');
-        }
-
-        const RENDER = { poll: pollHtml, prediction: predictionHtml, hypetrain: hypeHtml };
-        // Durée d'affichage du résultat après la fin.
-        const LINGER = { poll: 15000, prediction: 20000, hypetrain: 12000 };
+        const cards = {};   // kind -> { el, hideTimer }
 
         function show(kind, data, phase) {
-            if (!only.includes(kind)) return;
+            if (!only.includes(kind) || !ORDER.includes(kind)) return;
             let card = cards[kind];
             if (!card) {
                 const el = document.createElement('div');
-                el.className = 'w-card w-enter';
-                const stack = document.getElementById('stack');
+                el.className = 'tw-card tw-enter';
                 // Ordre stable : hype train, puis sondage, puis prédiction.
                 const next = ORDER.slice(ORDER.indexOf(kind) + 1).map((k) => cards[k]?.el).find(Boolean);
-                stack.insertBefore(el, next || null);
+                document.getElementById('stack').insertBefore(el, next || null);
                 card = cards[kind] = { el };
             }
             clearTimeout(card.hideTimer);
-            card.el.classList.remove('w-leave');
-            card.el.classList.toggle('golden', kind === 'hypetrain' && !!data.golden);
-            card.el.innerHTML = RENDER[kind](data, phase);
-            if (phase === 'end') card.hideTimer = setTimeout(() => hide(kind), LINGER[kind]);
+            card.el.innerHTML = TwitchWidgets.html(kind, data, phase);
+            if (phase === 'end') card.hideTimer = setTimeout(() => hide(kind), TwitchWidgets.LINGER[kind]);
         }
 
         function hide(kind) {
             const card = cards[kind];
             if (!card) return;
-            card.el.classList.add('w-leave');
+            card.el.classList.add('tw-leave');
             setTimeout(() => card.el.remove(), 400);
             delete cards[kind];
         }
 
-        // Comptes à rebours.
-        setInterval(() => {
-            document.querySelectorAll('[data-ends]').forEach((el) => {
-                if (el.dataset.ends) el.textContent = W.formatCountdown(W.secondsUntil(el.dataset.ends));
-            });
-        }, 1000);
-
-        W.on((message) => {
-            if (message.type === 'interaction' && RENDER[message.kind]) show(message.kind, message.data, message.phase);
+        Widgets.on((message) => {
+            if (message.type === 'interaction') show(message.kind, message.data, message.phase);
         });
         fetch('/api/interactions').then((r) => r.json()).then((state) => {
             for (const kind of ORDER) if (state[kind]) show(kind, state[kind], 'progress');
         }).catch(() => {});
-        W.start();
+        Widgets.start();
     })();
     </script>
 </body>
