@@ -53,11 +53,11 @@
                     <button type="button" class="btn btn-primary" id="btnProfileActivate" {{expr:2}}>{{expr:3}}</button>
                     <button type="button" class="btn" id="btnProfileNew">Nouveau (copie de celui-ci)</button>
                     <button type="button" class="btn" id="btnProfileRename">Renommer</button>
-                    <button type="button" class="btn" id="btnProfileExport">Exporter</button>
-                    <button type="button" class="btn" id="btnProfileImport">Importer</button>
+                    <button type="button" class="btn" id="btnProfileExport">Partager…</button>
+                    <button type="button" class="btn" id="btnProfileImport">Importer…</button>
                     <button type="button" class="btn" id="btnProfileSeedThemes">Ajouter les profils de thèmes</button>
                     <button type="button" class="btn btn-danger" id="btnProfileDelete">Supprimer</button>
-                    <input type="file" id="profileImportFile" accept="application/json" style="display:none;">
+                    <input type="file" id="profileImportFile" accept=".json,application/json" style="display:none;">
                 </div>
                 <div class="field-row" id="profileNameForm" style="display:none; margin-top:var(--space-3);">
                     <div class="field">
@@ -68,6 +68,7 @@
                     <button type="button" class="btn btn-ghost" id="btnProfileNameCancel">Annuler</button>
                 </div>
                 <p class="msg" id="profileMsg" role="status"></p>
+                <p class="hint" style="margin-bottom:0;">Partager crée un fichier avec tout le profil (scènes, éléments, couleurs, alertes, sons et vidéos) à envoyer à un autre streamer. Pour importer, clique sur « Importer… » ou glisse le fichier ici.</p>
         </div>
 
         <div class="settings-section card" id="section-themes">
@@ -196,6 +197,38 @@
                 <p class="hint" id="backupDir" style="margin-bottom:0;"></p>
         </div>
 
+            </div>
+        </div>
+
+        <div class="modal-backdrop" id="shareModal" hidden>
+            <div class="modal" role="dialog" aria-labelledby="shareTitle">
+                <div class="modal-head"><h2 id="shareTitle">Partager le profil</h2><button type="button" class="modal-close" data-close>×</button></div>
+                <div class="modal-body">
+                    <div class="field"><label for="shareName">Nom du profil partagé</label><input type="text" id="shareName"></div>
+                    <div class="field"><label for="shareAuthor">Auteur</label><input type="text" id="shareAuthor" placeholder="Ton pseudo"></div>
+                    <div class="field"><label for="shareDescription">Description</label><textarea id="shareDescription" placeholder="Ex. : thème néon violet, scènes Démarrage, En direct et Pause"></textarea></div>
+                    <label class="checkbox-row"><input type="checkbox" id="shareAssets" checked> <span id="shareAssetsLabel">Inclure les sons et vidéos d'alerte</span></label>
+                    <p class="hint" style="margin-bottom:0;">Les images des éléments « Image » sont des liens : elles ne sont pas copiées dans le fichier.</p>
+                    <div class="msg" id="shareMsg" role="status"></div>
+                </div>
+                <div class="modal-foot">
+                    <button type="button" class="btn btn-ghost" data-close>Annuler</button>
+                    <button type="button" class="btn btn-primary" id="btnShareSave">Enregistrer le fichier</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="modal-backdrop" id="importModal" hidden>
+            <div class="modal" role="dialog" aria-labelledby="importTitle">
+                <div class="modal-head"><h2 id="importTitle">Importer un profil</h2><button type="button" class="modal-close" data-close>×</button></div>
+                <div class="modal-body"><div class="share-preview" id="importPreview"></div>
+                    <label class="checkbox-row" style="margin-top:16px;"><input type="checkbox" id="importActivate" checked> Activer ce profil après l'import</label>
+                    <div class="msg" id="importMsg" role="status"></div>
+                </div>
+                <div class="modal-foot">
+                    <button type="button" class="btn btn-ghost" data-close>Annuler</button>
+                    <button type="button" class="btn btn-primary" id="btnImportConfirm">Importer</button>
+                </div>
             </div>
         </div>
 
@@ -454,20 +487,143 @@
             callProfileApi('/api/profiles/seed-theme-presets', { method: 'POST' });
         });
 
-        document.getElementById('btnProfileExport').addEventListener('click', () => {
-            window.location.href = '/api/profiles/' + VIEWED_PROFILE_ID + '/export';
+        // ---------- Partage / import de profil ----------
+        const escHtml = (t) => String(t ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+        const formatSize = (n) => n >= 1048576 ? (n / 1048576).toFixed(1).replace('.', ',') + ' Mo' : Math.max(1, Math.round(n / 1024)) + ' Ko';
+        function openModal(id) { document.getElementById(id).hidden = false; }
+        function closeModal(id) { document.getElementById(id).hidden = true; }
+        document.querySelectorAll('.modal-backdrop').forEach((backdrop) => {
+            backdrop.addEventListener('click', (e) => {
+                if (e.target === backdrop || e.target.closest('[data-close]')) backdrop.hidden = true;
+            });
         });
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') document.querySelectorAll('.modal-backdrop').forEach((m) => { m.hidden = true; });
+        });
+        function setModalMsg(id, text, ok) {
+            const el = document.getElementById(id);
+            el.textContent = text;
+            el.className = 'msg ' + (ok ? 'success' : 'error');
+        }
+
+        document.getElementById('btnProfileExport').addEventListener('click', async () => {
+            setModalMsg('shareMsg', '', true);
+            try {
+                const info = await fetch('/api/profiles/' + VIEWED_PROFILE_ID + '/share-info').then((r) => r.json());
+                document.getElementById('shareName').value = info.name || '';
+                if (!document.getElementById('shareAuthor').value) document.getElementById('shareAuthor').value = info.author || '';
+                document.getElementById('shareAssetsLabel').textContent = info.assetsCount
+                    ? 'Inclure les sons et vidéos d\'alerte (' + info.assetsCount + ' fichier' + (info.assetsCount > 1 ? 's' : '') + ', ' + formatSize(info.assetsSize) + ')'
+                    : 'Inclure les sons et vidéos d\'alerte (aucun sur ce profil)';
+            } catch (e) { /* valeurs par défaut */ }
+            openModal('shareModal');
+            document.getElementById('shareName').focus();
+        });
+
+        document.getElementById('btnShareSave').addEventListener('click', async () => {
+            const params = {
+                name: document.getElementById('shareName').value,
+                author: document.getElementById('shareAuthor').value,
+                description: document.getElementById('shareDescription').value,
+                assets: document.getElementById('shareAssets').checked ? '1' : '0'
+            };
+            const api = window.electronAPI;
+            if (api && api.saveSharedProfile) {
+                // App : fenêtre « Enregistrer sous » de Windows.
+                try {
+                    const path = await api.saveSharedProfile(VIEWED_PROFILE_ID, params);
+                    if (path) {
+                        closeModal('shareModal');
+                        setProfileMsg('Profil enregistré : ' + path, true);
+                    }
+                } catch (error) {
+                    setModalMsg('shareMsg', String(error), false);
+                }
+            } else {
+                // Navigateur : téléchargement classique.
+                window.location.href = '/api/profiles/' + VIEWED_PROFILE_ID + '/share?' + new URLSearchParams(params);
+                closeModal('shareModal');
+            }
+        });
+
+        // Import : aperçu du fichier avant de l'importer.
+        let pendingImport = null;
+        function previewImport(file) {
+            const reader = new FileReader();
+            reader.onload = () => {
+                let data;
+                try { data = JSON.parse(reader.result); } catch (e) { data = null; }
+                if (!data || typeof data !== 'object' || !data.display) {
+                    setProfileMsg('Ce fichier n\'est pas un profil ElectrumOverlay.', false);
+                    return;
+                }
+                pendingImport = file;
+                const display = data.display || {};
+                const shared = data.shared || {};
+                const themes = display.themes || {};
+                const THEME_NAMES = { starting: 'Démarrage', index: 'En direct', pause: 'Pause', ending: 'Fin' };
+                const swatches = Object.entries(THEME_NAMES).filter(([key]) => themes[key]).map(([key, label]) => {
+                    const t = themes[key];
+                    const colors = [t.primary, t.secondary, t.accent].filter(Boolean).map((c) => '<i style="background:' + escHtml(c) + '"></i>').join('');
+                    return '<div class="share-swatch"><span>' + colors + '</span>' + label + '</div>';
+                }).join('');
+                const customScenes = Object.entries(display.scenes || {}).filter(([key]) => !THEME_NAMES[key]).map(([, scene]) => scene.name || 'Scène');
+                const elements = Object.values(display.customTexts || {}).reduce((n, page) => n + Object.keys(page || {}).length, 0);
+                const assets = ['audio', 'media'].reduce((n, key) => n + Object.keys(data[key] || {}).length, 0);
+                const meta = [shared.author ? 'par ' + escHtml(shared.author) : '', shared.exportedAt ? 'le ' + new Date(shared.exportedAt).toLocaleDateString('fr-FR') : '', formatSize(file.size)].filter(Boolean).join(' · ');
+                document.getElementById('importPreview').innerHTML =
+                    '<div><div class="share-title">' + escHtml(data.name || 'Profil importé') + '</div><div class="share-meta">' + meta + '</div></div>'
+                    + (shared.description ? '<div class="share-desc">' + escHtml(shared.description) + '</div>' : '')
+                    + (swatches ? '<div class="share-swatches">' + swatches + '</div>' : '')
+                    + '<div class="share-stats">'
+                    + '<div><strong>' + (4 + customScenes.length) + '</strong><span>scènes</span></div>'
+                    + '<div><strong>' + elements + '</strong><span>éléments ajoutés</span></div>'
+                    + '<div><strong>' + assets + '</strong><span>sons et vidéos</span></div>'
+                    + '</div>'
+                    + (customScenes.length ? '<div class="share-meta">Scènes personnalisées : ' + customScenes.map(escHtml).join(', ') + '</div>' : '');
+                setModalMsg('importMsg', '', true);
+                openModal('importModal');
+            };
+            reader.readAsText(file);
+        }
 
         document.getElementById('btnProfileImport').addEventListener('click', () => {
+            document.getElementById('profileImportFile').value = '';
             document.getElementById('profileImportFile').click();
         });
-
         document.getElementById('profileImportFile').addEventListener('change', (e) => {
-            const file = e.target.files[0];
-            if (!file) return;
-            const formData = new FormData();
-            formData.append('file', file);
-            callProfileApi('/api/profiles/import', { method: 'POST', body: formData }, (data) => '/settings?profile=' + encodeURIComponent(data.profile.id));
+            if (e.target.files[0]) previewImport(e.target.files[0]);
+        });
+
+        // Glisser-déposer un fichier de profil sur la section Profils.
+        const profilesSection = document.getElementById('section-profiles');
+        profilesSection.addEventListener('dragover', (e) => { e.preventDefault(); profilesSection.classList.add('drop-hint'); });
+        profilesSection.addEventListener('dragleave', () => profilesSection.classList.remove('drop-hint'));
+        profilesSection.addEventListener('drop', (e) => {
+            e.preventDefault();
+            profilesSection.classList.remove('drop-hint');
+            const file = e.dataTransfer.files[0];
+            if (file) previewImport(file);
+        });
+
+        document.getElementById('btnImportConfirm').addEventListener('click', async (e) => {
+            if (!pendingImport) return;
+            const button = e.currentTarget;
+            button.disabled = true;
+            setModalMsg('importMsg', 'Import en cours…', true);
+            try {
+                const formData = new FormData();
+                formData.append('file', pendingImport);
+                const data = await fetch('/api/profiles/import', { method: 'POST', body: formData }).then((r) => r.json());
+                if (!data.ok) throw new Error(data.error || 'Import impossible');
+                if (document.getElementById('importActivate').checked) {
+                    await fetch('/api/profiles/' + encodeURIComponent(data.profile.id) + '/activate', { method: 'POST' });
+                }
+                window.location.href = '/settings?profile=' + encodeURIComponent(data.profile.id);
+            } catch (error) {
+                setModalMsg('importMsg', error.message, false);
+                button.disabled = false;
+            }
         });
 
         // ---------- Sons d'alerte (upload immédiat, indépendant du bouton Enregistrer) ----------

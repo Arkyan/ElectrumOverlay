@@ -5,6 +5,7 @@ const COMMANDS: &[&str] = &[
     "app_version",
     "autostart_status",
     "autostart_set",
+    "profile_share_save",
     "window_minimize",
     "window_toggle_maximize",
     "window_close",

@@ -497,3 +497,24 @@ async fn cartes_twitch_dans_l_editeur_de_scene() {
     assert_eq!(send(&state, "GET", "/css/accent.css", None).await.headers["cache-control"], "no-store");
     assert_eq!(send(&state, "GET", "/chat.html", None).await.status, StatusCode::NOT_FOUND);
 }
+
+#[tokio::test]
+async fn partage_de_profil() {
+    let (state, _dir) = new_state();
+    let id = active_id(&state);
+    let info = send(&state, "GET", &format!("/api/profiles/{id}/share-info"), None).await.json();
+    assert_eq!(info["assetsCount"], 0);
+
+    let shared = send(&state, "GET", &format!("/api/profiles/{id}/share?name=N%C3%A9on&author=moi&description=Violet&assets=0"), None).await;
+    let disposition = shared.headers["content-disposition"].to_str().unwrap().to_string();
+    assert!(disposition.contains("filename=\"N_on.electrumprofile.json\"") && disposition.contains("filename*=UTF-8''N%C3%A9on.electrumprofile.json"), "{disposition}");
+    assert_eq!(electrum_server::routes::profiles::share_filename("Néon : violet?"), "Néon _ violet_.electrumprofile.json");
+    let payload = shared.json();
+    assert_eq!((payload["name"].as_str(), payload["shared"]["author"].as_str(), payload["shared"]["description"].as_str()), (Some("Néon"), Some("moi"), Some("Violet")));
+    assert!(payload["display"]["themes"].is_object());
+
+    // Réimport du fichier partagé.
+    let imported = upload(&state, "/api/profiles/import", "neon.electrumprofile.json", "application/json", payload.to_string().as_bytes()).await.json();
+    assert_eq!(imported["profile"]["name"], "Néon");
+    assert_eq!(send(&state, "GET", "/api/profiles/inconnu/share", None).await.status, StatusCode::NOT_FOUND);
+}

@@ -26,6 +26,8 @@
         // Propre à la version Tauri : démarrage avec Windows.
         getAutostart: () => invoke('autostart_status'),
         setAutostart: (enabled, minimized) => invoke('autostart_set', { enabled, minimized }),
+        // Partage de profil : fenêtre « Enregistrer sous », renvoie le chemin (null si annulé).
+        saveSharedProfile: (id, params) => invoke('profile_share_save', { id, params }),
 
         minimize: () => invoke('window_minimize'),
         maximize: () => invoke('window_toggle_maximize'),

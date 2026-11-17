@@ -126,6 +126,9 @@ fn create_window(app: &AppHandle, path: &str) -> tauri::Result<WebviewWindow> {
         .decorations(false)
         .background_color(tauri::window::Color(0x18, 0x19, 0x1d, 0xff))
         .initialization_script(BRIDGE)
+        // Les fichiers glissés sur la fenêtre arrivent à la page (import de profil par
+        // glisser-déposer) au lieu d'être interceptés par Tauri.
+        .disable_drag_drop_handler()
         .on_navigation(move |url| {
             if is_own_server(url, port) {
                 return true;
@@ -293,6 +296,30 @@ fn autostart_set(app: AppHandle, enabled: bool, minimized: bool) -> Result<Value
     Ok(autostart_status(app))
 }
 
+/// Partage d'un profil : fenêtre « Enregistrer sous » de Windows, puis écriture du fichier.
+/// `params` : `name`, `author`, `description`, `assets` (comme `GET /api/profiles/:id/share`).
+/// Renvoie le chemin choisi, ou `None` si l'utilisateur a annulé.
+#[tauri::command]
+async fn profile_share_save(app: AppHandle, id: String, params: std::collections::HashMap<String, String>) -> Result<Option<String>, String> {
+    let state = app.state::<Desktop>().state.clone();
+    let (filename, content) =
+        electrum_server::routes::profiles::shared_profile(&state, &id, &params).map_err(|error| error.1)?;
+    let (tx, rx) = tokio::sync::oneshot::channel();
+    app.dialog()
+        .file()
+        .set_title("Partager le profil")
+        .set_file_name(&filename)
+        .add_filter("Profil ElectrumOverlay", &["json"])
+        .save_file(move |path| {
+            let _ = tx.send(path);
+        });
+    let Some(path) = rx.await.map_err(|error| error.to_string())? else { return Ok(None) };
+    let path = path.into_path().map_err(|error| error.to_string())?;
+    std::fs::write(&path, content).map_err(|error| format!("Écriture de {} impossible : {error}", path.display()))?;
+    state.log("info", format!("📤 Profil partagé enregistré : {}", path.display()));
+    Ok(Some(path.display().to_string()))
+}
+
 fn start_minimized(app: &AppHandle) -> bool {
     let desktop = app.state::<Desktop>();
     let store = desktop.state.store();
@@ -455,6 +482,7 @@ pub fn run() {
             app_version,
             autostart_status,
             autostart_set,
+            profile_share_save,
             window_minimize,
             window_toggle_maximize,
             window_close,

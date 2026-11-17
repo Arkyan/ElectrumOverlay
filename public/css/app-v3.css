@@ -440,3 +440,39 @@ input:focus, textarea:focus, select:focus { border-color: var(--accent); box-sha
 .card-title.with-actions .btn { text-transform: none; letter-spacing: 0; }
 .history-scroll { max-height: 340px; overflow-y: auto; }
 .table td.nowrap { white-space: nowrap; width: 1%; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+
+/* Fenêtres modales (partage / import de profil) */
+.modal-backdrop {
+    position: fixed; inset: 0; z-index: 1000; display: flex; align-items: center; justify-content: center;
+    background: rgba(5, 6, 9, 0.66); backdrop-filter: blur(3px); padding: 24px;
+}
+.modal-backdrop[hidden] { display: none; }
+.modal {
+    width: min(560px, 100%); max-height: calc(100vh - 48px); overflow-y: auto;
+    background: var(--surface); border: 1px solid var(--border-strong); border-radius: var(--radius);
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(var(--accent-rgb), 0.1);
+}
+.modal-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 18px 22px; border-bottom: 1px solid var(--border); }
+.modal-head h2 { margin: 0; font-size: 17px; }
+.modal-body { padding: 20px 22px; }
+.modal-body .field { margin-bottom: 14px; }
+.modal-body .field input, .modal-body .field textarea { width: 100%; }
+.modal-body textarea { min-height: 76px; resize: vertical; }
+.modal-foot { display: flex; justify-content: flex-end; gap: 10px; padding: 14px 22px; border-top: 1px solid var(--border); }
+.modal-close { background: none; border: none; color: var(--text-muted); font-size: 20px; line-height: 1; cursor: pointer; padding: 4px 8px; border-radius: 6px; }
+.modal-close:hover { background: var(--surface-elevated); color: var(--text); }
+
+/* Aperçu d'un profil à importer */
+.share-preview { display: grid; gap: 14px; }
+.share-title { font-size: 18px; font-weight: 700; }
+.share-meta { font-size: 13px; color: var(--text-muted); }
+.share-desc { font-size: 14px; color: var(--text); white-space: pre-wrap; }
+.share-swatches { display: flex; flex-wrap: wrap; gap: 10px; }
+.share-swatch { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-muted); }
+.share-swatch span { display: inline-flex; border-radius: 6px; overflow: hidden; border: 1px solid var(--border); }
+.share-swatch i { width: 18px; height: 22px; display: block; }
+.share-stats { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 10px; }
+.share-stats div { background: var(--surface-elevated); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 10px 12px; }
+.share-stats strong { display: block; font-size: 20px; }
+.share-stats span { font-size: 12px; color: var(--text-muted); }
+.drop-hint { border: 1.5px dashed rgba(var(--accent-rgb), 0.5); border-radius: var(--radius); }

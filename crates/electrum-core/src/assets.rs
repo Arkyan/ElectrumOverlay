@@ -109,6 +109,18 @@ pub fn decode_base64_lenient(input: &str) -> Vec<u8> {
     engine.decode(cleaned).unwrap_or_default()
 }
 
+/// Options d'un export partagé (`Store::share_profile`).
+#[derive(Debug, Clone, Default)]
+pub struct ShareOptions<'a> {
+    /// Nom donné au profil partagé (`None` ou vide : son nom actuel).
+    pub name: Option<&'a str>,
+    pub author: &'a str,
+    pub description: &'a str,
+    /// Inclure les sons et vidéos d'alerte (fichier bien plus lourd).
+    pub include_assets: bool,
+    pub app_version: &'a str,
+}
+
 impl Store {
     fn asset_dir(&self, kind: AssetKind, id: &str) -> PathBuf {
         match kind {
@@ -228,6 +240,48 @@ impl Store {
         Ok(Value::Object(out))
     }
 
+    /// Export destiné à être partagé avec d'autres streamers : même format que `export_profile`
+    /// (importable aussi par la version Electron, qui ignore les champs en plus), avec un nom
+    /// au choix, l'auteur, une description, et les sons/vidéos en option.
+    pub fn share_profile(&self, id: &str, options: &ShareOptions) -> Result<Value> {
+        let mut out = self.export_profile(id)?;
+        let Value::Object(map) = &mut out else { return Ok(out) };
+        if let Some(name) = options.name.map(str::trim).filter(|n| !n.is_empty()) {
+            map.insert("name".into(), json!(name));
+        }
+        if !options.include_assets {
+            map.insert(AssetKind::Audio.key().into(), json!({}));
+            map.insert(AssetKind::Media.key().into(), json!({}));
+        }
+        let mut shared = Map::new();
+        shared.insert("author".into(), json!(options.author.trim()));
+        shared.insert("description".into(), json!(options.description.trim()));
+        shared.insert("exportedAt".into(), json!(crate::time::now_iso()));
+        shared.insert("appVersion".into(), json!(options.app_version));
+        map.insert("shared".into(), Value::Object(shared));
+        Ok(out)
+    }
+
+    /// Taille et nombre des sons/vidéos d'un profil (pour la fenêtre de partage).
+    pub fn profile_assets_summary(&self, id: &str) -> Result<(usize, u64)> {
+        let profile = self.get_profile_full(id).map_err(|_| Error::msg("Profil introuvable"))?;
+        let (mut count, mut size) = (0, 0);
+        for kind in [AssetKind::Audio, AssetKind::Media] {
+            for alert_type in &self.alert_types {
+                if profile.get(kind.key()).and_then(|m| m.get(alert_type)).is_none() {
+                    continue;
+                }
+                if let Some(file) = self.profile_asset_file(kind, id, alert_type) {
+                    if let Ok(meta) = std::fs::metadata(&file.path) {
+                        count += 1;
+                        size += meta.len();
+                    }
+                }
+            }
+        }
+        Ok((count, size))
+    }
+
     /// Nom de fichier proposé au téléchargement : `<nom>.electrumprofile.json`.
     pub fn export_filename(profile_name: &str) -> String {
         let name = if profile_name.is_empty() { "profil" } else { profile_name };
@@ -291,6 +345,30 @@ mod tests {
         assert_eq!(decode_base64_lenient("aGVsbG8="), b"hello");
         assert_eq!(decode_base64_lenient("aGVs\nbG8"), b"hello");
         assert_eq!(decode_base64_lenient("-_-_"), base64::engine::general_purpose::STANDARD.decode("+/+/").unwrap());
+    }
+
+    #[test]
+    fn partage_de_profil() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut store = Store::open(dir.path()).unwrap();
+        let id = store.active_profile_id().unwrap().to_string();
+        store
+            .set_profile_asset(AssetKind::Audio, &id, "follow", AssetUpload { filename: "f.mp3", mime_type: "audio/mpeg", bytes: &[1, 2, 3] })
+            .unwrap();
+        assert_eq!(store.profile_assets_summary(&id).unwrap(), (1, 3));
+
+        let options = ShareOptions { name: Some(" Néon "), author: "arkyan", description: "Thème violet", include_assets: true, app_version: "3.0.0" };
+        let shared = store.share_profile(&id, &options).unwrap();
+        assert_eq!((shared["name"].as_str(), shared["shared"]["author"].as_str()), (Some("Néon"), Some("arkyan")));
+        assert!(shared["audio"]["follow"]["dataBase64"].is_string());
+        assert!(shared["display"].is_object());
+
+        let light = store.share_profile(&id, &ShareOptions { include_assets: false, ..options.clone() }).unwrap();
+        assert_eq!(light["audio"], json!({}));
+
+        // Réimportable tel quel.
+        let imported = store.import_profile(&shared).unwrap();
+        assert_eq!(imported["name"], "Néon");
     }
 
     #[test]

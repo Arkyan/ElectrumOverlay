@@ -5,12 +5,12 @@
 use super::{body_or_empty, ok, ApiError, ApiResult};
 use crate::state::AppState;
 use axum::body::Bytes;
-use axum::extract::{DefaultBodyLimit, Multipart, Path, State};
+use axum::extract::{DefaultBodyLimit, Multipart, Path, Query, State};
 use axum::http::{header, StatusCode};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, patch, post, put};
 use axum::{Json, Router};
-use electrum_core::assets::{AssetKind, AssetUpload};
+use electrum_core::assets::{AssetKind, AssetUpload, ShareOptions};
 use electrum_core::json::{is_truthy, number_value, to_js_pretty_string};
 use electrum_core::scene::{SCENE_ICON_KEYS, STAT_SOURCES};
 use electrum_core::Store;
@@ -19,7 +19,9 @@ use serde_json::{json, Map, Value};
 const MB: usize = 1024 * 1024;
 const AUDIO_MAX: usize = 5 * MB;
 const MEDIA_MAX: usize = 10 * MB;
-const IMPORT_MAX: usize = 20 * MB;
+/// Un profil partagé embarque ses sons et vidéos en base64 (+33 %) : jusqu'à ~100 Mo pour un
+/// profil complet (la version Node limitait à 20 Mo).
+const IMPORT_MAX: usize = 150 * MB;
 
 pub fn router() -> Router<AppState> {
     // Marge au-dessus de la taille de fichier pour l'enveloppe multipart : c'est la limite du
@@ -52,6 +54,8 @@ pub fn router() -> Router<AppState> {
         .route("/api/profiles/{id}/theme/{page}", patch(update_theme))
         .route("/api/profiles/{id}/pause-messages", patch(update_pause_messages))
         .route("/api/profiles/{id}/export", get(export))
+        .route("/api/profiles/{id}/share-info", get(share_info))
+        .route("/api/profiles/{id}/share", get(share))
 }
 
 /// Exécute une modification du profil `id`, puis diffuse `config-updated` si c'est l'actif.
@@ -165,7 +169,7 @@ const MEDIA_RULES: UploadRules = UploadRules {
 
 const IMPORT_RULES: UploadRules = UploadRules {
     max: IMPORT_MAX,
-    max_label: "20 Mo",
+    max_label: "150 Mo",
     mime: None,
     missing: "Fichier de profil manquant",
 };
@@ -542,6 +546,71 @@ async fn export(State(state): State<AppState>, Path(id): Path<String>) -> Respon
                 .into_response()
         }
         Err(_) => ApiError(StatusCode::NOT_FOUND, "Profil introuvable".into()).into_response(),
+    }
+}
+
+/// Valeurs proposées dans la fenêtre de partage : nom, auteur (la chaîne Twitch), poids des
+/// sons/vidéos.
+async fn share_info(State(state): State<AppState>, Path(id): Path<String>) -> ApiResult {
+    let store = state.store();
+    let profile = store.get_profile_full(&id).map_err(|_| ApiError(StatusCode::NOT_FOUND, "Profil introuvable".into()))?;
+    let (assets_count, assets_size) = store.profile_assets_summary(&id)?;
+    Ok(Json(json!({
+        "name": profile.get("name"),
+        "author": store.config()["twitch"]["BROADCASTER_LOGIN"].as_str().unwrap_or_default(),
+        "assetsCount": assets_count,
+        "assetsSize": assets_size,
+    })))
+}
+
+/// Contenu d'un profil partagé (`Store::share_profile`) à partir des paramètres d'URL `name`,
+/// `author`, `description`, `assets` (`0` = sans sons ni vidéos).
+pub fn shared_profile(state: &AppState, id: &str, params: &std::collections::HashMap<String, String>) -> Result<(String, String), ApiError> {
+    let text = |key: &str| params.get(key).map(String::as_str).unwrap_or_default();
+    let options = ShareOptions {
+        name: params.get("name").map(String::as_str),
+        author: text("author"),
+        description: text("description"),
+        include_assets: text("assets") != "0",
+        app_version: env!("CARGO_PKG_VERSION"),
+    };
+    let payload = state.store().share_profile(id, &options).map_err(|_| ApiError(StatusCode::NOT_FOUND, "Profil introuvable".into()))?;
+    let name = electrum_core::json::js_string_or_empty(payload.get("name"));
+    Ok((share_filename(&name), to_js_pretty_string(&payload)))
+}
+
+/// Nom de fichier d'un profil partagé, accents gardés (`Néon violet.electrumprofile.json`) :
+/// seuls les caractères interdits dans un nom de fichier Windows sont remplacés.
+pub fn share_filename(name: &str) -> String {
+    let cleaned: String = name
+        .trim()
+        .chars()
+        .map(|c| if c.is_control() || r#"<>:"/\|?*"#.contains(c) { '_' } else { c })
+        .collect();
+    let cleaned = cleaned.trim_end_matches(['.', ' ']);
+    format!("{}.electrumprofile.json", if cleaned.is_empty() { "profil" } else { cleaned })
+}
+
+/// `Content-Disposition` avec un nom non ASCII (RFC 6266) : repli ASCII + `filename*` encodé.
+fn attachment_header(filename: &str) -> String {
+    let encoded: String = filename
+        .bytes()
+        .map(|b| if b.is_ascii_alphanumeric() || b"-_.~".contains(&b) { (b as char).to_string() } else { format!("%{b:02X}") })
+        .collect();
+    format!("attachment; filename=\"{}\"; filename*=UTF-8''{encoded}", Store::export_filename(filename.trim_end_matches(".electrumprofile.json")))
+}
+
+async fn share(State(state): State<AppState>, Path(id): Path<String>, Query(params): Query<std::collections::HashMap<String, String>>) -> Response {
+    match shared_profile(&state, &id, &params) {
+        Ok((filename, content)) => (
+            [
+                (header::CONTENT_TYPE, "application/json; charset=utf-8".to_string()),
+                (header::CONTENT_DISPOSITION, attachment_header(&filename)),
+            ],
+            content,
+        )
+            .into_response(),
+        Err(error) => error.into_response(),
     }
 }
 
