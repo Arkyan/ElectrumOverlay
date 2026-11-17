@@ -3,6 +3,43 @@
  * Contient toutes les fonctions partagées entre starting.html, index.html et ending.html
  */
 
+/**
+ * Traduction des textes intégrés des overlays (interface en anglais) : dictionnaire servi par
+ * /js/i18n.js (globalThis.OVERLAY_I18N, vide en français ou si le fichier n'existe pas — version
+ * Electron). Correspondance exacte du texte ; {n}, {name}... sont remplacés par `vars`.
+ * Les textes personnalisés par l'utilisateur ne sont pas dans le dictionnaire : inchangés.
+ */
+function tr(text, vars) {
+    const dict = globalThis.OVERLAY_I18N?.dict || {};
+    // Espaces normalisés : un texte du HTML peut être coupé sur plusieurs lignes.
+    const key = typeof text === 'string' ? text.replace(/\s+/g, ' ').trim() : text;
+    let out = dict[key] !== undefined ? dict[key] : text;
+    if (vars && typeof out === 'string') {
+        for (const [key, value] of Object.entries(vars)) out = out.split('{' + key + '}').join(String(value));
+    }
+    return out;
+}
+
+/** Traduit en place les textes du HTML de la page (titres par défaut, libellés...). */
+function translateStaticTexts(root) {
+    if (!globalThis.OVERLAY_I18N || globalThis.OVERLAY_I18N.lang === 'fr' || !root) return;
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    const nodes = [];
+    while (walker.nextNode()) nodes.push(walker.currentNode);
+    nodes.forEach((node) => {
+        const text = node.nodeValue.trim();
+        if (!text) return;
+        const translated = tr(text);
+        if (translated !== text) node.nodeValue = node.nodeValue.replace(text, translated);
+        // Texte coupé par des balises (<br>, <span>...) : on tente le texte complet de l'élément.
+        else if (node.parentElement && node.parentElement.childNodes.length > 1) {
+            const parent = node.parentElement;
+            const whole = tr(parent.textContent);
+            if (whole !== parent.textContent && parent.children.length === 0) parent.textContent = whole;
+        }
+    });
+}
+
 function getOverlayConfig() {
     if (typeof globalThis !== 'undefined' && globalThis.OVERLAY_CONFIG) {
         return globalThis.OVERLAY_CONFIG;
@@ -674,7 +711,7 @@ function renderCustomTextsFromConfig() {
                 el.style.justifyContent = 'center';
                 el.style.color = 'rgba(255, 255, 255, 0.65)';
                 el.style.font = "600 1.8vh Inter, sans-serif";
-                el.textContent = 'Image — URL à définir';
+                el.textContent = tr('Image — URL à définir');
             }
         } else if (type === 'box') {
             el.dataset.colorValue = item.color || '#a855f7';
@@ -769,7 +806,7 @@ function renderCustomTextsFromConfig() {
             el.innerHTML = '<img class="spotify-art" data-spotify-art alt="">'
                 + '<div class="spotify-info">'
                 + '<div class="spotify-title" data-spotify-title>Spotify</div>'
-                + '<div class="spotify-artist" data-spotify-artist>Rien en cours de lecture</div>'
+                + '<div class="spotify-artist" data-spotify-artist>' + tr('Rien en cours de lecture') + '</div>'
                 + '</div>';
             applySpotifyTrackTo(el, lastSpotifyTrack);
         } else if (type === 'keys') {
@@ -874,12 +911,12 @@ function renderCustomTextsFromConfig() {
             if (!el.style.width) el.style.width = '22vw';
             const section = (title, icon, rows) => '<div class="ipw-section">'
                 + '<div class="ipw-title">' + sceneIconHtml(icon) + '<span>' + escapeHtml(title) + '</span></div>'
-                + rows.map(([label, key]) => '<div class="ipw-row"><span class="ipw-label">' + escapeHtml(label)
+                + rows.map(([label, key]) => '<div class="ipw-row"><span class="ipw-label">' + escapeHtml(tr(label))
                     + '</span><span class="ipw-value" data-ipw="' + key + '">...</span></div>').join('')
                 + '</div>';
             let html = '';
             if (item.showTrip !== false) {
-                html += section(item.title1 || 'TRAJET ACTUEL', 'truck',
+                html += section(item.title1 || tr('TRAJET ACTUEL'), 'truck',
                     [['Destination', 'destination'], ['Distance', 'distance'], ['Cargaison', 'cargo']]);
             }
             if (item.showStats !== false) {
@@ -1144,11 +1181,11 @@ function applyInfoPanelDataToWidgets() {
         destination: (d.lastJob?.source_city_name || '?') + ' → ' + (d.lastJob?.destination_city_name || '?'),
         distance: (d.lastJob?.planned_distance_km ?? '?') + ' km',
         cargo: (d.lastJob?.cargo_name || '?') + ' (' + (d.lastJob?.cargo_mass_t ?? '?') + 't)',
-        rank: d.userData?.role?.name || 'Inconnu',
+        rank: d.userData?.role?.name || tr('Inconnu'),
         distanceVTC: thousands(d.companyStats?.distance_driven_on_job_km) + ' km',
         completedTrips: thousands(d.companyStats?.jobs_delivered),
         drivers: thousands(d.companyDetails?.members_count),
-        recruitments: d.companyDetails?.recruitment === 'open' ? '🟢 Ouverts' : '🔴 Fermés'
+        recruitments: d.companyDetails?.recruitment === 'open' ? tr('🟢 Ouverts') : tr('🔴 Fermés')
     };
     document.querySelectorAll('.info-panel-widget [data-ipw]').forEach((el) => {
         const value = values[el.dataset.ipw];
@@ -1331,7 +1368,7 @@ function applySpotifyTrackTo(el, track) {
         }
     } else {
         title.textContent = 'Spotify';
-        artist.textContent = 'Rien en cours de lecture';
+        artist.textContent = tr('Rien en cours de lecture');
         art.removeAttribute('src');
         art.style.display = 'none';
     }
@@ -1469,7 +1506,7 @@ function applyBottomBarContentFromConfig() {
     if (!content) return;
 
     const infoTexts = Array.isArray(content.infoTexts) ? content.infoTexts : null;
-    const scrollingText = (typeof content.scrollingText === 'string') ? content.scrollingText : null;
+    const scrollingText = (typeof content.scrollingText === 'string') ? tr(content.scrollingText) : null;
 
     document.querySelectorAll('.bottom-bar').forEach(bar => {
         // 1) Texte défilant (index.html)
@@ -1486,7 +1523,7 @@ function applyBottomBarContentFromConfig() {
             if (infoItemTextEls && infoItemTextEls.length > 0) {
                 infoItemTextEls.forEach((el, idx) => {
                     if (typeof infoTexts[idx] === 'string') {
-                        el.textContent = infoTexts[idx];
+                        el.textContent = tr(infoTexts[idx]);
                     }
                 });
                 return;
@@ -1497,7 +1534,7 @@ function applyBottomBarContentFromConfig() {
             if (directTextEls && directTextEls.length > 0) {
                 directTextEls.forEach((el, idx) => {
                     if (typeof infoTexts[idx] === 'string') {
-                        el.textContent = infoTexts[idx];
+                        el.textContent = tr(infoTexts[idx]);
                     }
                 });
             }
@@ -1566,9 +1603,9 @@ function showAlert(type, username, message = '', amount = '') {
 
         // Configuration de l'alerte
         alertIcon.innerHTML = config.icon;
-        alertTitle.textContent = config.title;
+        alertTitle.textContent = tr(config.title);
         alertUsername.textContent = username || 'Anonymous';
-        alertMessage.textContent = message || config.defaultMessage;
+        alertMessage.textContent = message || tr(config.defaultMessage);
 
         // Couleur d'accent par type (bordure, badge icône, titre, glow) — voir --alert-accent
         // dans overlay-common.css. Le fond du cadre reprend en plus un léger dégradé
@@ -1919,6 +1956,11 @@ function initWebSocket() {
             return;
         }
 
+        if (data.type === 'language-changed') {
+            location.reload();
+            return;
+        }
+
         if (data.type === 'interaction') {
             setTwitchInteraction(data.kind, data.data, data.phase);
             return;
@@ -1971,27 +2013,27 @@ function initWebSocket() {
             }
         }
         else if (data.type === 'channel.raid') {
-            const raidMessage = `Raid de ${data.data.from_broadcaster_user_name}`;
-            const raidAmount = data.data.viewers ? ` Bienvenue au ${data.data.viewers} viewers` : '';
+            const raidMessage = tr('Raid de {name}', { name: data.data.from_broadcaster_user_name });
+            const raidAmount = data.data.viewers ? ' ' + tr('Bienvenue aux {n} viewers', { n: data.data.viewers }) : '';
             addAlertsToQueue('raid', raidMessage, '', raidAmount);
         }
         else if (data.type === 'channel.subscribe' && !data.data.is_gift) {
             const message = data.data.message ? data.data.message.text || '' : '';
-            const subMessage = data.data.cumulative_months ? `Merci pour le resub ! ${data.data.cumulative_months} mois` : 'Merci pour le sub !';
+            const subMessage = data.data.cumulative_months ? tr('Merci pour le resub ! {n} mois', { n: data.data.cumulative_months }) : tr('Merci pour le sub !');
             addAlertsToQueue('sub', data.data.user_name, subMessage, message);
         }
         else if (data.type === 'channel.subscribe' && data.data.is_gift) {
-            addAlertsToQueue('sub', data.data.user_name, `Merci pour le sub gift !`, '');
+            addAlertsToQueue('sub', data.data.user_name, tr('Merci pour le sub gift !'), '');
         }
         else if (data.type === 'channel.subscription.gift') {
-            addAlertsToQueue('subs_gift', data.data.user_name, `Merci pour les ${data.data.total} sub gifts !`, '');
+            addAlertsToQueue('subs_gift', data.data.user_name, tr('Merci pour les {n} sub gifts !', { n: data.data.total }), '');
         }
         else if (data.type === 'channel.cheer') {
             var cheerUserName = data.data.is_anonymous ? 'Anonymous' : data.data.user_name;
-            addAlertsToQueue('bits', cheerUserName, `Merci pour les  ${data.data.bits} bits !`, data.data.message ? data.data.message : '');
+            addAlertsToQueue('bits', cheerUserName, tr('Merci pour les {n} bits !', { n: data.data.bits }), data.data.message ? data.data.message : '');
         }
         else if (data.type === 'channel.follow') {
-            addAlertsToQueue('follow', data.data.user_name, `Merci pour le follow !`);
+            addAlertsToQueue('follow', data.data.user_name, tr('Merci pour le follow !'));
         }
     };
 
@@ -2167,6 +2209,10 @@ function animateCounter(element, start, end, duration) {
 
 function initCommonOverlay() {
     const cfg = getOverlayConfig();
+
+    // Textes intégrés de la page dans la langue de l'interface (avant que les textes par défaut
+    // ne soient mémorisés par captureDefaultTexts).
+    translateStaticTexts(document.body);
 
     // Thème (couleurs) + variables CSS
     applyThemeFromConfig();

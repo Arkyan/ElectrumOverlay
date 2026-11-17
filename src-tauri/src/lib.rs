@@ -177,26 +177,41 @@ async fn stop_server(app: &AppHandle) {
 // Icône de la zone de notification
 // ------------------------------------------------------------------------------------------------
 
+/// Texte de l'app (menus, fenêtres de dialogue) dans la langue de l'interface.
+fn t(app: &AppHandle, french: &str) -> String {
+    match app.try_state::<Desktop>() {
+        Some(desktop) if desktop.state.language() == "en" => electrum_server::i18n::to_english(french),
+        _ => french.to_string(),
+    }
+}
+
+/// Langue au premier lancement : celle de Windows (français si Windows est en français, anglais
+/// sinon). Ensuite, c'est le réglage de Paramètres › Application qui compte.
+fn initial_language() -> &'static str {
+    let locale = sys_locale::get_locale().unwrap_or_default().to_lowercase();
+    if locale.starts_with("fr") { "fr" } else { "en" }
+}
+
 async fn refresh_tray(app: &AppHandle) {
     let running = app.state::<Desktop>().server_running().await;
     let Some(tray) = app.tray_by_id(TRAY) else { return };
     let downloaded = app.state::<updater::Updater>().downloaded_version();
     let build = || -> tauri::Result<_> {
         let update_item = match &downloaded {
-            Some(version) => MenuItemBuilder::with_id("install-update", format!("Installer la mise à jour (v{version})")).build(app)?,
-            None => MenuItemBuilder::with_id("check-update", "Vérifier les mises à jour").enabled(updater::enabled()).build(app)?,
+            Some(version) => MenuItemBuilder::with_id("install-update", format!("{} (v{version})", t(app, "Installer la mise à jour"))).build(app)?,
+            None => MenuItemBuilder::with_id("check-update", t(app, "Vérifier les mises à jour")).enabled(updater::enabled()).build(app)?,
         };
-        let toggle = if running { "Arrêter le serveur" } else { "Démarrer le serveur" };
+        let toggle = t(app, if running { "Arrêter le serveur" } else { "Démarrer le serveur" });
         MenuBuilder::new(app)
-            .item(&MenuItemBuilder::with_id("open", "Ouvrir").build(app)?)
-            .item(&MenuItemBuilder::with_id("settings", "Paramètres").build(app)?)
+            .item(&MenuItemBuilder::with_id("open", t(app, "Ouvrir")).build(app)?)
+            .item(&MenuItemBuilder::with_id("settings", t(app, "Paramètres")).build(app)?)
             .item(&MenuItemBuilder::with_id("logs", "Logs").build(app)?)
             .item(&MenuItemBuilder::with_id("tests", "Tests").build(app)?)
             .separator()
             .item(&MenuItemBuilder::with_id("toggle-server", toggle).build(app)?)
             .separator()
             .item(&update_item)
-            .item(&MenuItemBuilder::with_id("quit", "Quitter").build(app)?)
+            .item(&MenuItemBuilder::with_id("quit", t(app, "Quitter")).build(app)?)
             .build()
     };
     match build() {
@@ -307,9 +322,9 @@ async fn profile_share_save(app: AppHandle, id: String, params: std::collections
     let (tx, rx) = tokio::sync::oneshot::channel();
     app.dialog()
         .file()
-        .set_title("Partager le profil")
+        .set_title(t(&app, "Partager le profil"))
         .set_file_name(&filename)
-        .add_filter("Profil ElectrumOverlay", &["json"])
+        .add_filter(t(&app, "Profil ElectrumOverlay"), &["json"])
         .save_file(move |path| {
             let _ = tx.send(path);
         });
@@ -324,6 +339,12 @@ fn start_minimized(app: &AppHandle) -> bool {
     let desktop = app.state::<Desktop>();
     let store = desktop.state.store();
     store.config()["desktop"]["startMinimized"].as_bool().unwrap_or(true)
+}
+
+/// Reconstruit le menu de l'icône (après un changement de langue).
+#[tauri::command]
+async fn tray_refresh(app: AppHandle) {
+    refresh_tray(&app).await;
 }
 
 #[tauri::command]
@@ -401,6 +422,15 @@ fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
             return Ok(());
         }
     };
+    if electrum_server::i18n::configured_language(store.config()).is_none() {
+        let mut store = store;
+        let _ = store.save_config(&serde_json::json!({ "app": { "language": initial_language() } }));
+        return setup_with_store(app, assets, store);
+    }
+    setup_with_store(app, assets, store)
+}
+
+fn setup_with_store(app: &mut tauri::App, assets: Assets, store: Store) -> Result<(), Box<dyn std::error::Error>> {
     let startup = [
         format!("📁 Config : {}", store.paths().config_dir.display()),
         format!("🎨 Profil actif : {}", store.active_profile_id().unwrap_or("aucun")),
@@ -424,7 +454,11 @@ fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     if let Err(error) = tauri::async_runtime::block_on(start_server(&handle)) {
         fatal(
             app,
-            format!("Le serveur n'a pas pu démarrer : {error}\n\nUne autre instance est peut-être déjà lancée (vérifiez l'icône dans la zone de notification)."),
+            format!(
+                "{} : {error}\n\n{}",
+                t(app.handle(), "Le serveur n'a pas pu démarrer"),
+                t(app.handle(), "Une autre instance est peut-être déjà lancée (vérifiez l'icône dans la zone de notification).")
+            ),
         );
         return Ok(());
     }
@@ -483,6 +517,7 @@ pub fn run() {
             autostart_status,
             autostart_set,
             profile_share_save,
+            tray_refresh,
             window_minimize,
             window_toggle_maximize,
             window_close,

@@ -8,12 +8,20 @@
  * voir crates/electrum-server/src/interactions.rs) et renvoyé par GET /api/interactions.
  */
 (function () {
+    // Traduction (interface en anglais) : même dictionnaire que les overlays (/js/i18n.js).
+    function tr(text, vars) {
+        const dict = globalThis.OVERLAY_I18N?.dict || {};
+        let out = dict[text] !== undefined ? dict[text] : text;
+        if (vars) for (const [k, v] of Object.entries(vars)) out = out.split('{' + k + '}').join(String(v));
+        return out;
+    }
+
     function esc(text) {
         return String(text ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
     }
 
     function number(n) {
-        return Number(n || 0).toLocaleString('fr-FR');
+        return Number(n || 0).toLocaleString(globalThis.OVERLAY_I18N?.lang === 'en' ? 'en-US' : 'fr-FR');
     }
 
     function secondsUntil(iso) {
@@ -38,8 +46,9 @@
     function goal(g, phase) {
         const percent = g.target > 0 ? Math.min(100, Math.round((g.current / g.target) * 100)) : 0;
         const done = g.achieved || (g.target > 0 && g.current >= g.target);
-        const title = g.description || (g.unit ? g.unit.charAt(0).toUpperCase() + g.unit.slice(1) : 'Objectif');
-        return head(done ? 'Objectif atteint !' : 'Objectif', `${percent} %`)
+        const unit = g.unit ? tr(g.unit) : '';
+        const title = g.description || (unit ? unit.charAt(0).toUpperCase() + unit.slice(1) : tr('Objectif'));
+        return head(done ? tr('Objectif atteint !') : tr('Objectif'), `${percent} %`)
             + bar(title, `${number(g.current)} / ${number(g.target)}`, percent, done ? 'tw-gold' : '');
     }
 
@@ -52,9 +61,9 @@
             const cls = ended && total ? (c.votes === max ? 'tw-winner' : 'tw-loser') : '';
             return bar(c.title, `${percent} %`, percent, cls);
         }).join('');
-        return head('Sondage', ended ? 'Terminé' : countdown(secondsUntil(p.endsAt)), ended ? '' : p.endsAt)
+        return head(tr('Sondage'), ended ? tr('Terminé') : countdown(secondsUntil(p.endsAt)), ended ? '' : p.endsAt)
             + `<div class="tw-title">${esc(p.title)}</div>${rows}`
-            + `<div class="tw-foot">${number(total)} vote${total > 1 ? 's' : ''}</div>`;
+            + `<div class="tw-foot">${tr(total > 1 ? '{n} votes' : '{n} vote', { n: number(total) })}</div>`;
     }
 
     function prediction(p, phase) {
@@ -68,22 +77,22 @@
         }).join('');
         const live = phase === 'begin' || phase === 'progress';
         let status = countdown(secondsUntil(p.locksAt));
-        if (phase === 'end') status = p.status === 'canceled' ? 'Annulée' : 'Résultat';
-        else if (phase === 'lock') status = 'Verrouillée';
-        return head('Prédiction', status, live ? p.locksAt : '')
+        if (phase === 'end') status = p.status === 'canceled' ? tr('Annulée') : tr('Résultat');
+        else if (phase === 'lock') status = tr('Verrouillée');
+        return head(tr('Prédiction'), status, live ? p.locksAt : '')
             + `<div class="tw-title">${esc(p.title)}</div>${rows}`
-            + `<div class="tw-foot">${number(total)} points de chaîne en jeu</div>`;
+            + `<div class="tw-foot">${tr('{n} points de chaîne en jeu', { n: number(total) })}</div>`;
     }
 
     function hypetrain(h, phase) {
         const ended = phase === 'end';
         const percent = h.goal ? Math.min(100, Math.round((h.progress / h.goal) * 100)) : 100;
         const top = (h.topContributions || []).slice(0, 2)
-            .map((c) => `<span>${c.type === 'bits' ? 'Bits' : 'Subs'} : <strong>${esc(c.user)}</strong></span>`).join('');
+            .map((c) => `<span>${c.type === 'bits' ? 'Bits' : 'Subs'}${tr(' : ')}<strong>${esc(c.user)}</strong></span>`).join('');
         return `<div class="tw-hype-head"><span class="tw-level${h.golden ? ' tw-golden' : ''}">${h.level}</span><div class="tw-grow">`
-            + head(h.golden ? 'Golden Kappa Train' : 'Hype train', ended ? 'Terminé' : countdown(secondsUntil(h.expiresAt)), ended ? '' : h.expiresAt)
-            + `<div class="tw-title tw-title-tight">${ended ? `Niveau ${h.level} atteint !` : `Niveau ${h.level}`}</div></div></div>`
-            + (ended ? '' : bar(`Vers le niveau ${h.level + 1}`, `${percent} %`, percent))
+            + head(h.golden ? 'Golden Kappa Train' : 'Hype train', ended ? tr('Terminé') : countdown(secondsUntil(h.expiresAt)), ended ? '' : h.expiresAt)
+            + `<div class="tw-title tw-title-tight">${tr(ended ? 'Niveau {n} atteint !' : 'Niveau {n}', { n: h.level })}</div></div></div>`
+            + (ended ? '' : bar(tr('Vers le niveau {n}', { n: h.level + 1 }), `${percent} %`, percent))
             + (top ? `<div class="tw-foot tw-top">${top}</div>` : '');
     }
 
@@ -93,11 +102,11 @@
     function sample(kind) {
         const inSeconds = (s) => new Date(Date.now() + s * 1000).toISOString();
         return {
-            goal: { phase: 'progress', data: { description: 'Objectif followers', unit: 'followers', current: 842, target: 1000 } },
-            poll: { phase: 'progress', data: { title: 'On joue à quoi ensuite ?', endsAt: inSeconds(95), choices: [
+            goal: { phase: 'progress', data: { description: tr('Objectif followers'), unit: 'followers', current: 842, target: 1000 } },
+            poll: { phase: 'progress', data: { title: tr('On joue à quoi ensuite ?'), endsAt: inSeconds(95), choices: [
                 { title: 'Euro Truck Simulator 2', votes: 21 }, { title: 'Minecraft', votes: 14 }, { title: 'Just Chatting', votes: 6 }] } },
-            prediction: { phase: 'progress', data: { title: 'La prochaine livraison ?', locksAt: inSeconds(95), outcomes: [
-                { id: 'a', title: 'Sans dégâts', color: 'blue', points: 4200 }, { id: 'b', title: 'Au moins une rayure', color: 'pink', points: 2100 }] } },
+            prediction: { phase: 'progress', data: { title: tr('La prochaine livraison ?'), locksAt: inSeconds(95), outcomes: [
+                { id: 'a', title: tr('Sans dégâts'), color: 'blue', points: 4200 }, { id: 'b', title: tr('Au moins une rayure'), color: 'pink', points: 2100 }] } },
             hypetrain: { phase: 'progress', data: { level: 2, progress: 700, goal: 2100, expiresAt: inSeconds(240),
                 topContributions: [{ user: 'Viewer1', type: 'bits' }, { user: 'Viewer2', type: 'subscription' }] } },
         }[kind];

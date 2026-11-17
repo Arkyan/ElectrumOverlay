@@ -6,6 +6,7 @@ const COMMANDS: &[&str] = &[
     "autostart_status",
     "autostart_set",
     "profile_share_save",
+    "tray_refresh",
     "window_minimize",
     "window_toggle_maximize",
     "window_close",

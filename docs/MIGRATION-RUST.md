@@ -107,6 +107,8 @@ $env:ELECTRUM_CONFIG_DIR = "C:\chemin\vers\une\copie\config"
 | Objectifs, sondages, prédictions, hype train (EventSub, scopes facultatifs) + éléments de l'éditeur de scène | ✅ testé contre un faux Twitch (à valider avec un vrai compte) |
 | Démarrage avec Windows (réduit ou non), Paramètres › Application | ✅ compile pour Windows (à valider) |
 | Sauvegardes automatiques quotidiennes + manuelles, restauration, Paramètres › Sauvegardes | ✅ testé |
+| Partage de profil (auteur, description, sons en option, aperçu avant import) | ✅ testé |
+| Interface en anglais (Paramètres › Application), langue de Windows au premier lancement | ✅ testé |
 | Première pré-version Rust, test réel de la bascule 2.5.2 → 3.0 | ⏳ voir [RELEASE-RUST.md](RELEASE-RUST.md) |
 
 ## Différences volontaires avec la version Node
@@ -147,6 +149,10 @@ $env:ELECTRUM_CONFIG_DIR = "C:\chemin\vers\une\copie\config"
 - Sauvegardes dans `%APPDATA%\ElectrumOverlay\backups` (à côté de `config`) : JSON copiés,
   sons/vidéos stockés une seule fois par contenu (`backups/files`). Une restauration garde les
   sections `twitch` et `spotify` actuelles et sauvegarde l'état d'avant.
+- Langue : `app.language` (`fr`/`en`) dans `overlay-config.json`. Le français reste le texte de
+  référence ; en anglais, `crates/electrum-server/i18n/en.json` est appliqué aux pages de l'app et
+  aux erreurs de l'API, et `i18n/en-overlay.json` aux textes intégrés des overlays (via
+  `/js/i18n.js`). Les textes personnalisés ne sont pas traduits ; les logs restent en français.
 - Démarrage avec Windows : entrée `Run` du registre (`ElectrumOverlay … --autostart`), retirée
   par le désinstalleur (pas lors d'une mise à jour). Réglage « réduit » : `desktop.startMinimized`
   dans `overlay-config.json`.

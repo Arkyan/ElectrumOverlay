@@ -6,7 +6,7 @@ A Windows app that runs your Twitch stream overlays: real-time alerts (follow, s
 
 ![Dashboard](docs/screenshots/tableau-de-bord.png)
 
-*Screenshots show the French interface.*
+*Screenshots show the French interface. The app is also available in English: Settings › Application › Interface language (English is picked automatically on first launch if Windows isn't in French).*
 
 ## 📋 Table of Contents
 
@@ -19,6 +19,7 @@ A Windows app that runs your Twitch stream overlays: real-time alerts (follow, s
 - [🧩 Scene editor](#-scene-editor)
 - [🧪 Testing without going live](#-testing-without-going-live)
 - [💾 Backups](#-backups)
+- [🤝 Sharing a profile](#-sharing-a-profile)
 - [🔄 Updates](#-updates)
 - [🚛 TruckyApp integration](#-truckyapp-integration)
 - [🎛️ Stream Deck plugin](#️-stream-deck-plugin)
@@ -46,6 +47,7 @@ A Windows app that runs your Twitch stream overlays: real-time alerts (follow, s
 ### 🖥️ A real desktop app
 - Lightweight: Rust engine, and the window frees its memory when closed
 - Stays in the notification area to keep serving the overlays, even with the window closed
+- Interface in English or French (overlays included)
 - Optional launch at Windows startup (minimized or not)
 - Automatic config backups, one-click restore
 - Signed automatic updates
@@ -128,7 +130,7 @@ Everything shown on a scene (chat, goal, poll…) is added from the **scene edit
 ## 🖥️ Day-to-day use
 
 - **Dashboard**: Twitch and stream status (viewers, follows, subs, messages), quick tests, recent events with **Replay**, scene URLs for OBS.
-- **Settings**: profiles, themes, alerts, panels, animations, chat, stats. Also **Application** (launch with Windows) and **Backups**.
+- **Settings**: profiles (with sharing and import), themes, alerts, panels, animations, chat, stats. Also **Application** (language, launch with Windows) and **Backups**.
 - **Chat commands**: automatic replies and overlay actions, with permissions and cooldowns.
 - **Integrations**: Spotify (now playing), TruckyApp, key display.
 - **Logs**: live log viewer, handy when something goes wrong.
@@ -149,6 +151,10 @@ The **Tests** page triggers fake events visible on the open overlays: follow, su
 An automatic backup is made once a day when the config has changed (the last 10 are kept), and you can create one at any time from **Settings › Backups**. They include every profile with its sounds and videos. Restoring keeps your current Twitch and Spotify connections and backs up the current state first, so a restore can always be undone.
 
 Location: `%APPDATA%\ElectrumOverlay\backups`.
+
+## 🤝 Sharing a profile
+
+**Settings › Profiles › Share…** creates a file with the whole profile: scenes, elements, colors, alerts, and optionally sounds and videos. You can add your name and a description. To import one, **Import…** (or drop the file on the section) shows a preview of its content before adding it.
 
 ## 🔄 Updates
 

@@ -84,6 +84,11 @@
         leftPanelTitle3: 'Titre section 3 (panneau gauche)'
     };
 
+    // Libellés dans la langue de l'interface (tr : overlay-common.js).
+    [LABELS, CUSTOM_TYPE_LABELS, TEXT_LABELS].forEach((map) => {
+        for (const key of Object.keys(map)) map[key] = tr(map[key]);
+    });
+
     let styleInjected = false;
     function injectStyle() {
         if (styleInjected) return;
@@ -138,7 +143,7 @@
             .tw-widget.tw-idle { display: block !important; }
             [data-scene-alert-zone]:not(.show) .alert-box { display: none !important; }
             [data-scene-alert-zone]:not(.show)::after {
-                content: "Zone d'alerte — l'alerte s'y ajuste au plus grand";
+                content: ${JSON.stringify(tr("Zone d'alerte — l'alerte s'y ajuste au plus grand"))};
                 color: rgba(255, 255, 255, 0.75);
                 font: 600 15px/1.4 Inter, sans-serif;
                 text-align: center;

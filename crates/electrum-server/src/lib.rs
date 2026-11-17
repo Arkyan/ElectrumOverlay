@@ -9,6 +9,7 @@
 pub mod commands;
 pub mod events;
 pub mod history;
+pub mod i18n;
 pub mod input;
 pub mod interactions;
 pub mod pages;
@@ -43,7 +44,9 @@ pub fn http_router(state: AppState) -> Router {
         .merge(routes::settings::router())
         .merge(routes::testtools::router())
         .merge(routes::backups::router())
+        .merge(routes::app::router())
         .fallback_service(public)
+        .layer(axum::middleware::from_fn_with_state(state.clone(), routes::app::translate_responses))
         .layer(axum::middleware::from_fn_with_state(state.clone(), routes::setup::redirect_until_configured))
         // Toujours revérifier auprès du serveur (réponse 304 si rien n'a changé) : sans ça, la
         // fenêtre de l'app et OBS gardaient d'anciens JS/CSS après une mise à jour, et l'éditeur

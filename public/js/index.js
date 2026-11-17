@@ -39,11 +39,11 @@ async function showInfoPanel(force = false) {
     updateLeftPanel('leftPanelDestination', `${data.lastJob.source_city_name} → ${data.lastJob.destination_city_name}`);
     updateLeftPanel('leftPanelDistance', `${data.lastJob.planned_distance_km} km`);
     updateLeftPanel('leftPanelCargo', `${data.lastJob.cargo_name} ( ${data.lastJob.cargo_mass_t}t )`);
-    updateLeftPanel('leftPanelRank', `${data.userData.role.name || 'Inconnu'}`);
+    updateLeftPanel('leftPanelRank', `${data.userData.role.name || tr('Inconnu')}`);
     updateLeftPanel('leftPanelDistanceVTC', `${seperateThousands(data.companyStats.distance_driven_on_job_km)} km`);
     updateLeftPanel('leftPanelCompletedTrips', `${seperateThousands(data.companyStats.jobs_delivered)}`);
     updateLeftPanel('leftPanelDrivers', `${seperateThousands(data.companyDetails.members_count)}`);
-    updateLeftPanel('leftPanelRecruitments', `${data.companyDetails.recruitment === 'open' ? '🟢 Ouverts' : '🔴 Fermés'}`);
+    updateLeftPanel('leftPanelRecruitments', `${data.companyDetails.recruitment === 'open' ? tr('🟢 Ouverts') : tr('🔴 Fermés')}`);
 
     progress = 0;
     timer.style.background = `conic-gradient(#ef4444 0%, transparent 0%)`;

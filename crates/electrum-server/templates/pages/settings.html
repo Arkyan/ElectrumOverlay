@@ -175,6 +175,13 @@
         <div class="settings-section card" id="section-app">
             <h2>Application</h2>
                 <p class="hint">Appliqué tout de suite, sans passer par « Enregistrer ».</p>
+                <div class="field-row" style="margin-bottom:var(--space-4);">
+                    <div class="field">
+                        <label for="appLanguage">Langue de l'interface</label>
+                        <select id="appLanguage"></select>
+                    </div>
+                </div>
+                <p class="hint" style="margin-top:calc(-1 * var(--space-2));">La page se recharge dans la nouvelle langue. Les textes que tu as personnalisés ne changent pas.</p>
                 <div id="autostartUnavailable" class="hint">Disponible dans l'app ElectrumOverlay pour Windows.</div>
                 <div id="autostartForm" hidden>
                     <label class="checkbox-row"><input type="checkbox" id="autostartEnabled"> Lancer ElectrumOverlay au démarrage de Windows</label>
@@ -303,6 +310,19 @@
                 selectTab(groupName, savedTab);
             }
         });
+
+        // ---------- Application : langue ----------
+        (function () {
+            const select = document.getElementById('appLanguage');
+            fetch('/api/app/language').then((r) => r.json()).then(({ language, languages }) => {
+                select.innerHTML = languages.map((l) => '<option value="' + l.code + '"' + (l.code === language ? ' selected' : '') + '>' + l.name + '</option>').join('');
+            }).catch(() => {});
+            select.addEventListener('change', () => {
+                fetch('/api/app/language', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ language: select.value }) })
+                    .then(() => window.electronAPI?.refreshTray?.())
+                    .finally(() => location.reload());
+            });
+        })();
 
         // ---------- Application : démarrage avec Windows ----------
         (function () {
@@ -570,7 +590,7 @@
                 const customScenes = Object.entries(display.scenes || {}).filter(([key]) => !THEME_NAMES[key]).map(([, scene]) => scene.name || 'Scène');
                 const elements = Object.values(display.customTexts || {}).reduce((n, page) => n + Object.keys(page || {}).length, 0);
                 const assets = ['audio', 'media'].reduce((n, key) => n + Object.keys(data[key] || {}).length, 0);
-                const meta = [shared.author ? 'par ' + escHtml(shared.author) : '', shared.exportedAt ? 'le ' + new Date(shared.exportedAt).toLocaleDateString('fr-FR') : '', formatSize(file.size)].filter(Boolean).join(' · ');
+                const meta = [shared.author ? 'Partagé par ' + escHtml(shared.author) : '', shared.exportedAt ? 'Exporté le ' + new Date(shared.exportedAt).toLocaleDateString('fr-FR') : '', formatSize(file.size)].filter(Boolean).join(' · ');
                 document.getElementById('importPreview').innerHTML =
                     '<div><div class="share-title">' + escHtml(data.name || 'Profil importé') + '</div><div class="share-meta">' + meta + '</div></div>'
                     + (shared.description ? '<div class="share-desc">' + escHtml(shared.description) + '</div>' : '')

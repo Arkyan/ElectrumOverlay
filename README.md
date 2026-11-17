@@ -17,6 +17,7 @@ Application Windows qui gère tes overlays de stream Twitch : alertes en temps r
 - [🧩 Éditeur de scène](#-éditeur-de-scène)
 - [🧪 Tester sans être en live](#-tester-sans-être-en-live)
 - [💾 Sauvegardes](#-sauvegardes)
+- [🤝 Partager un profil](#-partager-un-profil)
 - [🔄 Mises à jour](#-mises-à-jour)
 - [🚛 Intégration TruckyApp](#-intégration-truckyapp)
 - [🎛️ Plugin Stream Deck](#️-plugin-stream-deck)
@@ -44,6 +45,7 @@ Application Windows qui gère tes overlays de stream Twitch : alertes en temps r
 ### 🖥️ Une vraie application desktop
 - Légère : moteur en Rust, la fenêtre libère sa mémoire quand elle est fermée
 - Reste dans la zone de notification pour servir les overlays, même fenêtre fermée
+- Interface en français ou en anglais (overlays compris)
 - Lancement au démarrage de Windows (réduit ou non), au choix
 - Sauvegardes automatiques de la config, restauration en un clic
 - Mises à jour automatiques et signées
@@ -126,7 +128,7 @@ Le fichier `ConfigOBS.json` contient des scènes OBS déjà prêtes (Starting, G
 ## 🖥️ Utilisation au quotidien
 
 - **Tableau de bord** : état de Twitch et du live (viewers, follows, subs, messages), tests rapides, derniers événements avec **Rejouer**, URLs des scènes pour OBS.
-- **Paramètres** : profils, thèmes, alertes, panneaux, animations, chat, statistiques. On y trouve aussi **Application** (lancement avec Windows) et **Sauvegardes**.
+- **Paramètres** : profils (avec partage et import), thèmes, alertes, panneaux, animations, chat, statistiques. On y trouve aussi **Application** (langue, lancement avec Windows) et **Sauvegardes**.
 - **Commandes de chat** : réponses automatiques et actions sur l'overlay, avec permissions et délai entre deux utilisations.
 - **Intégrations** : Spotify (morceau en cours), TruckyApp, affichage des touches.
 - **Logs** : suivi en direct, utile en cas de souci.
@@ -147,6 +149,10 @@ La page **Tests** déclenche de faux événements visibles sur les overlays ouve
 Une sauvegarde automatique est faite une fois par jour quand la config a changé (les 10 dernières sont gardées), et tu peux en créer à tout moment depuis **Paramètres › Sauvegardes**. Elles contiennent tous les profils avec leurs sons et vidéos. Restaurer garde tes connexions Twitch et Spotify actuelles et sauvegarde d'abord l'état présent : une restauration peut toujours être annulée.
 
 Emplacement : `%APPDATA%\ElectrumOverlay\backups`.
+
+## 🤝 Partager un profil
+
+**Paramètres › Profils › Partager…** crée un fichier avec tout le profil : scènes, éléments, couleurs, alertes, et en option les sons et vidéos. Tu peux y indiquer ton pseudo et une description. Pour l'importer, **Importer…** (ou glisse le fichier sur la section) affiche un aperçu du contenu avant de l'ajouter.
 
 ## 🔄 Mises à jour
 

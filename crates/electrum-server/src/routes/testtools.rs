@@ -167,7 +167,15 @@ async fn show_panel(State(state): State<AppState>, Path(panel): Path<String>) ->
 
 /// Dernières alertes reçues (du plus récent au plus ancien).
 async fn history(State(state): State<AppState>) -> Json<Value> {
-    Json(json!({ "events": state.history().list() }))
+    let mut events = state.history().list();
+    if state.language() == "en" {
+        for event in &mut events {
+            if let Some(detail) = event["detail"].as_str() {
+                event["detail"] = json!(crate::i18n::to_english(detail));
+            }
+        }
+    }
+    Json(json!({ "events": events }))
 }
 
 async fn clear_history(State(state): State<AppState>) -> ApiResult {

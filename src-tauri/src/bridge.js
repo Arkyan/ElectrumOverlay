@@ -28,6 +28,8 @@
         setAutostart: (enabled, minimized) => invoke('autostart_set', { enabled, minimized }),
         // Partage de profil : fenêtre « Enregistrer sous », renvoie le chemin (null si annulé).
         saveSharedProfile: (id, params) => invoke('profile_share_save', { id, params }),
+        // Menu de l'icône de notification reconstruit (langue changée).
+        refreshTray: () => invoke('tray_refresh'),
 
         minimize: () => invoke('window_minimize'),
         maximize: () => invoke('window_toggle_maximize'),

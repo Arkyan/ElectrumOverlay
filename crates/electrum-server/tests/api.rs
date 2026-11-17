@@ -518,3 +518,34 @@ async fn partage_de_profil() {
     assert_eq!(imported["profile"]["name"], "Néon");
     assert_eq!(send(&state, "GET", "/api/profiles/inconnu/share", None).await.status, StatusCode::NOT_FOUND);
 }
+
+#[tokio::test]
+async fn interface_en_anglais() {
+    let (state, _dir) = new_state();
+    let mut rx = state.subscribe();
+    assert_eq!(send(&state, "GET", "/api/app/language", None).await.json()["language"], "fr");
+    assert!(send(&state, "GET", "/js/i18n.js", None).await.text().contains("lang: \"fr\", dict: {}"));
+    assert_eq!(send(&state, "POST", "/api/app/language", Some(json!({ "language": "de" }))).await.status, StatusCode::BAD_REQUEST);
+
+    send(&state, "POST", "/api/app/language", Some(json!({ "language": "en" }))).await;
+    assert!(std::iter::from_fn(|| rx.try_recv().ok()).any(|e| e.contains("language-changed")), "overlays prévenus");
+
+    // Pages de l'app traduites (texte, attributs, chaînes des scripts), sans erreur de syntaxe JS
+    // introduite par une apostrophe.
+    let home = send(&state, "GET", "/app", None).await.text();
+    assert!(home.contains("<html lang=\"en\">") && home.contains(">Dashboard<") && home.contains("Recent events"), "{home}");
+    assert!(!home.contains("Tableau de bord"));
+    let settings = send(&state, "GET", "/settings", None).await.text();
+    assert!(settings.contains("Interface language") && settings.contains("Could not reach the server."));
+    // Overlays : pas touchés par le serveur, ils reçoivent leur dictionnaire.
+    let overlay = send(&state, "GET", "/pause.html", None).await.text();
+    assert!(overlay.contains("lang=\"fr\"") || !overlay.contains("lang=\"en\""));
+    let dict = send(&state, "GET", "/js/i18n.js", None).await.text();
+    assert!(dict.contains("\"Merci pour le follow !\":\"Thanks for the follow!\""), "{dict}");
+    // Messages d'erreur de l'API.
+    let error = send(&state, "GET", "/api/profiles/inconnu/share-info", None).await.json();
+    assert_eq!(error["error"], "Profile not found");
+
+    send(&state, "POST", "/api/app/language", Some(json!({ "language": "fr" }))).await;
+    assert!(send(&state, "GET", "/app", None).await.text().contains("Tableau de bord"));
+}
