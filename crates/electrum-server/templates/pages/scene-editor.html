@@ -680,6 +680,11 @@
             const opening = !addMenu.classList.contains('open');
             addMenu.classList.toggle('open', opening);
             if (opening) {
+                // Hauteur limitée à la place libre au-dessus du bouton « + » (qui remonte quand le
+                // panneau de propriétés d'un élément sélectionné est ouvert), sous la barre de titre.
+                const top = addMenu.parentElement.getBoundingClientRect().top;
+                const titlebar = document.querySelector('header.chrome')?.getBoundingClientRect().bottom || 0;
+                addMenu.style.maxHeight = Math.max(220, Math.min(620, top - titlebar - 16)) + 'px';
                 addMenuSearch.value = '';
                 renderAddMenu('');
                 addMenu.querySelector('.se-menu-list').scrollTop = 0;
