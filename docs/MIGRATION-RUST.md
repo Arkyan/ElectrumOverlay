@@ -104,8 +104,7 @@ $env:ELECTRUM_CONFIG_DIR = "C:\chemin\vers\une\copie\config"
 | Script de release (installateur, `latest.json`, `latest.yml` pour la bascule Electron) | ✅ `latest.yml` vérifié avec electron-updater |
 | Couleur de l'app = couleur principale des overlays du profil actif (`/css/accent.css`) | ✅ testé |
 | Tableau de bord : derniers événements (follow, sub, bits, raid) avec « Rejouer » | ✅ testé |
-| Objectifs, sondages, prédictions, hype train (EventSub, scopes facultatifs) + overlays `goal.html` / `interactions.html` | ✅ testé contre un faux Twitch (à valider avec un vrai compte) |
-| Overlay de chat seul `chat.html` (options dans l'URL) | ✅ |
+| Objectifs, sondages, prédictions, hype train (EventSub, scopes facultatifs) + éléments de l'éditeur de scène | ✅ testé contre un faux Twitch (à valider avec un vrai compte) |
 | Démarrage avec Windows (réduit ou non), Paramètres › Application | ✅ compile pour Windows (à valider) |
 | Sauvegardes automatiques quotidiennes + manuelles, restauration, Paramètres › Sauvegardes | ✅ testé |
 | Première pré-version Rust, test réel de la bascule 2.5.2 → 3.0 | ⏳ voir [RELEASE-RUST.md](RELEASE-RUST.md) |
@@ -140,9 +139,11 @@ $env:ELECTRUM_CONFIG_DIR = "C:\chemin\vers\une\copie\config"
   version Electron) : bits, titre/catégorie, objectifs, sondages, prédictions, hype train (v2).
   Ils ne sont créés que si le token a le scope correspondant : un token obtenu avant reste
   valable, le tableau de bord indique ce qui est inactif et propose de ré-autoriser.
-- Overlays « widgets » à fond transparent (`chat.html`, `goal.html`, `interactions.html`), à
-  ajouter comme sources séparées par-dessus une scène. Options d'URL : `?scale=`, `?theme=`, et
-  pour le chat `?max=`, `?fade=`, `?bg=`, `?layout=inline`, `?hide=`, `?commands=1`.
+- Éléments de scène en plus (propres à Rust) : Objectif Twitch, Sondage, Prédiction, Hype train
+  (rendu dans `public/js/twitch-widgets.js`). Tout passe par l'éditeur de scène : pas de page
+  d'overlay séparée.
+- Fichiers statiques servis avec `Cache-Control: no-cache` : l'app et OBS revérifient chaque
+  fichier, une mise à jour de l'app est donc prise en compte sans vider de cache.
 - Sauvegardes dans `%APPDATA%\ElectrumOverlay\backups` (à côté de `config`) : JSON copiés,
   sons/vidéos stockés une seule fois par contenu (`backups/files`). Une restauration garde les
   sections `twitch` et `spotify` actuelles et sauvegarde l'état d'avant.

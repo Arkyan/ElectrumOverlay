@@ -33,14 +33,6 @@ pub fn tests() -> String {
 /// Pages d'overlay intégrées, dans l'ordre d'un stream.
 const OBS_PAGES: [(&str, &str); 4] = [("Démarrage", "/starting.html"), ("En direct", "/"), ("Pause", "/pause.html"), ("Fin", "/ending.html")];
 
-/// Overlays « widgets » à fond transparent, à placer librement par-dessus une scène :
-/// nom, taille de source conseillée, chemin.
-const WIDGET_PAGES: [(&str, &str, &str); 3] = [
-    ("Chat", "450×800", "/chat.html"),
-    ("Objectif", "900×140", "/goal.html"),
-    ("Sondages, prédictions, hype train", "560×720", "/interactions.html"),
-];
-
 /// Tableau de bord : état de Twitch et du live (rafraîchis par la page), tests rapides, et URLs
 /// des sources OBS (pages intégrées + scènes personnalisées du profil actif) à copier.
 pub fn app_home(config: &Value) -> String {
@@ -61,9 +53,6 @@ pub fn app_home(config: &Value) -> String {
             }
             rows.push_str(&row(&js::string(scene.get("name")), &format!("/scene/{id}")));
         }
-    }
-    for (name, size, path) in WIDGET_PAGES {
-        rows.push_str(&row_with(name, &format!("Widget transparent · {size}"), path));
     }
     let login = at(config, &["twitch", "BROADCASTER_LOGIN"]).filter(|v| electrum_core::json::is_truthy(Some(v)));
     let channel = login.map_or("—".to_string(), |l| esc(&js::string(Some(l))));

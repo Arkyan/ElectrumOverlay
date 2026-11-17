@@ -27,6 +27,7 @@ use std::io;
 use std::net::SocketAddr;
 use tokio::net::TcpListener;
 use tower_http::services::ServeDir;
+use tower_http::set_header::SetResponseHeaderLayer;
 
 /// Routeur HTTP complet. Les routes passent avant les fichiers statiques, comme côté Node
 /// (`/js/config.js` est généré, pas lu sur disque).
@@ -44,6 +45,13 @@ pub fn http_router(state: AppState) -> Router {
         .merge(routes::backups::router())
         .fallback_service(public)
         .layer(axum::middleware::from_fn_with_state(state.clone(), routes::setup::redirect_until_configured))
+        // Toujours revérifier auprès du serveur (réponse 304 si rien n'a changé) : sans ça, la
+        // fenêtre de l'app et OBS gardaient d'anciens JS/CSS après une mise à jour, et l'éditeur
+        // de scène ne connaissait pas les nouveaux types d'éléments.
+        .layer(SetResponseHeaderLayer::if_not_present(
+            axum::http::header::CACHE_CONTROL,
+            axum::http::HeaderValue::from_static("no-cache"),
+        ))
         .with_state(state)
 }
 

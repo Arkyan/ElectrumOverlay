@@ -445,9 +445,6 @@ async fn objectif_sondage_prediction_hype_train() {
     tokio::time::sleep(std::time::Duration::from_millis(100)).await;
     assert_eq!(send(&state, "GET", "/api/interactions", None).await.json()["goal"]["current"], 842);
 
-    // Les widgets sont listés sur le tableau de bord.
-    let home = send(&state, "GET", "/app", None).await.text();
-    assert!(home.contains("http://localhost:8080/interactions.html") && home.contains("http://localhost:8080/goal.html"));
 }
 
 #[tokio::test]
@@ -494,4 +491,9 @@ async fn cartes_twitch_dans_l_editeur_de_scene() {
         let html = send(&state, "GET", page, None).await.text();
         assert!(html.contains("js/twitch-widgets.js") && html.contains("css/twitch-widgets.css"), "{page}");
     }
+    // Fichiers toujours revérifiés : une mise à jour de l'app est vue sans vider de cache.
+    let script = send(&state, "GET", "/js/overlay-common.js", None).await;
+    assert_eq!(script.headers["cache-control"], "no-cache");
+    assert_eq!(send(&state, "GET", "/css/accent.css", None).await.headers["cache-control"], "no-store");
+    assert_eq!(send(&state, "GET", "/chat.html", None).await.status, StatusCode::NOT_FOUND);
 }
