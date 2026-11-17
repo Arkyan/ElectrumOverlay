@@ -121,6 +121,7 @@ async fn redirige_vers_setup_tant_que_twitch_n_est_pas_configure() {
     send(&state, "POST", "/api/setup/credentials", Some(json!({ "clientId": " abc ", "clientSecret": "s" }))).await;
     let url = send(&state, "GET", "/api/setup/auth-url", None).await.json();
     assert!(url["url"].as_str().unwrap().contains("client_id=abc&redirect_uri=http%3A%2F%2Flocalhost%3A8080%2Fauth-callback&scope=user%3Aread%3Achat+"));
+    assert!(url["url"].as_str().unwrap().contains("+bits%3Aread+channel%3Aread%3Agoals+channel%3Aread%3Apolls+channel%3Aread%3Apredictions+channel%3Aread%3Ahype_train"));
     assert_eq!(send(&state, "POST", "/api/setup/finish", Some(json!({}))).await.json()["error"], "Autorisation Twitch requise avant d'enregistrer");
 }
 
@@ -409,4 +410,42 @@ async fn historique_des_alertes_et_rejouer() {
     assert_eq!(send(&state, "POST", "/api/events/999/replay", None).await.status, StatusCode::NOT_FOUND);
     send(&state, "DELETE", "/api/events/history", None).await;
     assert!(send(&state, "GET", "/api/events/history", None).await.json()["events"].as_array().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn objectif_sondage_prediction_hype_train() {
+    let (state, _dir) = new_state();
+    let mut rx = state.subscribe();
+    let route = |kind: &str, event: Value| electrum_server::events::route_event(&state, kind, &event);
+
+    route("channel.poll.begin", json!({ "id": "p", "title": "Quoi ?", "choices": [{ "id": "a", "title": "A", "votes": 0 }], "ends_at": "2030-01-01T00:00:00Z" }));
+    let message = next_event(&mut rx);
+    assert_eq!((message["type"].as_str(), message["kind"].as_str(), message["phase"].as_str()), (Some("interaction"), Some("poll"), Some("begin")));
+    assert_eq!(message["data"]["choices"][0]["title"], "A");
+    route("channel.goal.progress", json!({ "type": "follower", "current_amount": 10, "target_amount": 50 }));
+    route("channel.prediction.lock", json!({ "title": "P", "outcomes": [{ "id": "o", "title": "Oui", "color": "PINK", "users": 1, "channel_points": 10 }] }));
+
+    // Un overlay ouvert maintenant voit ce qui est en cours.
+    let current = send(&state, "GET", "/api/interactions", None).await.json();
+    assert_eq!(current["poll"]["title"], "Quoi ?");
+    assert_eq!(current["goal"]["unit"], "followers");
+    assert_eq!(current["prediction"]["outcomes"][0]["color"], "pink");
+    assert!(current["hypetrain"].is_null());
+
+    // Fin : plus rien en cours, mais le résultat est diffusé.
+    route("channel.poll.end", json!({ "id": "p", "title": "Quoi ?", "choices": [{ "id": "a", "title": "A", "votes": 4 }], "status": "completed" }));
+    let end = std::iter::from_fn(|| rx.try_recv().ok()).last().unwrap();
+    assert!(end.contains("\"phase\":\"end\"") && end.contains("\"votes\":4"), "{end}");
+    assert!(send(&state, "GET", "/api/interactions", None).await.json()["poll"].is_null());
+    // Pas dans l'historique des alertes.
+    assert!(send(&state, "GET", "/api/events/history", None).await.json()["events"].as_array().unwrap().is_empty());
+
+    // Scénario de démonstration de la page Tests : se déroule en tâche de fond.
+    assert_eq!(send(&state, "POST", "/api/tests/trigger", Some(json!({ "action": "goal" }))).await.status, StatusCode::OK);
+    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    assert_eq!(send(&state, "GET", "/api/interactions", None).await.json()["goal"]["current"], 842);
+
+    // Les widgets sont listés sur le tableau de bord.
+    let home = send(&state, "GET", "/app", None).await.text();
+    assert!(home.contains("http://localhost:8080/interactions.html") && home.contains("http://localhost:8080/goal.html"));
 }

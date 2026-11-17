@@ -10,6 +10,7 @@ pub mod commands;
 pub mod events;
 pub mod history;
 pub mod input;
+pub mod interactions;
 pub mod pages;
 pub mod routes;
 pub mod spotify;

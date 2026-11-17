@@ -21,6 +21,65 @@ pub struct EventSubStatus {
     pub last_error: Option<String>,
     /// Le token a été refusé : il faut ré-autoriser l'application dans /setup.
     pub needs_authorization: bool,
+    /// Fonctions facultatives inactives faute d'autorisation (« Bits », « Sondages »...) :
+    /// une nouvelle autorisation dans /setup les active.
+    pub missing_features: Vec<String>,
+}
+
+/// Abonnements facultatifs propres à la version Rust (la config `eventTypes` est partagée avec
+/// la version Electron, qui ne sait pas les traiter) : type, version, scope requis, libellé.
+/// Créés seulement si le token a le scope : un token obtenu avant leur ajout continue de marcher.
+pub const OPTIONAL_EVENTS: &[(&str, &str, Option<&str>, &str)] = &[
+    ("channel.update", "2", None, "Titre et catégorie"),
+    ("channel.cheer", "1", Some("bits:read"), "Bits"),
+    ("channel.goal.begin", "1", Some("channel:read:goals"), "Objectifs"),
+    ("channel.goal.progress", "1", Some("channel:read:goals"), "Objectifs"),
+    ("channel.goal.end", "1", Some("channel:read:goals"), "Objectifs"),
+    ("channel.poll.begin", "1", Some("channel:read:polls"), "Sondages"),
+    ("channel.poll.progress", "1", Some("channel:read:polls"), "Sondages"),
+    ("channel.poll.end", "1", Some("channel:read:polls"), "Sondages"),
+    ("channel.prediction.begin", "1", Some("channel:read:predictions"), "Prédictions"),
+    ("channel.prediction.progress", "1", Some("channel:read:predictions"), "Prédictions"),
+    ("channel.prediction.lock", "1", Some("channel:read:predictions"), "Prédictions"),
+    ("channel.prediction.end", "1", Some("channel:read:predictions"), "Prédictions"),
+    ("channel.hype_train.begin", "2", Some("channel:read:hype_train"), "Hype train"),
+    ("channel.hype_train.progress", "2", Some("channel:read:hype_train"), "Hype train"),
+    ("channel.hype_train.end", "2", Some("channel:read:hype_train"), "Hype train"),
+];
+
+/// Scopes demandés à l'autorisation : ceux de la config + ceux des abonnements facultatifs.
+pub fn authorization_scopes(config_scopes: Vec<String>) -> Vec<String> {
+    let mut scopes = config_scopes;
+    for scope in OPTIONAL_EVENTS.iter().filter_map(|e| e.2) {
+        if !scopes.iter().any(|s| s == scope) {
+            scopes.push(scope.to_string());
+        }
+    }
+    scopes
+}
+
+/// Abonnements facultatifs possibles avec ces scopes (sans doublon avec la config), et libellés
+/// des fonctions qui restent inactives faute de scope.
+pub fn optional_subscriptions(
+    already: &[(String, String, Value)],
+    broadcaster_id: &str,
+    scopes: &[String],
+) -> (Vec<(String, String, Value)>, Vec<String>) {
+    let mut wanted = Vec::new();
+    let mut missing: Vec<String> = Vec::new();
+    for (kind, version, scope, label) in OPTIONAL_EVENTS {
+        if already.iter().any(|(k, _, _)| k == kind) {
+            continue;
+        }
+        if scope.is_some_and(|scope| !scopes.iter().any(|s| s == scope)) {
+            if !missing.iter().any(|m| m == label) {
+                missing.push(label.to_string());
+            }
+            continue;
+        }
+        wanted.push((kind.to_string(), version.to_string(), json!({ "broadcaster_user_id": broadcaster_id })));
+    }
+    (wanted, missing)
 }
 
 /// Ensemble borné d'identifiants déjà vus (dédoublonnage des notifications Twitch, échos de nos

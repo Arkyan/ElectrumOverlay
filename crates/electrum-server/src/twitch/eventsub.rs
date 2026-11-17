@@ -110,7 +110,7 @@ async fn connect(url: &str) -> Result<Socket, String> {
 
 /// Vérifie le token avant de se connecter : message clair si expiré / mauvaise application /
 /// scopes manquants (c'était la première cause de « chat qui ne marche pas »).
-async fn check_token(state: &AppState, creds: &Credentials) -> Result<(), End> {
+async fn check_token(state: &AppState, creds: &Credentials) -> Result<Vec<String>, End> {
     match state.twitch.api.validate(&creds.token).await {
         Ok(None) => Err(End::Unauthorized(
             "Le token Twitch est expiré ou révoqué — ré-autorise l'application dans Configuration".into(),
@@ -132,15 +132,21 @@ async fn check_token(state: &AppState, creds: &Credentials) -> Result<(), End> {
             if let Some(seconds) = info.expires_in.filter(|s| *s > 0 && *s < 3 * 24 * 3600) {
                 state.log("warn", format!("⚠️ Le token Twitch expire dans {} h — pense à ré-autoriser bientôt", seconds / 3600));
             }
-            Ok(())
+            Ok(info.scopes)
         }
         Err(error) => Err(End::Lost(error.to_string())),
     }
 }
 
 /// Crée tous les abonnements voulus pour cette session. Erreur seulement si le token est refusé.
-async fn subscribe_all(state: &AppState, creds: &Credentials, session_id: &str) -> Result<Vec<Value>, End> {
-    let wanted = super::wanted_subscriptions(state, &creds.broadcaster_id);
+async fn subscribe_all(state: &AppState, creds: &Credentials, session_id: &str, scopes: &[String]) -> Result<Vec<Value>, End> {
+    let mut wanted = super::wanted_subscriptions(state, &creds.broadcaster_id);
+    let (optional, missing) = super::optional_subscriptions(&wanted, &creds.broadcaster_id, scopes);
+    wanted.extend(optional);
+    if !missing.is_empty() {
+        state.log("info", format!("ℹ️ Inactif faute d'autorisation : {} — ré-autorise Twitch dans Configuration pour l'activer", missing.join(", ")));
+    }
+    state.twitch.set_status(|s| s.missing_features = missing);
     let mut created = Vec::new();
     for (kind, version, condition) in &wanted {
         match state.twitch.api.create_subscription(creds, kind, version, condition, session_id).await {
@@ -160,9 +166,10 @@ async fn subscribe_all(state: &AppState, creds: &Credentials, session_id: &str) 
 
 /// Une session complète, de la connexion à sa fin.
 async fn session(state: &AppState, creds: &Credentials, options: &Options) -> End {
-    if let Err(end) = check_token(state, creds).await {
-        return end;
-    }
+    let scopes = match check_token(state, creds).await {
+        Ok(scopes) => scopes,
+        Err(end) => return end,
+    };
     let mut socket = match connect(&with_keepalive(&state.twitch.api.endpoints.eventsub_ws)).await {
         Ok(socket) => socket,
         Err(error) => return End::Lost(error),
@@ -198,9 +205,12 @@ async fn session(state: &AppState, creds: &Credentials, options: &Options) -> En
                     keepalive = Duration::from_secs(seconds) + options.keepalive_grace;
                 }
                 if !subscribed {
-                    match subscribe_all(state, creds, &session_id).await {
+                    match subscribe_all(state, creds, &session_id, &scopes).await {
                         Ok(subscriptions) => state.twitch.set_status(|s| s.subscriptions = subscriptions),
                         Err(end) => return end,
+                    }
+                    if scopes.iter().any(|s| s == "channel:read:goals") {
+                        load_current_goal(state, creds).await;
                     }
                     subscribed = true;
                 }
@@ -248,6 +258,14 @@ async fn session(state: &AppState, creds: &Credentials, options: &Options) -> En
     }
 }
 
+/// Objectif en cours sur la chaîne (le premier s'il y en a plusieurs).
+async fn load_current_goal(state: &AppState, creds: &Credentials) {
+    match state.twitch.api.goals(creds).await {
+        Ok(goals) => crate::interactions::set_initial_goal(state, goals.first()),
+        Err(error) => state.log("warn", format!("⚠️ Objectifs Twitch illisibles : {error}")),
+    }
+}
+
 /// Rejoint l'URL de reconnexion et attend son `session_welcome`.
 async fn reconnect(url: &str, keepalive: Duration) -> Result<(Socket, String), String> {
     let mut socket = connect(url).await?;
@@ -274,6 +292,7 @@ pub fn status_json(state: &AppState) -> Value {
         "sessionId": status.session_id,
         "subscriptions": status.subscriptions.len(),
         "lastError": status.last_error,
-        "needsAuthorization": status.needs_authorization
+        "needsAuthorization": status.needs_authorization,
+        "missingFeatures": status.missing_features
     })
 }

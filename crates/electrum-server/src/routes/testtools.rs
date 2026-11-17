@@ -16,6 +16,7 @@ pub fn router() -> Router<AppState> {
         .route("/api/tests/trigger", post(trigger))
         .route("/api/panels/{panel}/show", post(show_panel))
         .route("/api/events/history", get(history).delete(clear_history))
+        .route("/api/interactions", get(interactions))
         .route("/api/events/{id}/replay", post(replay_event))
 }
 
@@ -85,9 +86,71 @@ fn build_test_event(state: &AppState, action: &str) -> Option<(&'static str, Val
     })
 }
 
+/// Objectif, sondage, prédiction et hype train en cours (affichage immédiat d'un overlay ouvert).
+async fn interactions(State(state): State<AppState>) -> Json<Value> {
+    Json(state.interactions().to_json())
+}
+
+fn in_seconds(seconds: i64) -> String {
+    (chrono::Utc::now() + chrono::Duration::seconds(seconds)).to_rfc3339_opts(chrono::SecondsFormat::Millis, true)
+}
+
+/// Scénario de démonstration : (délai en ms depuis le début, type EventSub, événement).
+fn interaction_scenario(state: &AppState, action: &str) -> Option<Vec<(u64, &'static str, Value)>> {
+    let b = |fields: Value| with_broadcaster(state, fields);
+    let choices = |votes: [u64; 3]| {
+        json!([
+            { "id": "c1", "title": "Euro Truck Simulator 2", "votes": votes[0] },
+            { "id": "c2", "title": "Minecraft", "votes": votes[1] },
+            { "id": "c3", "title": "Just Chatting", "votes": votes[2] }
+        ])
+    };
+    let outcomes = |users: [u64; 2], points: [u64; 2]| {
+        json!([
+            { "id": "o1", "title": "Livraison sans dégâts", "color": "blue", "users": users[0], "channel_points": points[0] },
+            { "id": "o2", "title": "Au moins une rayure", "color": "pink", "users": users[1], "channel_points": points[1] }
+        ])
+    };
+    let hype = |level: u64, total: u64, progress: u64, goal: u64| {
+        json!({ "id": "test-hype", "type": "regular", "level": level, "total": total, "progress": progress, "goal": goal, "expires_at": in_seconds(300),
+            "top_contributions": [{ "user_name": "TestViewer", "type": "bits", "total": 500 }, { "user_name": "Alice", "type": "subscription", "total": 1000 }] })
+    };
+    Some(match action {
+        "goal" => vec![(0, "channel.goal.progress", b(json!({ "id": "test-goal", "type": "follower", "description": "Objectif followers", "current_amount": 842, "target_amount": 1000 })))],
+        "poll" => vec![
+            (0, "channel.poll.begin", b(json!({ "id": "test-poll", "title": "On joue à quoi ensuite ?", "choices": choices([0, 0, 0]), "ends_at": in_seconds(20) }))),
+            (3000, "channel.poll.progress", b(json!({ "id": "test-poll", "title": "On joue à quoi ensuite ?", "choices": choices([12, 5, 3]), "ends_at": in_seconds(17) }))),
+            (8000, "channel.poll.progress", b(json!({ "id": "test-poll", "title": "On joue à quoi ensuite ?", "choices": choices([21, 14, 6]), "ends_at": in_seconds(12) }))),
+            (14000, "channel.poll.end", b(json!({ "id": "test-poll", "title": "On joue à quoi ensuite ?", "choices": choices([27, 15, 6]), "status": "completed", "ended_at": in_seconds(0) }))),
+        ],
+        "prediction" => vec![
+            (0, "channel.prediction.begin", b(json!({ "id": "test-pred", "title": "La prochaine livraison ?", "outcomes": outcomes([0, 0], [0, 0]), "locks_at": in_seconds(20) }))),
+            (3000, "channel.prediction.progress", b(json!({ "id": "test-pred", "title": "La prochaine livraison ?", "outcomes": outcomes([8, 5], [4200, 2100]), "locks_at": in_seconds(17) }))),
+            (8000, "channel.prediction.lock", b(json!({ "id": "test-pred", "title": "La prochaine livraison ?", "outcomes": outcomes([14, 9], [7300, 5200]) }))),
+            (14000, "channel.prediction.end", b(json!({ "id": "test-pred", "title": "La prochaine livraison ?", "outcomes": outcomes([14, 9], [7300, 5200]), "status": "resolved", "winning_outcome_id": "o1" }))),
+        ],
+        "hypetrain" => vec![
+            (0, "channel.hype_train.begin", b(hype(1, 600, 600, 1800))),
+            (4000, "channel.hype_train.progress", b(hype(2, 2500, 700, 2100))),
+            (12000, "channel.hype_train.end", b(json!({ "id": "test-hype", "level": 2, "total": 2500, "top_contributions": [] }))),
+        ],
+        _ => return None,
+    })
+}
+
 async fn trigger(State(state): State<AppState>, body: Bytes) -> ApiResult {
     let body = body_or_empty(&body);
     let action = body.get("action").and_then(Value::as_str).unwrap_or_default();
+    if let Some(steps) = interaction_scenario(&state, action) {
+        tokio::spawn(async move {
+            let start = tokio::time::Instant::now();
+            for (at, event_type, event) in steps {
+                tokio::time::sleep_until(start + std::time::Duration::from_millis(at)).await;
+                route_test_event(&state, event_type, &event);
+            }
+        });
+        return ok();
+    }
     let (event_type, event) =
         build_test_event(&state, action).ok_or_else(|| ApiError::bad_request("Action de test inconnue"))?;
     route_test_event(&state, event_type, &event);

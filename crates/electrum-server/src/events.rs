@@ -64,6 +64,10 @@ pub fn route_test_event(state: &AppState, event_type: &str, event: &Value) {
 }
 
 fn route(state: &AppState, event_type: &str, event: &Value, test: bool) {
+    if let Some((kind, phase)) = crate::interactions::classify(event_type) {
+        crate::interactions::handle(state, kind, phase, event);
+        return;
+    }
     match event_type {
         "stream.online" => {
             state.stats().start_stream(

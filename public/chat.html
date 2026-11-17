@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>Chat - ElectrumOverlay</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/widgets.css">
+    <style>
+        html, body { height: 100%; }
+        body { display: flex; flex-direction: column; justify-content: flex-end; padding: calc(10px * var(--w-scale)); box-sizing: border-box; }
+        #messages { display: flex; flex-direction: column; gap: calc(8px * var(--w-scale)); }
+        .msg {
+            background: rgba(var(--w-panel-rgb), var(--w-bg-opacity, 0.82));
+            border-left: calc(4px * var(--w-scale)) solid var(--w-primary);
+            border-radius: calc(12px * var(--w-scale));
+            padding: calc(9px * var(--w-scale)) calc(14px * var(--w-scale));
+            box-shadow: 0 6px 18px rgba(0, 0, 0, 0.28);
+            line-height: 1.35;
+            overflow-wrap: anywhere;
+            transition: opacity 0.6s, transform 0.6s;
+        }
+        .msg.gone { opacity: 0; transform: translateX(-12px); }
+        .name { font-weight: 800; margin-right: 0.35em; }
+        .name img { height: 1.05em; vertical-align: -0.15em; margin-right: 0.25em; }
+        .text { font-weight: 500; }
+        .text img { height: 1.6em; vertical-align: middle; margin: -0.3em 0.05em; }
+        body.inline .name::after { content: ' :'; color: var(--w-muted); font-weight: 600; }
+        body.stacked .name { display: block; margin-bottom: 0.15em; }
+    </style>
+</head>
+<body class="stacked">
+    <!-- Chat Twitch en direct, fond transparent. Source conseillée : 450×800.
+         Options d'URL : ?max=15 (messages affichés), ?fade=60 (secondes avant disparition, 0 = jamais),
+         ?bg=0.8 (opacité du fond), ?layout=inline (pseudo et message sur une ligne),
+         ?hide=nightbot,streamelements (pseudos masqués), ?commands=1 (afficher les !commandes),
+         ?scale=1.2, ?theme=pause (couleurs d'un autre thème du profil). -->
+    <div id="messages"></div>
+
+    <script src="js/config.js"></script>
+    <script src="js/widgets.js"></script>
+    <script>
+    (function () {
+        const W = Widgets;
+        const p = W.params;
+        const max = Math.max(1, parseInt(p.get('max'), 10) || 15);
+        const fade = p.has('fade') ? Math.max(0, parseFloat(p.get('fade')) || 0) : 60;
+        const hidden = new Set((p.get('hide') || '').toLowerCase().split(',').map((s) => s.trim()).filter(Boolean));
+        const showCommands = p.get('commands') === '1';
+        if (p.has('bg')) document.documentElement.style.setProperty('--w-bg-opacity', String(Math.min(1, Math.max(0, parseFloat(p.get('bg')) || 0))));
+        if (p.get('layout') === 'inline') document.body.className = 'inline';
+
+        const list = document.getElementById('messages');
+        const badges = { channel: {}, global: {} };
+
+        function loadBadges(url, target) {
+            return fetch(url).then((r) => r.json()).then((json) => {
+                (json.data || []).forEach((set) => set.versions.forEach((v) => { target[`${set.set_id}/${v.id}`] = v.image_url_2x || v.image_url_1x; }));
+            }).catch(() => {});
+        }
+        const broadcasterId = (globalThis.OVERLAY_CONFIG || {}).twitch?.broadcasterId;
+        if (broadcasterId) loadBadges(`/badges/${broadcasterId}`, badges.channel);
+        loadBadges('/badgesglobal', badges.global);
+
+        function badgeHtml(all) {
+            return Object.entries(all || {}).map(([set, id]) => {
+                const url = badges.channel[`${set}/${id}`] || badges.global[`${set}/${id}`];
+                return url ? `<img src="${url}" alt="">` : '';
+            }).join('');
+        }
+
+        function textHtml(text, fragments) {
+            if (!Array.isArray(fragments) || fragments.length === 0) return W.escapeHtml(text);
+            return fragments.map((f) => f.type === 'emote' && f.emote?.id
+                ? `<img src="https://static-cdn.jtvnw.net/emoticons/v2/${encodeURIComponent(f.emote.id)}/default/dark/2.0" alt="${W.escapeHtml(f.text)}">`
+                : W.escapeHtml(f.text)).join('');
+        }
+
+        function safeColor(color) {
+            return /^#[0-9a-f]{3,8}$/i.test(color || '') ? color : 'var(--w-primary)';
+        }
+
+        function remove(el) {
+            el.classList.add('gone');
+            setTimeout(() => el.remove(), 600);
+        }
+
+        function add(message) {
+            const name = message.displayName || message.username || '';
+            if (hidden.has(String(name).toLowerCase())) return;
+            if (!showCommands && String(message.message || '').startsWith('!')) return;
+            const el = document.createElement('div');
+            el.className = 'msg w-enter';
+            el.innerHTML = `<span class="name" style="color:${safeColor(message.color)}">${badgeHtml(message.badges)}${W.escapeHtml(name)}</span>`
+                + `<span class="text">${textHtml(message.message, message.fragments)}</span>`;
+            list.appendChild(el);
+            while (list.children.length > max) list.firstElementChild.remove();
+            if (fade > 0) setTimeout(() => remove(el), fade * 1000);
+        }
+
+        W.on((message) => {
+            if (message.type === 'message') add(message);
+        });
+        W.start();
+    })();
+    </script>
+</body>
+</html>

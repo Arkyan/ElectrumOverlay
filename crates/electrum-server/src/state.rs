@@ -26,6 +26,7 @@ pub struct Inner {
     store: Mutex<Store>,
     stats: Mutex<StreamStats>,
     history: Mutex<crate::history::History>,
+    interactions: Mutex<crate::interactions::Interactions>,
     events: broadcast::Sender<String>,
     logs: Mutex<VecDeque<Value>>,
     /// Dernier déclenchement de chaque commande de chat (cooldown, en mémoire seulement).
@@ -83,6 +84,7 @@ impl AppState {
             store: Mutex::new(store),
             stats: Mutex::new(StreamStats::default()),
             history: Mutex::new(Default::default()),
+            interactions: Mutex::new(Default::default()),
             events,
             logs: Mutex::new(VecDeque::new()),
             command_cooldowns: Mutex::new(HashMap::new()),
@@ -107,6 +109,11 @@ impl AppState {
     /// Historique des alertes (tableau de bord).
     pub fn history(&self) -> MutexGuard<'_, crate::history::History> {
         self.history.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+
+    /// Objectif, sondage, prédiction, hype train en cours.
+    pub fn interactions(&self) -> MutexGuard<'_, crate::interactions::Interactions> {
+        self.interactions.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
     }
 
     /// Envoie un message JSON à tous les overlays connectés (`broadcastEvent` côté Node).

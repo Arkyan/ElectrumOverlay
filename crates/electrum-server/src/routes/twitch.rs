@@ -32,8 +32,9 @@ pub fn authorize_url(state: &AppState) -> String {
     let store = state.store();
     let twitch = &store.config()["twitch"];
     let text = |key: &str| twitch.get(key).and_then(Value::as_str).unwrap_or_default().to_string();
-    let scopes: Vec<String> =
-        twitch["SCOPES"].as_array().map(|s| s.iter().filter_map(Value::as_str).map(str::to_string).collect()).unwrap_or_default();
+    let scopes: Vec<String> = crate::twitch::authorization_scopes(
+        twitch["SCOPES"].as_array().map(|s| s.iter().filter_map(Value::as_str).map(str::to_string).collect()).unwrap_or_default(),
+    );
     state.twitch.api.authorize_url(&text("CLIENT_ID"), &text("REDIRECT_URI"), &scopes)
 }
 

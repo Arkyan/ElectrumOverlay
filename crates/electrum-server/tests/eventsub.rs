@@ -60,7 +60,7 @@ async fn wait_for(what: &str, mut condition: impl FnMut() -> bool) {
 async fn first_session(mut socket: WebSocket, mock: Arc<Mock>, port: u16) {
     socket.send(welcome("s1", 1)).await.unwrap();
     // Laisser le client créer ses abonnements (il a ~10 s pour le faire chez Twitch).
-    wait_for("abonnements de la session 1", || mock.subscriptions.lock().unwrap().len() >= 8).await;
+    wait_for("abonnements de la session 1", || mock.subscriptions.lock().unwrap().len() >= 12).await;
     socket.send(notification("n1", "channel.follow", json!({ "user_name": "Alice" }))).await.unwrap();
     socket.send(notification("n1", "channel.follow", json!({ "user_name": "Alice" }))).await.unwrap(); // doublon
     socket.send(message("session_keepalive", "k1", json!({}))).await.unwrap();
@@ -105,7 +105,7 @@ async fn validate(State((mock, _)): State<(Arc<Mock>, u16)>, headers: HeaderMap)
         return (StatusCode::UNAUTHORIZED, Json(json!({ "status": 401, "message": "invalid access token" }))).into_response();
     }
     Json(json!({ "client_id": "test", "login": "moi", "user_id": "1", "expires_in": 5_000_000,
-                 "scopes": ["user:read:chat", "user:bot", "channel:bot", "channel:read:subscriptions", "moderator:read:followers", "chat:read", "chat:edit", "user:write:chat"] }))
+                 "scopes": ["user:read:chat", "user:bot", "channel:bot", "channel:read:subscriptions", "moderator:read:followers", "chat:read", "chat:edit", "user:write:chat", "channel:read:polls"] }))
     .into_response()
 }
 
@@ -169,7 +169,12 @@ async fn connexion_notifications_reconnexions() {
     // 1. Abonnements créés pour la session s1, avec le bon transport et les bonnes conditions.
     wait_for("connexion EventSub", || state.twitch.status().connected).await;
     let created = mock.subscriptions.lock().unwrap().clone();
-    assert_eq!(created.len(), 8, "7 événements de base + le chat");
+    assert_eq!(created.len(), 12, "7 événements de base + le chat + titre/catégorie + 3 de sondage");
+    // Abonnements facultatifs : seulement ceux que le token autorise.
+    assert!(created.iter().any(|s| s["type"] == "channel.poll.progress"));
+    assert!(created.iter().any(|s| s["type"] == "channel.update" && s["version"] == "2"));
+    assert!(!created.iter().any(|s| s["type"] == "channel.cheer" || s["type"] == "channel.goal.progress"));
+    assert_eq!(state.twitch.status().missing_features, ["Bits", "Objectifs", "Prédictions", "Hype train"]);
     assert!(created.iter().all(|s| s["transport"] == json!({ "method": "websocket", "session_id": "s1" })));
     let follow = created.iter().find(|s| s["type"] == "channel.follow").unwrap();
     assert_eq!((follow["version"].clone(), follow["condition"].clone()), (json!("2"), json!({ "broadcaster_user_id": "1", "moderator_user_id": "1" })));
@@ -177,7 +182,7 @@ async fn connexion_notifications_reconnexions() {
     assert_eq!(chat["condition"], json!({ "broadcaster_user_id": "1", "user_id": "1" }));
     let raid = created.iter().find(|s| s["type"] == "channel.raid").unwrap();
     assert_eq!(raid["condition"], json!({ "to_broadcaster_user_id": "1" }));
-    assert_eq!(state.twitch.status().subscriptions.len(), 7, "le refus 403 d'un abonnement n'empêche pas les autres");
+    assert_eq!(state.twitch.status().subscriptions.len(), 11, "le refus 403 d'un abonnement n'empêche pas les autres");
 
     // 2. Notifications : le doublon est ignoré, le chat arrive aux overlays.
     wait_for("follow + chat", || state.stats().chat_messages == 1).await;
@@ -188,12 +193,12 @@ async fn connexion_notifications_reconnexions() {
         std::iter::from_fn(|| overlay.try_recv().ok()).any(|e| e.contains("\"channel.raid\""))
     })
     .await;
-    assert_eq!(mock.subscriptions.lock().unwrap().len(), 8, "pas de nouveaux abonnements après session_reconnect");
+    assert_eq!(mock.subscriptions.lock().unwrap().len(), 12, "pas de nouveaux abonnements après session_reconnect");
 
     // 4. Silence sur la nouvelle URL : keepalive dépassé → reconnexion complète + réabonnement.
     wait_for("nouvelle session après silence", || state.twitch.status().session_id.as_deref() == Some("s3")).await;
-    wait_for("réabonnement", || mock.subscriptions.lock().unwrap().len() == 16).await;
-    assert!(mock.subscriptions.lock().unwrap()[8..].iter().all(|s| s["transport"]["session_id"] == "s3"));
+    wait_for("réabonnement", || mock.subscriptions.lock().unwrap().len() == 24).await;
+    assert!(mock.subscriptions.lock().unwrap()[12..].iter().all(|s| s["transport"]["session_id"] == "s3"));
     assert_eq!(state.stats().follows, 1);
 }
 

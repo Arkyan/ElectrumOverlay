@@ -27,6 +27,7 @@
             <div class="metric-row"><span>Connexion</span><span class="tag" id="twState">…</span></div>
             <div class="metric-row"><span>Événements suivis</span><strong id="twSubs">–</strong></div>
             <p class="hint" id="twError" hidden></p>
+            <p class="hint" id="twMissing" hidden></p>
             <div class="card-actions">
                 <a class="btn btn-sm" href="/setup">Configuration</a>
             </div>
@@ -72,7 +73,7 @@
     <section class="card">
         <h2 class="card-title">Sources pour OBS</h2>
         <table class="table">
-            <thead><tr><th>Scène</th><th>URL (source navigateur, 1920×1080)</th><th></th></tr></thead>
+            <thead><tr><th>Source</th><th>URL (source navigateur)</th><th></th></tr></thead>
             <tbody>{{expr:2}}</tbody>
         </table>
     </section>
@@ -116,6 +117,9 @@
             $('twSubs').textContent = e.connected ? String(e.subscriptions) : '–';
             $('twError').hidden = !e.lastError;
             $('twError').textContent = e.lastError || '';
+            const missing = e.connected ? (e.missingFeatures || []) : [];
+            $('twMissing').hidden = missing.length === 0;
+            $('twMissing').innerHTML = missing.length ? 'Inactif : ' + missing.join(', ') + '. <a href="/auth-url">Ré-autoriser Twitch</a> pour les activer.' : '';
         }).catch(() => {});
     }
 
@@ -147,7 +151,7 @@
                 const [label, cls] = KINDS[e.type] || [e.type, ''];
                 const time = new Date(e.time).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
                 return '<tr><td class="nowrap">' + time + '</td>'
-                    + '<td><span class="tag ' + cls + '">' + label + '</span> ' + esc(e.detail) + (e.test ? ' <span class="tag">test</span>' : '') + '</td>'
+                    + '<td><span class="tag ' + cls + '">' + label + '</span> ' + (e.detail === label ? '' : esc(e.detail)) + (e.test ? ' <span class="tag">test</span>' : '') + '</td>'
                     + '<td><strong>' + esc(e.user || '—') + '</strong></td>'
                     + '<td class="actions"><button type="button" class="btn btn-sm" data-replay="' + e.id + '">Rejouer</button></td></tr>';
             }).join('');

@@ -33,17 +33,26 @@ pub fn tests() -> String {
 /// Pages d'overlay intégrées, dans l'ordre d'un stream.
 const OBS_PAGES: [(&str, &str); 4] = [("Démarrage", "/starting.html"), ("En direct", "/"), ("Pause", "/pause.html"), ("Fin", "/ending.html")];
 
+/// Overlays « widgets » à fond transparent, à placer librement par-dessus une scène :
+/// nom, taille de source conseillée, chemin.
+const WIDGET_PAGES: [(&str, &str, &str); 3] = [
+    ("Chat", "450×800", "/chat.html"),
+    ("Objectif", "900×140", "/goal.html"),
+    ("Sondages, prédictions, hype train", "560×720", "/interactions.html"),
+];
+
 /// Tableau de bord : état de Twitch et du live (rafraîchis par la page), tests rapides, et URLs
 /// des sources OBS (pages intégrées + scènes personnalisées du profil actif) à copier.
 pub fn app_home(config: &Value) -> String {
     let port = js::string(at(config, &["server", "PORT"]));
-    let row = |name: &str, path: &str| {
+    let row_with = |name: &str, kind: &str, path: &str| {
         let url = format!("http://localhost:{port}{path}");
         format!(
-            "<tr><td>{}</td><td class=\"url\">{}</td><td class=\"actions\"><button type=\"button\" class=\"btn btn-sm btn-ghost\" data-copy=\"{}\">{}<span>Copier</span></button></td></tr>",
-            esc(name), esc(&url), esc(&url), shell::icon("copy")
+            "<tr><td>{}<div class=\"hint\" style=\"margin:2px 0 0;\">{}</div></td><td class=\"url\">{}</td><td class=\"actions\"><button type=\"button\" class=\"btn btn-sm btn-ghost\" data-copy=\"{}\">{}<span>Copier</span></button></td></tr>",
+            esc(name), esc(kind), esc(&url), esc(&url), shell::icon("copy")
         )
     };
+    let row = |name: &str, path: &str| row_with(name, "Scène · 1920×1080", path);
     let mut rows: String = OBS_PAGES.iter().map(|(name, path)| row(name, path)).collect();
     if let Some(scenes) = at(config, &["display", "scenes"]).and_then(Value::as_object) {
         for (id, scene) in scenes {
@@ -52,6 +61,9 @@ pub fn app_home(config: &Value) -> String {
             }
             rows.push_str(&row(&js::string(scene.get("name")), &format!("/scene/{id}")));
         }
+    }
+    for (name, size, path) in WIDGET_PAGES {
+        rows.push_str(&row_with(name, &format!("Widget transparent · {size}"), path));
     }
     let login = at(config, &["twitch", "BROADCASTER_LOGIN"]).filter(|v| electrum_core::json::is_truthy(Some(v)));
     let channel = login.map_or("—".to_string(), |l| esc(&js::string(Some(l))));

@@ -59,7 +59,7 @@ fn describe(broadcast_type: &str, event: &Value) -> (String, String) {
         }
         "channel.raid" => {
             let viewers = event.get("viewers").and_then(Value::as_u64).unwrap_or(0);
-            (text(event, "from_broadcaster_user_name").to_string(), format!("Raid · {viewers} viewers"))
+            (text(event, "from_broadcaster_user_name").to_string(), format!("{viewers} viewers"))
         }
         other => (user, other.to_string()),
     }
@@ -108,7 +108,7 @@ mod tests {
         let resub = history.record("channel.subscribe", &json!({ "user_name": "Bob", "tier": "2000", "cumulative_months": 7 }), false);
         assert_eq!((resub["user"].as_str(), resub["detail"].as_str()), (Some("Bob"), Some("Resub 7 mois (tier 2)")));
         let raid = history.record("channel.raid", &json!({ "from_broadcaster_user_name": "Alice", "viewers": 42 }), true);
-        assert_eq!(raid["detail"], "Raid · 42 viewers");
+        assert_eq!(raid["detail"], "42 viewers");
         let gift = history.record("channel.subscription.gift", &json!({ "is_anonymous": true, "total": 5 }), false);
         assert_eq!((gift["user"].as_str(), gift["detail"].as_str()), (Some("Anonyme"), Some("5 subs offerts")));
         assert_eq!(history.list()[0]["id"], gift["id"]);

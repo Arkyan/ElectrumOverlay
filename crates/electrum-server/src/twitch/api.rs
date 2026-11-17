@@ -183,6 +183,12 @@ impl TwitchApi {
         Ok(data["data"][0]["viewer_count"].as_u64().unwrap_or(0))
     }
 
+    /// Objectifs actifs de la chaîne (scope `channel:read:goals`).
+    pub async fn goals(&self, creds: &Credentials) -> Result<Vec<Value>, TwitchError> {
+        let data = self.helix_get(creds, &format!("/goals?broadcaster_id={}", creds.broadcaster_id)).await?;
+        Ok(data["data"].as_array().cloned().unwrap_or_default())
+    }
+
     /// Badges de chat d'une chaîne (`Some(id)`) ou globaux (`None`), réponse Helix brute.
     pub async fn badges(&self, creds: &Credentials, broadcaster_id: Option<&str>) -> Result<Value, TwitchError> {
         let path = match broadcaster_id {

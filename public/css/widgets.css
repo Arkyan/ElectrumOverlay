@@ -1,0 +1,129 @@
+/* Overlays « widgets » (chat, objectif, sondages/prédictions/hype train) : fond transparent,
+   couleurs du profil actif posées par js/widgets.js. */
+
+:root {
+    --w-primary: #a855f7;
+    --w-primary-rgb: 168, 85, 247;
+    --w-secondary: #8b45f6;
+    --w-secondary-rgb: 139, 69, 246;
+    --w-panel: #0f172a;
+    --w-panel-rgb: 15, 23, 42;
+    --w-text: #f1f5f9;
+    --w-muted: #94a3b8;
+    --w-scale: 1;
+    --w-radius: calc(16px * var(--w-scale));
+}
+
+html, body {
+    margin: 0;
+    background: transparent;
+    overflow: hidden;
+}
+
+body {
+    font-family: 'Inter', Arial, sans-serif;
+    color: var(--w-text);
+    font-size: calc(18px * var(--w-scale));
+    -webkit-font-smoothing: antialiased;
+}
+
+.w-card {
+    background: rgba(var(--w-panel-rgb), 0.9);
+    border: calc(2px * var(--w-scale)) solid rgba(var(--w-primary-rgb), 0.55);
+    border-radius: var(--w-radius);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35), 0 0 24px rgba(var(--w-primary-rgb), 0.18);
+    padding: calc(16px * var(--w-scale)) calc(20px * var(--w-scale));
+    box-sizing: border-box;
+}
+
+.w-label {
+    font-size: 0.66em;
+    font-weight: 800;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--w-primary);
+}
+
+.w-title {
+    font-weight: 700;
+    font-size: 1.1em;
+    line-height: 1.25;
+    margin: 0.2em 0 0.7em;
+}
+
+.w-row-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1em;
+}
+
+.w-timer {
+    font-variant-numeric: tabular-nums;
+    font-weight: 700;
+    font-size: 0.8em;
+    color: var(--w-muted);
+}
+
+/* Barres de progression (objectif, choix de sondage, issues de prédiction, hype train) */
+.w-bar {
+    position: relative;
+    height: calc(30px * var(--w-scale));
+    border-radius: calc(9px * var(--w-scale));
+    background: rgba(255, 255, 255, 0.08);
+    overflow: hidden;
+    margin-bottom: calc(8px * var(--w-scale));
+}
+
+.w-bar-fill {
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: 0;
+    background: linear-gradient(90deg, var(--w-secondary), var(--w-primary));
+    transition: width 0.8s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.w-bar-text {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.8em;
+    height: 100%;
+    padding: 0 0.7em;
+    font-size: 0.82em;
+    font-weight: 600;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+}
+
+.w-bar-text span:first-child {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.w-bar-text span:last-child {
+    flex-shrink: 0;
+    font-variant-numeric: tabular-nums;
+}
+
+.w-bar.loser { opacity: 0.45; }
+.w-bar.winner { box-shadow: 0 0 0 calc(2px * var(--w-scale)) var(--w-primary); }
+
+/* Apparition / disparition */
+.w-enter {
+    animation: w-in 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.w-leave {
+    animation: w-out 0.4s ease-in both;
+}
+
+@keyframes w-in {
+    from { opacity: 0; transform: translateY(16px) scale(0.98); }
+    to { opacity: 1; transform: none; }
+}
+
+@keyframes w-out {
+    to { opacity: 0; transform: translateY(12px) scale(0.98); }
+}
