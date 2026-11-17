@@ -107,7 +107,7 @@ $env:ELECTRUM_CONFIG_DIR = "C:\chemin\vers\une\copie\config"
 | Objectifs, sondages, prédictions, hype train (EventSub, scopes facultatifs) + éléments de l'éditeur de scène | ✅ testé contre un faux Twitch (à valider avec un vrai compte) |
 | Démarrage avec Windows (réduit ou non), Paramètres › Application | ✅ compile pour Windows (à valider) |
 | Sauvegardes automatiques quotidiennes + manuelles, restauration, Paramètres › Sauvegardes | ✅ testé |
-| Partage de profil (auteur, description, sons en option, aperçu avant import) | ✅ testé |
+| Partage de profil en `.zip` (auteur, description, sons en option, aperçu avant import ; ancien `.json` accepté) | ✅ testé |
 | Interface en anglais (Paramètres › Application), langue de Windows au premier lancement | ✅ testé |
 | Première pré-version Rust, test réel de la bascule 2.5.2 → 3.0 | ⏳ voir [RELEASE-RUST.md](RELEASE-RUST.md) |
 

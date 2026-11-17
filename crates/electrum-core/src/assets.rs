@@ -109,6 +109,9 @@ pub fn decode_base64_lenient(input: &str) -> Vec<u8> {
     engine.decode(cleaned).unwrap_or_default()
 }
 
+/// Fichier de réglages à la racine d'un profil partagé en zip.
+pub const PACKAGE_PROFILE_FILE: &str = "profile.json";
+
 /// Options d'un export partagé (`Store::share_profile`).
 #[derive(Debug, Clone, Default)]
 pub struct ShareOptions<'a> {
@@ -262,6 +265,80 @@ impl Store {
         Ok(out)
     }
 
+    /// Profil partagé sous forme de **zip** (`<nom>.electrumprofile.zip`) : `profile.json` (même
+    /// contenu que `share_profile`, sans base64) et les sons/vidéos tels quels dans `audio/` et
+    /// `media/`, référencés par `"file"`. Plus léger qu'un JSON (pas de base64), et ouvrable avec
+    /// l'explorateur de fichiers.
+    pub fn share_profile_package(&self, id: &str, options: &ShareOptions) -> Result<Vec<u8>> {
+        use std::io::Write;
+        use zip::write::SimpleFileOptions;
+        let mut payload = self.share_profile(id, &ShareOptions { include_assets: false, ..options.clone() })?;
+        let mut zip = zip::ZipWriter::new(std::io::Cursor::new(Vec::new()));
+        let zip_error = |e: zip::result::ZipError| Error::msg(format!("Création du zip impossible : {e}"));
+        let io_error = |e: std::io::Error| Error::msg(format!("Création du zip impossible : {e}"));
+        if options.include_assets {
+            let profile = self.get_profile_full(id).map_err(|_| Error::msg("Profil introuvable"))?;
+            for kind in [AssetKind::Audio, AssetKind::Media] {
+                let mut entries = Map::new();
+                for alert_type in &self.alert_types {
+                    let Some(entry) = profile.get(kind.key()).and_then(|m| m.get(alert_type)) else { continue };
+                    let Some((file, bytes)) = self.read_profile_asset(kind, id, alert_type) else { continue };
+                    let ext = file.path.extension().and_then(|e| e.to_str()).unwrap_or("bin");
+                    let path = format!("{}/{alert_type}.{ext}", kind.key());
+                    // Sons et images sont déjà compressés : stockés tels quels.
+                    zip.start_file(&path, SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored))
+                        .map_err(zip_error)?;
+                    zip.write_all(&bytes).map_err(io_error)?;
+                    let mut exported = Map::new();
+                    for key in ["filename", "mimeType"] {
+                        if let Some(v) = entry.get(key) {
+                            exported.insert(key.into(), v.clone());
+                        }
+                    }
+                    exported.insert("file".into(), json!(path));
+                    entries.insert(alert_type.clone(), Value::Object(exported));
+                }
+                payload[kind.key()] = Value::Object(entries);
+            }
+        }
+        zip.start_file(PACKAGE_PROFILE_FILE, SimpleFileOptions::default()).map_err(zip_error)?;
+        zip.write_all(crate::json::to_js_pretty_string(&payload).as_bytes()).map_err(io_error)?;
+        Ok(zip.finish().map_err(zip_error)?.into_inner())
+    }
+
+    /// Contenu d'un fichier de profil à importer, au format de `export_profile` (sons/vidéos en
+    /// base64) : zip (`.electrumprofile.zip`) ou ancien JSON (`.electrumprofile.json`).
+    pub fn read_profile_package(bytes: &[u8]) -> Result<Value> {
+        use std::io::Read;
+        if !bytes.starts_with(b"PK\x03\x04") {
+            let text = String::from_utf8_lossy(bytes);
+            return serde_json::from_str(&text).map_err(|e| Error::msg(e.to_string()));
+        }
+        let invalid = |e: zip::result::ZipError| Error::msg(format!("zip illisible ({e})"));
+        let mut archive = zip::ZipArchive::new(std::io::Cursor::new(bytes)).map_err(invalid)?;
+        let mut text = String::new();
+        archive
+            .by_name(PACKAGE_PROFILE_FILE)
+            .map_err(|_| Error::msg(format!("{PACKAGE_PROFILE_FILE} absent du zip")))?
+            .read_to_string(&mut text)
+            .map_err(|e| Error::msg(e.to_string()))?;
+        let mut payload: Value = serde_json::from_str(&text).map_err(|e| Error::msg(e.to_string()))?;
+        for kind in [AssetKind::Audio, AssetKind::Media] {
+            let Some(Value::Object(entries)) = payload.get_mut(kind.key()) else { continue };
+            for entry in entries.values_mut() {
+                let Some(path) = entry.get("file").and_then(Value::as_str).map(str::to_string) else { continue };
+                let mut file = archive.by_name(&path).map_err(|_| Error::msg(format!("{path} absent du zip")))?;
+                let mut data = Vec::new();
+                file.read_to_end(&mut data).map_err(|e| Error::msg(e.to_string()))?;
+                if let Value::Object(entry) = entry {
+                    entry.remove("file");
+                    entry.insert("dataBase64".into(), json!(base64::engine::general_purpose::STANDARD.encode(&data)));
+                }
+            }
+        }
+        Ok(payload)
+    }
+
     /// Taille et nombre des sons/vidéos d'un profil (pour la fenêtre de partage).
     pub fn profile_assets_summary(&self, id: &str) -> Result<(usize, u64)> {
         let profile = self.get_profile_full(id).map_err(|_| Error::msg("Profil introuvable"))?;
@@ -369,6 +446,20 @@ mod tests {
         // Réimportable tel quel.
         let imported = store.import_profile(&shared).unwrap();
         assert_eq!(imported["name"], "Néon");
+
+        // Zip : profile.json + le son tel quel, réimportable ; l'ancien JSON reste lisible.
+        let package = store.share_profile_package(&id, &options).unwrap();
+        assert!(package.starts_with(b"PK"));
+        let mut archive = zip::ZipArchive::new(std::io::Cursor::new(&package)).unwrap();
+        assert_eq!(archive.by_name("audio/follow.mp3").unwrap().size(), 3);
+        let read = Store::read_profile_package(&package).unwrap();
+        assert_eq!(read["audio"]["follow"]["dataBase64"], shared["audio"]["follow"]["dataBase64"]);
+        assert!(read["audio"]["follow"].get("file").is_none());
+        let imported = store.import_profile(&read).unwrap();
+        assert_eq!(store.profile_assets_summary(imported["id"].as_str().unwrap()).unwrap(), (1, 3));
+        let legacy = Store::read_profile_package(shared.to_string().as_bytes()).unwrap();
+        assert_eq!(legacy["name"], "Néon");
+        assert!(Store::read_profile_package(b"PK\x03\x04 pas un zip").is_err());
     }
 
     #[test]

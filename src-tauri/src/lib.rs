@@ -324,7 +324,7 @@ async fn profile_share_save(app: AppHandle, id: String, params: std::collections
         .file()
         .set_title(t(&app, "Partager le profil"))
         .set_file_name(&filename)
-        .add_filter(t(&app, "Profil ElectrumOverlay"), &["json"])
+        .add_filter(t(&app, "Profil ElectrumOverlay"), &["zip"])
         .save_file(move |path| {
             let _ = tx.send(path);
         });

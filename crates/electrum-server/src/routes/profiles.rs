@@ -31,6 +31,7 @@ pub fn router() -> Router<AppState> {
         .route("/api/profiles", get(list).post(create))
         .route("/api/profiles/seed-theme-presets", post(seed_theme_presets))
         .route("/api/profiles/import", post(import).layer(upload_limit(IMPORT_MAX)))
+        .route("/api/profiles/import-preview", post(import_preview).layer(upload_limit(IMPORT_MAX)))
         .route("/api/profiles/{id}", put(rename).delete(remove))
         .route("/api/profiles/{id}/activate", post(activate))
         .route(
@@ -565,7 +566,7 @@ async fn share_info(State(state): State<AppState>, Path(id): Path<String>) -> Ap
 
 /// Contenu d'un profil partagé (`Store::share_profile`) à partir des paramètres d'URL `name`,
 /// `author`, `description`, `assets` (`0` = sans sons ni vidéos).
-pub fn shared_profile(state: &AppState, id: &str, params: &std::collections::HashMap<String, String>) -> Result<(String, String), ApiError> {
+pub fn shared_profile(state: &AppState, id: &str, params: &std::collections::HashMap<String, String>) -> Result<(String, Vec<u8>), ApiError> {
     let text = |key: &str| params.get(key).map(String::as_str).unwrap_or_default();
     let options = ShareOptions {
         name: params.get("name").map(String::as_str),
@@ -574,9 +575,12 @@ pub fn shared_profile(state: &AppState, id: &str, params: &std::collections::Has
         include_assets: text("assets") != "0",
         app_version: env!("CARGO_PKG_VERSION"),
     };
-    let payload = state.store().share_profile(id, &options).map_err(|_| ApiError(StatusCode::NOT_FOUND, "Profil introuvable".into()))?;
-    let name = electrum_core::json::js_string_or_empty(payload.get("name"));
-    Ok((share_filename(&name), to_js_pretty_string(&payload)))
+    let store = state.store();
+    let profile = store.get_profile_full(id).map_err(|_| ApiError(StatusCode::NOT_FOUND, "Profil introuvable".into()))?;
+    let package = store.share_profile_package(id, &options)?;
+    let name = options.name.map(str::trim).filter(|n| !n.is_empty()).map(str::to_string)
+        .unwrap_or_else(|| electrum_core::json::js_string_or_empty(profile.get("name")));
+    Ok((share_filename(&name), package))
 }
 
 /// Nom de fichier d'un profil partagé, accents gardés (`Néon violet.electrumprofile.json`) :
@@ -588,7 +592,7 @@ pub fn share_filename(name: &str) -> String {
         .map(|c| if c.is_control() || r#"<>:"/\|?*"#.contains(c) { '_' } else { c })
         .collect();
     let cleaned = cleaned.trim_end_matches(['.', ' ']);
-    format!("{}.electrumprofile.json", if cleaned.is_empty() { "profil" } else { cleaned })
+    format!("{}.electrumprofile.zip", if cleaned.is_empty() { "profil" } else { cleaned })
 }
 
 /// `Content-Disposition` avec un nom non ASCII (RFC 6266) : repli ASCII + `filename*` encodé.
@@ -597,14 +601,14 @@ fn attachment_header(filename: &str) -> String {
         .bytes()
         .map(|b| if b.is_ascii_alphanumeric() || b"-_.~".contains(&b) { (b as char).to_string() } else { format!("%{b:02X}") })
         .collect();
-    format!("attachment; filename=\"{}\"; filename*=UTF-8''{encoded}", Store::export_filename(filename.trim_end_matches(".electrumprofile.json")))
+    format!("attachment; filename=\"{}\"; filename*=UTF-8''{encoded}", Store::export_filename(filename.trim_end_matches(".electrumprofile.zip")).replace(".electrumprofile.json", ".electrumprofile.zip"))
 }
 
 async fn share(State(state): State<AppState>, Path(id): Path<String>, Query(params): Query<std::collections::HashMap<String, String>>) -> Response {
     match shared_profile(&state, &id, &params) {
         Ok((filename, content)) => (
             [
-                (header::CONTENT_TYPE, "application/json; charset=utf-8".to_string()),
+                (header::CONTENT_TYPE, "application/zip".to_string()),
                 (header::CONTENT_DISPOSITION, attachment_header(&filename)),
             ],
             content,
@@ -614,14 +618,40 @@ async fn share(State(state): State<AppState>, Path(id): Path<String>, Query(para
     }
 }
 
-async fn import(State(state): State<AppState>, multipart: Multipart) -> ApiResult {
+/// Contenu d'un fichier de profil envoyé (zip ou ancien JSON), au format de l'export.
+async fn read_profile_upload(multipart: Multipart) -> Result<(Value, usize), ApiError> {
     let upload = read_upload(multipart, &IMPORT_RULES).await?;
     let invalid = |message: String| ApiError::bad_request(format!("Fichier de profil invalide : {message}"));
-    let text = String::from_utf8_lossy(&upload.bytes);
-    let payload: Value = serde_json::from_str(&text).map_err(|e| invalid(e.to_string()))?;
-    if !is_truthy(Some(&payload)) {
+    let payload = Store::read_profile_package(&upload.bytes).map_err(|e| invalid(e.to_string()))?;
+    if !is_truthy(Some(&payload)) || !payload.is_object() {
         return Err(invalid("contenu vide".into()));
     }
-    let profile = state.store().import_profile(&payload).map_err(|e| invalid(e.to_string()))?;
+    Ok((payload, upload.bytes.len()))
+}
+
+async fn import(State(state): State<AppState>, multipart: Multipart) -> ApiResult {
+    let (payload, _) = read_profile_upload(multipart).await?;
+    let profile = state
+        .store()
+        .import_profile(&payload)
+        .map_err(|e| ApiError::bad_request(format!("Fichier de profil invalide : {e}")))?;
     Ok(Json(json!({ "ok": true, "profile": profile })))
+}
+
+/// Aperçu d'un fichier de profil avant import : nom, infos de partage, réglages, nombre et
+/// poids des sons/vidéos (sans leur contenu).
+async fn import_preview(multipart: Multipart) -> ApiResult {
+    let (mut payload, size) = read_profile_upload(multipart).await?;
+    let mut assets = 0;
+    for key in [AssetKind::Audio.key(), AssetKind::Media.key()] {
+        if let Some(Value::Object(entries)) = payload.get_mut(key) {
+            for entry in entries.values_mut() {
+                if let Value::Object(entry) = entry {
+                    entry.remove("dataBase64");
+                    assets += 1;
+                }
+            }
+        }
+    }
+    Ok(Json(json!({ "ok": true, "profile": payload, "assets": assets, "size": size })))
 }

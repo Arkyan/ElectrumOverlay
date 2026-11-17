@@ -502,20 +502,33 @@ async fn cartes_twitch_dans_l_editeur_de_scene() {
 async fn partage_de_profil() {
     let (state, _dir) = new_state();
     let id = active_id(&state);
+    upload(&state, &format!("/api/profiles/{id}/audio/follow"), "f.mp3", "audio/mpeg", &[1, 2, 3, 4]).await;
     let info = send(&state, "GET", &format!("/api/profiles/{id}/share-info"), None).await.json();
-    assert_eq!(info["assetsCount"], 0);
+    assert_eq!((info["assetsCount"].as_u64(), info["assetsSize"].as_u64()), (Some(1), Some(4)));
 
-    let shared = send(&state, "GET", &format!("/api/profiles/{id}/share?name=N%C3%A9on&author=moi&description=Violet&assets=0"), None).await;
+    // Zip : profile.json + le son tel quel.
+    let shared = send(&state, "GET", &format!("/api/profiles/{id}/share?name=N%C3%A9on&author=moi&description=Violet&assets=1"), None).await;
+    assert_eq!(shared.headers["content-type"], "application/zip");
     let disposition = shared.headers["content-disposition"].to_str().unwrap().to_string();
-    assert!(disposition.contains("filename=\"N_on.electrumprofile.json\"") && disposition.contains("filename*=UTF-8''N%C3%A9on.electrumprofile.json"), "{disposition}");
-    assert_eq!(electrum_server::routes::profiles::share_filename("Néon : violet?"), "Néon _ violet_.electrumprofile.json");
-    let payload = shared.json();
-    assert_eq!((payload["name"].as_str(), payload["shared"]["author"].as_str(), payload["shared"]["description"].as_str()), (Some("Néon"), Some("moi"), Some("Violet")));
-    assert!(payload["display"]["themes"].is_object());
+    assert!(disposition.contains("filename=\"N_on.electrumprofile.zip\"") && disposition.contains("filename*=UTF-8''N%C3%A9on.electrumprofile.zip"), "{disposition}");
+    assert_eq!(electrum_server::routes::profiles::share_filename("Néon : violet?"), "Néon _ violet_.electrumprofile.zip");
+    assert!(shared.body.starts_with(b"PK"));
 
-    // Réimport du fichier partagé.
-    let imported = upload(&state, "/api/profiles/import", "neon.electrumprofile.json", "application/json", payload.to_string().as_bytes()).await.json();
+    // Aperçu puis import du zip.
+    let preview = upload(&state, "/api/profiles/import-preview", "neon.electrumprofile.zip", "application/zip", &shared.body).await.json();
+    assert_eq!((preview["profile"]["name"].as_str(), preview["profile"]["shared"]["author"].as_str(), preview["assets"].as_u64()), (Some("Néon"), Some("moi"), Some(1)));
+    assert!(preview["profile"]["audio"]["follow"].get("dataBase64").is_none());
+    let imported = upload(&state, "/api/profiles/import", "neon.electrumprofile.zip", "application/zip", &shared.body).await.json();
     assert_eq!(imported["profile"]["name"], "Néon");
+    let new_id = imported["profile"]["id"].as_str().unwrap();
+    assert_eq!(send(&state, "GET", &format!("/api/profiles/{new_id}/audio/follow"), None).await.body, vec![1, 2, 3, 4]);
+
+    // L'ancien format JSON reste importable.
+    let legacy = send(&state, "GET", &format!("/api/profiles/{id}/export"), None).await;
+    let imported = upload(&state, "/api/profiles/import", "ancien.electrumprofile.json", "application/json", &legacy.body).await.json();
+    assert_eq!(imported["ok"], true);
+    let bad = upload(&state, "/api/profiles/import-preview", "x.zip", "application/zip", b"PK\x03\x04abc").await;
+    assert_eq!(bad.status, StatusCode::BAD_REQUEST);
     assert_eq!(send(&state, "GET", "/api/profiles/inconnu/share", None).await.status, StatusCode::NOT_FOUND);
 }
 

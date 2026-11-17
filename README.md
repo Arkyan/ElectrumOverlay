@@ -152,7 +152,7 @@ Emplacement : `%APPDATA%\ElectrumOverlay\backups`.
 
 ## 🤝 Partager un profil
 
-**Paramètres › Profils › Partager…** crée un fichier avec tout le profil : scènes, éléments, couleurs, alertes, et en option les sons et vidéos. Tu peux y indiquer ton pseudo et une description. Pour l'importer, **Importer…** (ou glisse le fichier sur la section) affiche un aperçu du contenu avant de l'ajouter.
+**Paramètres › Profils › Partager…** crée un fichier `.zip` avec tout le profil : réglages (scènes, éléments, couleurs, alertes) et, en option, les sons et vidéos tels quels. Tu peux y indiquer ton pseudo et une description. Pour l'importer, **Importer…** (ou glisse le fichier sur la section) affiche un aperçu du contenu avant de l'ajouter.
 
 ## 🔄 Mises à jour
 

@@ -57,7 +57,7 @@
                     <button type="button" class="btn" id="btnProfileImport">Importer…</button>
                     <button type="button" class="btn" id="btnProfileSeedThemes">Ajouter les profils de thèmes</button>
                     <button type="button" class="btn btn-danger" id="btnProfileDelete">Supprimer</button>
-                    <input type="file" id="profileImportFile" accept=".json,application/json" style="display:none;">
+                    <input type="file" id="profileImportFile" accept=".zip,.json,application/zip,application/json" style="display:none;">
                 </div>
                 <div class="field-row" id="profileNameForm" style="display:none; margin-top:var(--space-3);">
                     <div class="field">
@@ -68,7 +68,7 @@
                     <button type="button" class="btn btn-ghost" id="btnProfileNameCancel">Annuler</button>
                 </div>
                 <p class="msg" id="profileMsg" role="status"></p>
-                <p class="hint" style="margin-bottom:0;">Partager crée un fichier avec tout le profil (scènes, éléments, couleurs, alertes, sons et vidéos) à envoyer à un autre streamer. Pour importer, clique sur « Importer… » ou glisse le fichier ici.</p>
+                <p class="hint" style="margin-bottom:0;">Partager crée un fichier .zip avec tout le profil (scènes, éléments, couleurs, alertes, sons et vidéos) à envoyer à un autre streamer. Pour importer, clique sur « Importer… » ou glisse le fichier ici (les anciens fichiers .json sont aussi acceptés).</p>
         </div>
 
         <div class="settings-section card" id="section-themes">
@@ -568,15 +568,20 @@
 
         // Import : aperçu du fichier avant de l'importer.
         let pendingImport = null;
-        function previewImport(file) {
-            const reader = new FileReader();
-            reader.onload = () => {
-                let data;
-                try { data = JSON.parse(reader.result); } catch (e) { data = null; }
-                if (!data || typeof data !== 'object' || !data.display) {
-                    setProfileMsg('Ce fichier n\'est pas un profil ElectrumOverlay.', false);
-                    return;
-                }
+        async function previewImport(file) {
+            // Lu par le serveur : zip (.electrumprofile.zip) ou ancien JSON.
+            let preview = null;
+            try {
+                const formData = new FormData();
+                formData.append('file', file);
+                preview = await fetch('/api/profiles/import-preview', { method: 'POST', body: formData }).then((r) => r.json());
+            } catch (e) { preview = null; }
+            const data = preview && preview.ok ? preview.profile : null;
+            if (!data || !data.display) {
+                setProfileMsg((preview && preview.error) || 'Ce fichier n\'est pas un profil ElectrumOverlay.', false);
+                return;
+            }
+            {
                 pendingImport = file;
                 const display = data.display || {};
                 const shared = data.shared || {};
@@ -589,7 +594,7 @@
                 }).join('');
                 const customScenes = Object.entries(display.scenes || {}).filter(([key]) => !THEME_NAMES[key]).map(([, scene]) => scene.name || 'Scène');
                 const elements = Object.values(display.customTexts || {}).reduce((n, page) => n + Object.keys(page || {}).length, 0);
-                const assets = ['audio', 'media'].reduce((n, key) => n + Object.keys(data[key] || {}).length, 0);
+                const assets = preview.assets;
                 const meta = [shared.author ? 'Partagé par ' + escHtml(shared.author) : '', shared.exportedAt ? 'Exporté le ' + new Date(shared.exportedAt).toLocaleDateString('fr-FR') : '', formatSize(file.size)].filter(Boolean).join(' · ');
                 document.getElementById('importPreview').innerHTML =
                     '<div><div class="share-title">' + escHtml(data.name || 'Profil importé') + '</div><div class="share-meta">' + meta + '</div></div>'
@@ -603,8 +608,7 @@
                     + (customScenes.length ? '<div class="share-meta">Scènes personnalisées : ' + customScenes.map(escHtml).join(', ') + '</div>' : '');
                 setModalMsg('importMsg', '', true);
                 openModal('importModal');
-            };
-            reader.readAsText(file);
+            }
         }
 
         document.getElementById('btnProfileImport').addEventListener('click', () => {

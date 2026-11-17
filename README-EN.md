@@ -154,7 +154,7 @@ Location: `%APPDATA%\ElectrumOverlay\backups`.
 
 ## 🤝 Sharing a profile
 
-**Settings › Profiles › Share…** creates a file with the whole profile: scenes, elements, colors, alerts, and optionally sounds and videos. You can add your name and a description. To import one, **Import…** (or drop the file on the section) shows a preview of its content before adding it.
+**Settings › Profiles › Share…** creates a `.zip` file with the whole profile: settings (scenes, elements, colors, alerts) and, optionally, the sounds and videos as they are. You can add your name and a description. To import one, **Import…** (or drop the file on the section) shows a preview of its content before adding it.
 
 ## 🔄 Updates
 
