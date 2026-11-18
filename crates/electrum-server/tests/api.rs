@@ -597,3 +597,52 @@ async fn profil_automatique_selon_le_jeu() {
     assert_eq!(active_id(&state), default_id);
     assert!(send(&state, "GET", "/api/app/game-profiles", None).await.json()["settings"]["rules"].as_array().unwrap().is_empty());
 }
+
+#[tokio::test]
+async fn widgets_personnalises() {
+    let (state, _dir) = new_state();
+    let id = active_id(&state);
+
+    // Exemple téléchargeable, installé tel quel.
+    let example = send(&state, "GET", "/api/widgets/example.zip", None).await;
+    assert_eq!(example.headers["content-type"], "application/zip");
+    let installed = upload(&state, "/api/widgets/import", "exemple.zip", "application/zip", &example.body).await.json();
+    let widget_id = installed["widget"]["id"].as_str().unwrap().to_string();
+    assert_eq!(widget_id, "exemple-dernier-follow");
+    assert_eq!(send(&state, "GET", "/api/widgets", None).await.json()["widgets"].as_array().unwrap().len(), 1);
+    let bad = upload(&state, "/api/widgets/import", "x.zip", "application/zip", b"pas un zip").await;
+    assert_eq!(bad.status, StatusCode::BAD_REQUEST);
+
+    // Fichiers servis aux overlays, sans sortir du dossier du widget.
+    let page = send(&state, "GET", &format!("/widgets/{widget_id}/"), None).await;
+    assert!(page.headers["content-type"].to_str().unwrap().starts_with("text/html") && page.text().contains("electrum-widget.js"));
+    assert_eq!(send(&state, "GET", &format!("/widgets/{widget_id}/widget.json"), None).await.json()["id"], widget_id.as_str());
+    assert_eq!(send(&state, "GET", &format!("/widgets/{widget_id}/..%2F..%2Foverlay-config.json"), None).await.status, StatusCode::NOT_FOUND);
+    assert!(send(&state, "GET", "/js/electrum-widget.js", None).await.text().contains("globalThis.Electrum"));
+    let context = send(&state, "GET", "/api/widget-context?page=index", None).await.json();
+    assert!(context["theme"]["primary"].is_string() && context["server"]["wsPort"].is_number());
+
+    // Élément de scène : nom, taille et réglages par défaut tirés du widget.json.
+    let added = send(&state, "POST", &format!("/api/profiles/{id}/custom-text/index"), Some(json!({ "type": "widget", "widgetId": widget_id }))).await.json();
+    let element = added["elementId"].as_str().unwrap().to_string();
+    let item = state.store().config()["display"]["customTexts"]["index"][&element].clone();
+    assert_eq!((item["name"].as_str(), item["width"].as_f64(), item["settings"]["title"].as_str()), (Some("Exemple : dernier follow"), Some(24.0), Some("Dernier follow")));
+    send(&state, "PATCH", &format!("/api/profiles/{id}/custom-text/index/{element}"), Some(json!({ "settings": { "title": "Bienvenue", "fontSize": 150, "objet": { "refusé": true } } }))).await;
+    let item = state.store().config()["display"]["customTexts"]["index"][&element].clone();
+    assert_eq!(item["settings"], json!({ "title": "Bienvenue", "fontSize": 150 }));
+    let unknown = send(&state, "POST", &format!("/api/profiles/{id}/custom-text/index"), Some(json!({ "type": "widget", "widgetId": "inconnu" }))).await;
+    assert_eq!(unknown.status, StatusCode::BAD_REQUEST);
+
+    // Profil partagé : le widget voyage avec ; l'aperçu le signale.
+    let shared = send(&state, "GET", &format!("/api/profiles/{id}/share?assets=0"), None).await;
+    let preview = upload(&state, "/api/profiles/import-preview", "p.zip", "application/zip", &shared.body).await.json();
+    assert_eq!(preview["widgets"][0]["id"], widget_id.as_str());
+    send(&state, "DELETE", &format!("/api/widgets/{widget_id}"), None).await;
+    assert!(send(&state, "GET", "/api/widgets", None).await.json()["widgets"].as_array().unwrap().is_empty());
+    upload(&state, "/api/profiles/import", "p.zip", "application/zip", &shared.body).await;
+    assert_eq!(send(&state, "GET", "/api/widgets", None).await.json()["widgets"][0]["id"], widget_id.as_str(), "réinstallé avec le profil");
+
+    // Page Widgets + documentation.
+    let page = send(&state, "GET", "/widgets", None).await.text();
+    assert!(page.contains("Créer un widget en 4 étapes") && page.contains("Electrum.on(type, fn)"));
+}

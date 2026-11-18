@@ -25,6 +25,12 @@ pub fn normalize_newlines(text: &str) -> std::borrow::Cow<'_, str> {
     if text.contains('\r') { std::borrow::Cow::Owned(text.replace("\r\n", "\n")) } else { std::borrow::Cow::Borrowed(text) }
 }
 
+/// Page des widgets personnalisés : import, liste, et documentation dans la langue de l'interface.
+pub fn widgets(language: &str) -> String {
+    let doc = if language == "en" { template!("widgets-doc-en") } else { template!("widgets-doc-fr") };
+    shell::wrap(&fill(template!("widgets"), &[doc.to_string()]), "/widgets")
+}
+
 /// Page des outils de test (aucune donnée serveur).
 pub fn tests() -> String {
     shell::wrap(template!("tests"), "/tests")

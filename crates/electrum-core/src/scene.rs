@@ -12,11 +12,12 @@ use crate::time::now_iso;
 use serde_json::{json, Map, Value};
 
 /// Types d'éléments ajoutables depuis l'éditeur (`type` absent ou inconnu ⇒ `text`).
-/// Les quatre derniers (cartes Twitch) sont propres à la version Rust.
-pub const CUSTOM_ELEMENT_TYPES: [&str; 18] = [
+/// Cartes Twitch (goal, poll, prediction, hypetrain) et widgets personnalisés (`widget`) : propres à
+/// la version Rust.
+pub const CUSTOM_ELEMENT_TYPES: [&str; 19] = [
     "text", "image", "box", "clock", "chat", "chatTicker", "alerts", "spotify", "keys",
     "statBadge", "badge", "rotatingText", "infoPanel", "bottomBar",
-    "goal", "poll", "prediction", "hypetrain",
+    "goal", "poll", "prediction", "hypetrain", "widget",
 ];
 
 /// Données live affichables par un `statBadge`.
@@ -337,6 +338,18 @@ fn new_custom_element(args: &Value) -> Value {
         // Cartes Twitch : taille par la police ; sans couleur, celle du thème de la page.
         "goal" | "poll" | "prediction" | "hypetrain" => {
             e.insert("size".into(), json!(2));
+        }
+        // Widget personnalisé : identifiant, nom affiché dans l'éditeur, réglages par défaut et
+        // taille conseillée du widget (fournis par la couche HTTP depuis son widget.json).
+        "widget" => {
+            e.insert("widgetId".into(), json!(string_arg("widgetId").unwrap_or_default()));
+            e.insert("name".into(), json!(string_arg("name").unwrap_or_default()));
+            e.insert("settings".into(), arg("settings").filter(|s| s.is_object()).cloned().unwrap_or_else(|| json!({})));
+            for key in ["width", "height"] {
+                if let Some(v) = arg(key).filter(|v| v.is_number()) {
+                    e.insert(key.into(), v.clone());
+                }
+            }
         }
         "keys" => {
             e.insert("color".into(), color_or("#f59e0b"));

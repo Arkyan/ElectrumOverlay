@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <title>Widgets - ElectrumOverlay</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="/css/app-v3.css">
+</head>
+<body>
+{{shell:open}}
+<div class="page wide">
+    <div class="page-header">
+        <h1>Widgets</h1>
+        <span class="spacer"></span>
+        <a class="btn btn-sm" href="/api/widgets/example.zip">Télécharger l'exemple</a>
+        <button type="button" class="btn btn-primary btn-sm" id="btnImport">Importer un widget…</button>
+        <input type="file" id="importFile" accept=".zip,application/zip" hidden>
+    </div>
+    <p class="hint" style="margin-top:0;">Crée tes propres éléments de scène en HTML, CSS et JavaScript : ils apparaissent dans l'éditeur de scène (menu +, « Mes widgets ») avec leurs réglages, et reçoivent les événements Twitch, les statistiques et les couleurs du thème.</p>
+
+    <section class="card" id="widgetsCard">
+        <h2 class="card-title">Widgets installés</h2>
+        <div class="widget-list" id="widgetList"><p class="hint" style="margin:0;">Chargement…</p></div>
+        <div class="msg" id="msg" role="status"></div>
+        <p class="hint" style="margin-bottom:0;">Glisse un fichier .zip ici pour l'installer. Un widget s'exécute sur ton PC avec accès à l'app : n'importe que des widgets de confiance.</p>
+    </section>
+
+    <section class="card doc">
+        <h2 class="card-title">Documentation</h2>
+        {{expr:0}}
+    </section>
+</div>
+
+<script>
+(function () {
+    const list = document.getElementById('widgetList');
+    const msg = document.getElementById('msg');
+    const esc = (t) => String(t ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const icon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 3H5a2 2 0 0 0-2 2v5h2.5a2 2 0 1 1 0 4H3v5a2 2 0 0 0 2 2h5v-2.5a2 2 0 1 1 4 0V21h5a2 2 0 0 0 2-2v-5h-2.5a2 2 0 1 1 0-4H21V5a2 2 0 0 0-2-2h-5v2.5a2 2 0 1 1-4 0z"/></svg>';
+    function say(text, ok) { msg.textContent = text; msg.className = 'msg ' + (ok ? 'success' : 'error'); }
+
+    function load() {
+        fetch('/api/widgets').then((r) => r.json()).then(({ widgets }) => {
+            list.innerHTML = widgets.length ? widgets.map((w) => `
+                <div class="widget-row">
+                    <span class="widget-icon">${icon}</span>
+                    <span class="widget-text"><strong>${esc(w.name)} <span>${esc(w.version)}${w.author ? ' · ' + esc(w.author) : ''}</span></strong>
+                        <span>${esc(w.description || '')}</span></span>
+                    <a class="btn btn-sm btn-ghost" href="/widgets/${encodeURIComponent(w.id)}/?preview=1" target="_blank">Ouvrir</a>
+                    <button type="button" class="btn btn-sm btn-ghost" data-remove="${esc(w.id)}" data-name="${esc(w.name)}">Supprimer</button>
+                </div>`).join('')
+                : '<p class="hint" style="margin:0;">Aucun widget installé. Télécharge l\'exemple pour commencer, ou importe un widget.</p>';
+        }).catch(() => {});
+    }
+
+    async function install(file) {
+        const formData = new FormData();
+        formData.append('file', file);
+        try {
+            const data = await fetch('/api/widgets/import', { method: 'POST', body: formData }).then((r) => r.json());
+            if (data.error) throw new Error(data.error);
+            say('Widget « ' + data.widget.name + ' » installé : ajoute-le depuis l\'éditeur de scène (menu +).', true);
+            load();
+        } catch (error) { say(error.message, false); }
+    }
+
+    document.getElementById('btnImport').addEventListener('click', () => document.getElementById('importFile').click());
+    document.getElementById('importFile').addEventListener('change', (e) => { if (e.target.files[0]) install(e.target.files[0]); e.target.value = ''; });
+    const card = document.getElementById('widgetsCard');
+    card.addEventListener('dragover', (e) => { e.preventDefault(); card.classList.add('drop-hint'); });
+    card.addEventListener('dragleave', () => card.classList.remove('drop-hint'));
+    card.addEventListener('drop', (e) => { e.preventDefault(); card.classList.remove('drop-hint'); if (e.dataTransfer.files[0]) install(e.dataTransfer.files[0]); });
+
+    list.addEventListener('click', async (e) => {
+        const button = e.target.closest('[data-remove]');
+        if (!button || !confirm('Supprimer le widget « ' + button.dataset.name + ' » ? Les éléments qui l\'utilisent n\'afficheront plus rien.')) return;
+        const data = await fetch('/api/widgets/' + encodeURIComponent(button.dataset.remove), { method: 'DELETE' }).then((r) => r.json());
+        if (data.error) say(data.error, false); else { say('Widget supprimé.', true); load(); }
+    });
+    load();
+})();
+</script>
+{{shell:close}}
+</body>
+</html>

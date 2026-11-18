@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<!-- Bibliothèque des widgets : événements Twitch, statistiques, thème, réglages. -->
+<script src="/js/electrum-widget.js"></script>
+<style>
+  html, body { margin: 0; height: 100%; background: transparent; overflow: hidden; }
+  body {
+    display: flex; align-items: center; gap: 0.6em; box-sizing: border-box; padding: 0.4em 0.9em;
+    font: 600 32vh/1.2 Inter, Arial, sans-serif; /* vh = hauteur du cadre du widget */ color: var(--electrum-text, #fff);
+    background: rgba(15, 18, 30, 0.85); border-radius: 0.6em;
+    border: 0.12em solid var(--accent);
+  }
+  .label { font-size: 0.55em; letter-spacing: 0.1em; text-transform: uppercase; color: var(--accent); }
+  .user { font-size: 1em; }
+  .count { margin-left: auto; font-size: 0.7em; opacity: 0.8; }
+  .pop { animation: pop 0.5s cubic-bezier(.2, 1.6, .4, 1); }
+  .fade { animation: fade 0.6s ease-out; }
+  @keyframes pop { from { transform: scale(0.6); } to { transform: scale(1); } }
+  @keyframes fade { from { opacity: 0; } to { opacity: 1; } }
+</style>
+</head>
+<body>
+  <div>
+    <div class="label" id="title"></div>
+    <div class="user" id="user">—</div>
+  </div>
+  <div class="count" id="count"></div>
+
+<script>
+Electrum.ready(async () => {
+  const s = Electrum.settings;           // réglages choisis dans l'éditeur de scène
+  const $ = (id) => document.getElementById(id);
+
+  // Couleur principale du thème de la scène (suit le profil actif).
+  const applyColor = () => document.body.style.setProperty('--accent', Electrum.theme.primary || '#a855f7');
+  applyColor();
+  Electrum.on('theme', applyColor);      // le thème a changé (profil activé, couleurs modifiées)
+
+  $('title').textContent = s.title || 'Dernier follow';
+  document.body.style.fontSize = (32 * (s.fontSize || 100) / 100) + 'vh';
+  $('count').hidden = !s.showCount;
+
+  // Valeurs de départ : statistiques du live et dernier follow de l'historique.
+  const stats = await Electrum.getStats();
+  $('count').textContent = stats.follows + ' follows';
+  const last = (await Electrum.getHistory()).find((e) => e.type === 'follow');
+  if (last) $('user').textContent = last.user;
+
+  // Dans l'éditeur de scène : un exemple pour voir le rendu.
+  if (Electrum.preview && !last) $('user').textContent = 'PseudoExemple';
+
+  // En direct : chaque nouveau follow.
+  Electrum.on('follow', (event) => {
+    $('user').textContent = event.user;
+    if (s.animation !== 'none') {
+      $('user').classList.remove('pop', 'fade');
+      void $('user').offsetWidth;        // relance l'animation
+      $('user').classList.add(s.animation);
+    }
+    Electrum.getStats().then((st) => { $('count').textContent = st.follows + ' follows'; });
+  });
+});
+</script>
+</body>
+</html>

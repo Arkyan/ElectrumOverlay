@@ -108,22 +108,22 @@ async fn remove(State(state): State<AppState>, Path(id): Path<String>) -> ApiRes
 // Sons et médias
 // ---------------------------------------------------------------------------------------------
 
-struct UploadRules {
-    max: usize,
-    max_label: &'static str,
+pub(crate) struct UploadRules {
+    pub(crate) max: usize,
+    pub(crate) max_label: &'static str,
     /// Préfixe MIME exigé + message d'erreur sinon (`None` = tout type accepté).
-    mime: Option<(&'static str, &'static str)>,
-    missing: &'static str,
+    pub(crate) mime: Option<(&'static str, &'static str)>,
+    pub(crate) missing: &'static str,
 }
 
-struct Upload {
-    filename: String,
-    mime_type: String,
-    bytes: Vec<u8>,
+pub(crate) struct Upload {
+    pub(crate) filename: String,
+    pub(crate) mime_type: String,
+    pub(crate) bytes: Vec<u8>,
 }
 
 /// Lit le champ `file` d'un formulaire multipart (équivalent de `multer.single('file')`).
-async fn read_upload(mut multipart: Multipart, rules: &UploadRules) -> Result<Upload, ApiError> {
+pub(crate) async fn read_upload(mut multipart: Multipart, rules: &UploadRules) -> Result<Upload, ApiError> {
     let too_big = || ApiError::bad_request(format!("Fichier trop volumineux (max {})", rules.max_label));
     loop {
         let field = match multipart.next_field().await {
@@ -340,6 +340,11 @@ async fn add_custom_text(State(state): State<AppState>, Path((id, page)): Path<(
             args.insert(key.into(), v.clone());
         }
     }
+    // Widget personnalisé : nom, réglages par défaut et taille conseillée lus dans son widget.json.
+    if body.get("type").and_then(Value::as_str) == Some("widget") {
+        let widget_id = body.get("widgetId").and_then(Value::as_str).unwrap_or_default();
+        args.extend(super::widgets::new_element_args(&state, widget_id)?);
+    }
     let element_id = modify(&state, &id, |store| store.add_profile_custom_text(&id, &page, &Value::Object(args)))?;
     Ok(Json(json!({ "ok": true, "elementId": element_id })))
 }
@@ -377,6 +382,20 @@ pub fn sanitize_custom_text_patch(body: &Value) -> Value {
     }
     if let Some(v) = number(body, "opacity") {
         put("opacity", number_value(v.clamp(0.0, 100.0)));
+    }
+    // Réglages d'un widget personnalisé : objet plat de valeurs simples (texte, nombre, booléen).
+    if let Some(Value::Object(settings)) = body.get("settings") {
+        let clean: Map<String, Value> = settings
+            .iter()
+            .take(60)
+            .filter(|(key, _)| key.len() <= 40)
+            .filter_map(|(key, value)| match value {
+                Value::String(s) => Some((key.clone(), json!(s.chars().take(5000).collect::<String>()))),
+                Value::Number(_) | Value::Bool(_) => Some((key.clone(), value.clone())),
+                _ => None,
+            })
+            .collect();
+        put("settings", Value::Object(clean));
     }
     if let Some(v) = number(body, "radius") {
         put("radius", number_value(v.clamp(0.0, 200.0)));
@@ -619,18 +638,26 @@ async fn share(State(state): State<AppState>, Path(id): Path<String>, Query(para
 }
 
 /// Contenu d'un fichier de profil envoyé (zip ou ancien JSON), au format de l'export.
-async fn read_profile_upload(multipart: Multipart) -> Result<(Value, usize), ApiError> {
+async fn read_profile_upload(multipart: Multipart) -> Result<(Value, usize, Vec<u8>), ApiError> {
     let upload = read_upload(multipart, &IMPORT_RULES).await?;
     let invalid = |message: String| ApiError::bad_request(format!("Fichier de profil invalide : {message}"));
     let payload = Store::read_profile_package(&upload.bytes).map_err(|e| invalid(e.to_string()))?;
     if !is_truthy(Some(&payload)) || !payload.is_object() {
         return Err(invalid("contenu vide".into()));
     }
-    Ok((payload, upload.bytes.len()))
+    Ok((payload, upload.bytes.len(), upload.bytes))
 }
 
 async fn import(State(state): State<AppState>, multipart: Multipart) -> ApiResult {
-    let (payload, _) = read_profile_upload(multipart).await?;
+    let (payload, _, bytes) = read_profile_upload(multipart).await?;
+    // Widgets personnalisés embarqués dans le profil : installés avant le profil.
+    let widgets = state
+        .store()
+        .install_package_widgets(&bytes)
+        .map_err(|e| ApiError::bad_request(format!("Fichier de profil invalide : {e}")))?;
+    if !widgets.is_empty() {
+        state.log("info", format!("🧩 {} widget(s) installé(s) avec le profil", widgets.len()));
+    }
     let profile = state
         .store()
         .import_profile(&payload)
@@ -641,7 +668,8 @@ async fn import(State(state): State<AppState>, multipart: Multipart) -> ApiResul
 /// Aperçu d'un fichier de profil avant import : nom, infos de partage, réglages, nombre et
 /// poids des sons/vidéos (sans leur contenu).
 async fn import_preview(multipart: Multipart) -> ApiResult {
-    let (mut payload, size) = read_profile_upload(multipart).await?;
+    let (mut payload, size, bytes) = read_profile_upload(multipart).await?;
+    let widgets: Vec<Value> = Store::package_widgets(&bytes).iter().map(|w| json!({ "id": w["id"], "name": w["name"], "version": w["version"] })).collect();
     let mut assets = 0;
     for key in [AssetKind::Audio.key(), AssetKind::Media.key()] {
         if let Some(Value::Object(entries)) = payload.get_mut(key) {
@@ -653,5 +681,5 @@ async fn import_preview(multipart: Multipart) -> ApiResult {
             }
         }
     }
-    Ok(Json(json!({ "ok": true, "profile": payload, "assets": assets, "size": size })))
+    Ok(Json(json!({ "ok": true, "profile": payload, "assets": assets, "size": size, "widgets": widgets })))
 }

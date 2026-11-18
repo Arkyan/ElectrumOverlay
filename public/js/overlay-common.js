@@ -955,6 +955,25 @@ function renderCustomTextsFromConfig() {
                 el.classList.add('scene-auto-hidden');
                 ensureSceneAutoShow();
             }
+        } else if (type === 'widget') {
+            // Widget personnalisé (importé depuis la page Widgets) : sa page tourne dans un cadre
+            // isolé — un widget buggé ne peut rien casser d'autre. Ses réglages lui sont passés
+            // dans l'URL (#...), lus par js/electrum-widget.js.
+            el.className = 'custom-widget';
+            if (!el.style.width) el.style.width = '25vw';
+            if (!el.style.height) el.style.height = '20vh';
+            const editing = new URLSearchParams(location.search).get('sceneEditor') === '1';
+            const frame = document.createElement('iframe');
+            frame.src = '/widgets/' + encodeURIComponent(item.widgetId || '') + '/?page=' + encodeURIComponent(pageKey)
+                + '&element=' + encodeURIComponent(id) + (editing ? '&preview=1' : '')
+                + '#' + encodeURIComponent(JSON.stringify(item.settings || {}));
+            frame.setAttribute('allowtransparency', 'true');
+            frame.setAttribute('scrolling', 'no');
+            frame.style.cssText = 'width:100%;height:100%;border:0;background:transparent;display:block;color-scheme:normal;';
+            el.appendChild(frame);
+            el.dataset.widgetName = item.name || item.widgetId || '';
+            el.dataset.propWidget = item.widgetId || '';
+            el.dataset.propSettings = JSON.stringify(item.settings || {});
         } else if (TWITCH_WIDGET_TYPES.includes(type)) {
             // Objectif / sondage / prédiction / hype train (js/twitch-widgets.js) : invisibles tant
             // que rien n'est en cours sur Twitch (classe .tw-idle), remplis par

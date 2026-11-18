@@ -715,7 +715,8 @@
                     + '<div><strong>' + elements + '</strong><span>éléments ajoutés</span></div>'
                     + '<div><strong>' + assets + '</strong><span>sons et vidéos</span></div>'
                     + '</div>'
-                    + (customScenes.length ? '<div class="share-meta">Scènes personnalisées : ' + customScenes.map(escHtml).join(', ') + '</div>' : '');
+                    + (customScenes.length ? '<div class="share-meta">Scènes personnalisées : ' + customScenes.map(escHtml).join(', ') + '</div>' : '')
+                    + ((preview.widgets || []).length ? '<div class="share-meta">Widgets inclus (installés avec le profil) : ' + preview.widgets.map((w) => escHtml(w.name)).join(', ') + '</div>' : '');
                 setModalMsg('importMsg', '', true);
                 openModal('importModal');
             }

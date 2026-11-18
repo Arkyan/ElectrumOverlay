@@ -301,6 +301,8 @@ impl Store {
                 payload[kind.key()] = Value::Object(entries);
             }
         }
+        // Widgets personnalisés utilisés par le profil : indispensables à son affichage.
+        self.add_widgets_to_package(&mut zip, &payload["display"])?;
         zip.start_file(PACKAGE_PROFILE_FILE, SimpleFileOptions::default()).map_err(zip_error)?;
         zip.write_all(crate::json::to_js_pretty_string(&payload).as_bytes()).map_err(io_error)?;
         Ok(zip.finish().map_err(zip_error)?.into_inner())

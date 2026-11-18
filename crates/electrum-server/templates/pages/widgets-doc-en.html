@@ -1,0 +1,114 @@
+<h3>Create a widget in 4 steps</h3>
+<ol>
+    <li>Download the example (button at the top) and unzip it.</li>
+    <li>Edit <code>widget.json</code> (name, settings) and <code>widget.html</code> (look and behavior).</li>
+    <li>While working on it, open it in your browser to see the result: install it once, then go to <code>http://localhost:8080/widgets/&lt;id&gt;/?preview=1</code> and reload the page after each reinstalled change.</li>
+    <li>Zip the folder and import it here. Importing a widget again with the same <code>id</code> updates it everywhere.</li>
+</ol>
+<p>Then, in the scene editor: <strong>+</strong> menu › <strong>My widgets</strong>. Each element has its own settings, and the widget travels with the profile when you share it.</p>
+
+<h3>Content of the .zip</h3>
+<pre><code>my-widget/
+├── widget.json     description and settings (required)
+├── widget.html     widget page (required, name can be changed with "entry")
+└── ...             images, sounds, fonts, scripts: anything you need</code></pre>
+<p>Limits: 25 MB and 300 files. Relative paths (<code>img/logo.png</code>) work from <code>widget.html</code>.</p>
+
+<h3>widget.json</h3>
+<pre><code>{
+  "id": "my-widget",
+  "name": "My widget",
+  "version": "1.0.0",
+  "author": "YourName",
+  "description": "What the widget does",
+  "entry": "widget.html",
+  "size": { "width": 25, "height": 15 },
+  "settings": [
+    { "key": "title", "label": "Title", "type": "text", "default": "Hi!" },
+    { "key": "size", "label": "Size (%)", "type": "number", "default": 100, "min": 50, "max": 300, "step": 10 },
+    { "key": "color", "label": "Color", "type": "color", "default": "#22d3ee" },
+    { "key": "sound", "label": "Play a sound", "type": "checkbox", "default": true },
+    { "key": "mode", "label": "Mode", "type": "select", "default": "simple",
+      "options": [{ "value": "simple", "label": "Simple" }, { "value": "detailed", "label": "Detailed" }] }
+  ]
+}</code></pre>
+<table class="table">
+    <thead><tr><th>Field</th><th>Purpose</th></tr></thead>
+    <tbody>
+        <tr><td><code>id</code></td><td>Required. Lowercase letters, digits and dashes. Identifies the widget: importing it again with the same id updates it.</td></tr>
+        <tr><td><code>name</code></td><td>Required. Name shown in the editor.</td></tr>
+        <tr><td><code>version</code>, <code>author</code>, <code>description</code></td><td>Optional, shown in the list.</td></tr>
+        <tr><td><code>entry</code></td><td>Entry page (default: <code>widget.html</code>).</td></tr>
+        <tr><td><code>size</code></td><td>Initial frame size, in % of the screen (resizable in the editor).</td></tr>
+        <tr><td><code>settings</code></td><td>Settings shown in the properties panel. <code>type</code>: <code>text</code>, <code>textarea</code>, <code>number</code> (<code>min</code>, <code>max</code>, <code>step</code>), <code>color</code>, <code>checkbox</code>, <code>select</code> (<code>options</code>). <code>default</code>: initial value.</td></tr>
+    </tbody>
+</table>
+
+<h3>The Electrum library</h3>
+<p>Add it to your page, then write your code inside <code>Electrum.ready</code>:</p>
+<pre><code>&lt;script src="/js/electrum-widget.js"&gt;&lt;/script&gt;
+&lt;script&gt;
+Electrum.ready(async () =&gt; {
+  document.body.textContent = Electrum.settings.title;
+
+  Electrum.on('follow', (e) =&gt; console.log('New follow:', e.user));
+  Electrum.on('bits', (e) =&gt; console.log(e.user, 'cheered', e.amount, 'bits'));
+
+  const stats = await Electrum.getStats();
+  console.log(stats.viewerCount, 'viewers');
+});
+&lt;/script&gt;</code></pre>
+<table class="table">
+    <thead><tr><th>Property / function</th><th>Content</th></tr></thead>
+    <tbody>
+        <tr><td><code>Electrum.ready(fn)</code></td><td>Runs <code>fn</code> once the theme and context are loaded.</td></tr>
+        <tr><td><code>Electrum.on(type, fn)</code></td><td>Calls <code>fn(data)</code> for each event (list below). <code>'*'</code>: every event. Returns a function to unsubscribe.</td></tr>
+        <tr><td><code>Electrum.settings</code></td><td>Settings of this element (keys from your <code>settings</code>).</td></tr>
+        <tr><td><code>Electrum.theme</code></td><td>Scene theme colors: <code>primary</code>, <code>secondary</code>, <code>accent</code>, <code>text</code>, <code>mutedText</code>, <code>panelBg</code>, <code>panelBorder</code>…</td></tr>
+        <tr><td><code>Electrum.preview</code></td><td><code>true</code> in the scene editor preview: show a sample to help with placement.</td></tr>
+        <tr><td><code>Electrum.page</code></td><td>Scene showing the widget: <code>starting</code>, <code>index</code>, <code>pause</code>, <code>ending</code>, or a custom scene id.</td></tr>
+        <tr><td><code>Electrum.language</code></td><td>Interface language: <code>fr</code> or <code>en</code>.</td></tr>
+        <tr><td><code>Electrum.channel</code>, <code>Electrum.profile</code></td><td>Twitch channel (<code>login</code>, <code>id</code>) and active profile (<code>id</code>, <code>name</code>).</td></tr>
+        <tr><td><code>Electrum.getStats()</code></td><td>Stream stats: <code>isLive</code>, <code>viewerCount</code>, <code>follows</code>, <code>subscribers</code>, <code>chatMessages</code>, <code>title</code>, <code>game</code>, <code>streamDuration</code>.</td></tr>
+        <tr><td><code>Electrum.getHistory()</code></td><td>Recent alerts, newest first: <code>type</code>, <code>user</code>, <code>detail</code>, <code>time</code>, <code>data</code> (full Twitch event).</td></tr>
+        <tr><td><code>Electrum.getInteractions()</code></td><td>Current goal, poll, prediction and hype train (<code>goal</code>, <code>poll</code>, <code>prediction</code>, <code>hypetrain</code>, <code>null</code> if none).</td></tr>
+        <tr><td><code>Electrum.getMusic()</code></td><td>Current Spotify track (<code>title</code>, <code>artist</code>, <code>albumArt</code>, <code>isPlaying</code>) or <code>null</code>.</td></tr>
+        <tr><td><code>Electrum.escapeHtml(text)</code></td><td>Escapes a text (name, message) before inserting it as HTML.</td></tr>
+    </tbody>
+</table>
+
+<h3>Events</h3>
+<table class="table">
+    <thead><tr><th>Type</th><th>Data</th></tr></thead>
+    <tbody>
+        <tr><td><code>follow</code></td><td><code>user</code>, <code>userId</code></td></tr>
+        <tr><td><code>sub</code></td><td><code>user</code>, <code>tier</code> (1 to 3), <code>months</code>, <code>gifted</code>, <code>message</code></td></tr>
+        <tr><td><code>subgift</code></td><td><code>user</code> (<code>null</code> if anonymous), <code>count</code>, <code>tier</code>, <code>anonymous</code></td></tr>
+        <tr><td><code>bits</code></td><td><code>user</code>, <code>amount</code>, <code>message</code>, <code>anonymous</code></td></tr>
+        <tr><td><code>raid</code></td><td><code>user</code>, <code>viewers</code></td></tr>
+        <tr><td><code>chat</code></td><td><code>user</code>, <code>color</code>, <code>text</code>, <code>html</code> (with emotes), <code>badges</code>, <code>command</code> (starts with !)</td></tr>
+        <tr><td><code>stream</code></td><td><code>live</code> (stream start / end), <code>title</code>, <code>game</code></td></tr>
+        <tr><td><code>channel</code></td><td><code>title</code>, <code>game</code> (title or category changed)</td></tr>
+        <tr><td><code>goal</code>, <code>poll</code>, <code>prediction</code>, <code>hypetrain</code></td><td><code>phase</code> (<code>begin</code>, <code>progress</code>, <code>lock</code>, <code>end</code>) and their data (same fields as <code>getInteractions()</code>)</td></tr>
+        <tr><td><code>music</code></td><td>New Spotify track (or <code>null</code>)</td></tr>
+        <tr><td><code>key</code></td><td><code>key</code>, <code>down</code>: keyboard/mouse keys, if key display is enabled</td></tr>
+        <tr><td><code>theme</code></td><td>The theme changed (profile activated, colors edited): read <code>Electrum.theme</code> again</td></tr>
+        <tr><td><code>raw</code></td><td>Raw server message, for advanced uses</td></tr>
+    </tbody>
+</table>
+<p>The buttons on the <strong>Tests</strong> page and “Replay” on the dashboard trigger these events: handy for testing.</p>
+
+<h3>Colors in CSS</h3>
+<p>The library also sets the theme colors as CSS variables, updated live:</p>
+<pre><code>.title { color: var(--electrum-primary); }
+.frame { background: var(--electrum-panel); border: 2px solid var(--electrum-border); }</code></pre>
+<p>Available: <code>--electrum-primary</code>, <code>--electrum-secondary</code>, <code>--electrum-accent</code>, <code>--electrum-text</code>, <code>--electrum-muted-text</code>, <code>--electrum-panel</code>, <code>--electrum-border</code>.</p>
+
+<h3>Good to know</h3>
+<ul>
+    <li>Keep a transparent background (<code>background: transparent</code>) to see the scene behind.</li>
+    <li>The widget is shown in its own frame: <code>vw</code> and <code>vh</code> refer to that frame, not the screen. With sizes in <code>vh</code>, text follows the frame size.</li>
+    <li>Changing a setting in the editor reloads the widget: it must be able to start from scratch (use <code>getStats()</code> or <code>getHistory()</code> on startup).</li>
+    <li>Sounds and videos play without a click in OBS (in a browser, you sometimes need to click the page first).</li>
+    <li>A widget can call the app's local API: only import widgets from authors you trust.</li>
+</ul>

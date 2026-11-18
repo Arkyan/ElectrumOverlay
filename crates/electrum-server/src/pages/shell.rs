@@ -11,6 +11,7 @@ const ICONS: &str = r##"<svg width="0" height="0" style="position:absolute" aria
 <symbol id="i-scene" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="14" rx="2"/><path d="M8 21h8M12 18v3"/><rect x="6.5" y="7.5" width="6" height="4" rx="0.5"/></symbol>
 <symbol id="i-sliders" viewBox="0 0 24 24"><path d="M4 6h9M17 6h3M4 12h3M11 12h9M4 18h11M19 18h1"/><circle cx="15" cy="6" r="2"/><circle cx="9" cy="12" r="2"/><circle cx="17" cy="18" r="2"/></symbol>
 <symbol id="i-chat" viewBox="0 0 24 24"><path d="M4 5h16v11H10l-4 4v-4H4z"/><path d="M8 9h8M8 12h5"/></symbol>
+<symbol id="i-puzzle" viewBox="0 0 24 24"><path d="M10 3H5a2 2 0 0 0-2 2v5h2.5a2 2 0 1 1 0 4H3v5a2 2 0 0 0 2 2h5v-2.5a2 2 0 1 1 4 0V21h5a2 2 0 0 0 2-2v-5h-2.5a2 2 0 1 1 0-4H21V5a2 2 0 0 0-2-2h-5v2.5a2 2 0 1 1-4 0z"/></symbol>
 <symbol id="i-plug" viewBox="0 0 24 24"><path d="M9 3v5M15 3v5"/><path d="M6 8h12v3a6 6 0 0 1-12 0z"/><path d="M12 17v4"/></symbol>
 <symbol id="i-zap" viewBox="0 0 24 24"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></symbol>
 <symbol id="i-chart" viewBox="0 0 24 24"><path d="M3 20h18"/><path d="M6 16v-5M11 16V6M16 16v-8M21 16v-3"/></symbol>
@@ -36,6 +37,7 @@ const NAV: &[(&str, &[NavItem])] = &[
     ]),
     ("Contenu", &[
         ("/commands", "Commandes de chat", "chat"),
+        ("/widgets", "Widgets", "puzzle"),
         ("/integrations", "Intégrations", "plug"),
     ]),
     ("Live", &[
