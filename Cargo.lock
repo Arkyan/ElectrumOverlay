@@ -1202,7 +1202,7 @@ checksum = "0e9c71c2167ca323c882b99918929403426e2373ea17242ff5653e0d5e1058be"
 
 [[package]]
 name = "electrum-core"
-version = "3.0.0"
+version = "3.1.0"
 dependencies = [
  "base64 0.22.1",
  "chrono",
@@ -1217,7 +1217,7 @@ dependencies = [
 
 [[package]]
 name = "electrum-deck"
-version = "3.0.0"
+version = "3.1.0"
 dependencies = [
  "serde_json",
  "tungstenite 0.27.0",
@@ -1225,7 +1225,7 @@ dependencies = [
 
 [[package]]
 name = "electrum-overlay"
-version = "3.0.0"
+version = "3.1.0"
 dependencies = [
  "electrum-core",
  "electrum-server",
@@ -1245,7 +1245,7 @@ dependencies = [
 
 [[package]]
 name = "electrum-server"
-version = "3.0.0"
+version = "3.1.0"
 dependencies = [
  "aho-corasick",
  "axum",
@@ -6473,7 +6473,7 @@ dependencies = [
 
 [[package]]
 name = "xtask"
-version = "3.0.0"
+version = "3.1.0"
 dependencies = [
  "base64 0.22.1",
  "chrono",
