@@ -57,7 +57,7 @@ pub async fn run(state: AppState, options: Options) {
     loop {
         let creds = credentials(&state);
         if !creds.is_complete() {
-            state.twitch.set_status(|s| {
+            set_status(&state, |s| {
                 *s = Default::default();
                 s.last_error = Some("Twitch n'est pas encore autorisé (voir Configuration)".into());
             });
@@ -71,7 +71,7 @@ pub async fn run(state: AppState, options: Options) {
             }
             End::Unauthorized(message) => {
                 state.log("error", format!("❌ {message}"));
-                state.twitch.set_status(|s| {
+                set_status(&state, |s| {
                     *s = Default::default();
                     s.last_error = Some(message);
                     s.needs_authorization = true;
@@ -81,7 +81,7 @@ pub async fn run(state: AppState, options: Options) {
             }
             End::Lost(message) => {
                 state.log("warn", format!("⚠️ EventSub déconnecté : {message} — nouvelle tentative dans {} s", backoff.as_secs()));
-                state.twitch.set_status(|s| {
+                set_status(&state, |s| {
                     s.connected = false;
                     s.session_id = None;
                     s.last_error = Some(message);
@@ -146,7 +146,7 @@ async fn subscribe_all(state: &AppState, creds: &Credentials, session_id: &str, 
     if !missing.is_empty() {
         state.log("info", format!("ℹ️ Inactif faute d'autorisation : {} — ré-autorise Twitch dans Configuration pour l'activer", missing.join(", ")));
     }
-    state.twitch.set_status(|s| s.missing_features = missing);
+    set_status(state, |s| s.missing_features = missing);
     let mut created = Vec::new();
     for (kind, version, condition) in &wanted {
         match state.twitch.api.create_subscription(creds, kind, version, condition, session_id).await {
@@ -206,9 +206,19 @@ async fn session(state: &AppState, creds: &Credentials, options: &Options) -> En
                 }
                 if !subscribed {
                     match subscribe_all(state, creds, &session_id, &scopes).await {
-                        Ok(subscriptions) => state.twitch.set_status(|s| s.subscriptions = subscriptions),
+                        Ok(subscriptions) => set_status(state, |s| s.subscriptions = subscriptions),
                         Err(end) => return end,
                     }
+                }
+                // Connecté dès que les abonnements existent (les pages sont prévenues tout de suite).
+                set_status(state, |s| {
+                    s.connected = true;
+                    s.session_id = Some(session_id);
+                    s.last_error = None;
+                    s.needs_authorization = false;
+                });
+                if !subscribed {
+                    subscribed = true;
                     if scopes.iter().any(|s| s == "channel:read:goals") {
                         load_current_goal(state, creds).await;
                     }
@@ -216,14 +226,7 @@ async fn session(state: &AppState, creds: &Credentials, options: &Options) -> En
                     if let Ok(game) = state.twitch.api.current_game(creds).await {
                         crate::game_profiles::apply(state, &game);
                     }
-                    subscribed = true;
                 }
-                state.twitch.set_status(|s| {
-                    s.connected = true;
-                    s.session_id = Some(session_id);
-                    s.last_error = None;
-                    s.needs_authorization = false;
-                });
             }
             "session_keepalive" => {}
             "notification" => {
@@ -240,7 +243,7 @@ async fn session(state: &AppState, creds: &Credentials, options: &Options) -> En
                     Ok((new_socket, session_id)) => {
                         // Les abonnements suivent la session : rien à recréer.
                         socket = new_socket;
-                        state.twitch.set_status(|s| s.session_id = Some(session_id));
+                        set_status(state, |s| s.session_id = Some(session_id));
                         state.log("info", "🔄 EventSub : reconnexion demandée par Twitch effectuée");
                     }
                     Err(error) => return End::Lost(error),
@@ -250,7 +253,7 @@ async fn session(state: &AppState, creds: &Credentials, options: &Options) -> En
                 let subscription = &payload["subscription"];
                 let (kind, status) = (subscription["type"].as_str().unwrap_or("?"), subscription["status"].as_str().unwrap_or("?"));
                 state.log("warn", format!("🚫 Abonnement révoqué par Twitch : {kind} ({status})"));
-                state.twitch.set_status(|s| {
+                set_status(state, |s| {
                     s.subscriptions.retain(|sub| sub["id"] != subscription["id"]);
                     if status == "authorization_revoked" {
                         s.needs_authorization = true;
@@ -268,6 +271,13 @@ async fn load_current_goal(state: &AppState, creds: &Credentials) {
         Ok(goals) => crate::interactions::set_initial_goal(state, goals.first()),
         Err(error) => state.log("warn", format!("⚠️ Objectifs Twitch illisibles : {error}")),
     }
+}
+
+/// Change l'état de la connexion et prévient les pages de l'app ouvertes (tableau de bord,
+/// barre latérale) par le WebSocket du serveur.
+fn set_status(state: &AppState, change: impl FnOnce(&mut super::EventSubStatus)) {
+    state.twitch.set_status(change);
+    state.broadcast(&json!({ "type": "twitch-status", "eventsub": status_json(state) }));
 }
 
 /// Rejoint l'URL de reconnexion et attend son `session_welcome`.

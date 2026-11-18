@@ -28,7 +28,12 @@ impl Updater {
         if status.is_null() { json!({ "status": "idle" }) } else { status }
     }
 
-    fn set(&self, status: Value) {
+    /// Change l'état et prévient tout de suite les pages ouvertes (bannière du tableau de bord),
+    /// par le WebSocket du serveur.
+    fn set(&self, app: &AppHandle, status: Value) {
+        if let Some(desktop) = app.try_state::<crate::Desktop>() {
+            desktop.state.broadcast(&json!({ "type": "updater-status", "status": status }));
+        }
         *self.status.lock().unwrap_or_else(|p| p.into_inner()) = status;
     }
 
@@ -67,7 +72,7 @@ pub async fn check(app: &AppHandle) {
     if !enabled() || busy {
         return;
     }
-    updater.set(json!({ "status": "checking" }));
+    updater.set(app, json!({ "status": "checking" }));
     log(app, "info", "🔄 Recherche de mise à jour...".into());
 
     let found = match app.updater() {
@@ -76,16 +81,16 @@ pub async fn check(app: &AppHandle) {
     };
     let update = match found {
         Ok(Some(update)) => update,
-        Ok(None) => return updater.set(json!({ "status": "idle" })),
+        Ok(None) => return updater.set(app, json!({ "status": "idle" })),
         Err(error) => {
             log(app, "error", format!("❌ Erreur de vérification de mise à jour: {error}"));
-            return updater.set(json!({ "status": "error", "message": error.to_string() }));
+            return updater.set(app, json!({ "status": "error", "message": error.to_string() }));
         }
     };
 
     let version = update.version.clone();
     log(app, "info", format!("⬇️  Mise à jour disponible : v{version}"));
-    updater.set(json!({ "status": "downloading", "version": version, "percent": 0 }));
+    updater.set(app, json!({ "status": "downloading", "version": version, "percent": 0 }));
     let mut received: u64 = 0;
     let progress_app = app.clone();
     let progress_version = version.clone();
@@ -97,7 +102,7 @@ pub async fn check(app: &AppHandle) {
                     let percent = (received * 100 / total).min(100);
                     progress_app
                         .state::<Updater>()
-                        .set(json!({ "status": "downloading", "version": progress_version, "percent": percent }));
+                        .set(&progress_app, json!({ "status": "downloading", "version": progress_version, "percent": percent }));
                 }
             },
             || {},
@@ -107,12 +112,12 @@ pub async fn check(app: &AppHandle) {
         Ok(bytes) => {
             *updater.ready.lock().unwrap_or_else(|p| p.into_inner()) = Some((update, bytes));
             log(app, "info", format!("✅ Mise à jour v{version} prête à installer."));
-            updater.set(json!({ "status": "downloaded", "version": version }));
+            updater.set(app, json!({ "status": "downloaded", "version": version }));
             crate::refresh_tray_later(app);
         }
         Err(error) => {
             log(app, "error", format!("❌ Erreur de mise à jour: {error}"));
-            updater.set(json!({ "status": "error", "message": error.to_string() }));
+            updater.set(app, json!({ "status": "error", "message": error.to_string() }));
         }
     }
 }
