@@ -76,37 +76,13 @@
         </div>
     </section>
 
-    <section class="card">
-        <h2 class="card-title with-actions">Sources pour OBS <button type="button" class="btn btn-sm btn-primary" id="btnObsOpen">Configurer OBS automatiquement</button></h2>
+    <section class="card" id="obsSources">
+        <h2 class="card-title">Sources pour OBS</h2>
         <table class="table">
             <thead><tr><th>Source</th><th>URL (source navigateur)</th><th></th></tr></thead>
             <tbody>{{expr:2}}</tbody>
         </table>
     </section>
-
-    <div class="modal-backdrop" id="obsModal" hidden>
-        <div class="modal" role="dialog" aria-labelledby="obsTitle">
-            <div class="modal-head"><h2 id="obsTitle">Configurer OBS automatiquement</h2><button type="button" class="modal-close" data-close>×</button></div>
-            <div class="modal-body">
-                <p class="hint" style="margin-top:0;">L'app crée les scènes dans OBS et y ajoute les overlays, en source navigateur 1920×1080. Tes scènes existantes sont gardées : s'il y en a une du même nom, l'overlay y est simplement ajouté par-dessus.</p>
-                <p class="hint" style="margin-bottom:var(--space-4);">Dans OBS : <strong>Outils › Paramètres du serveur WebSocket</strong>, coche <strong>Activer le serveur WebSocket</strong>, puis <strong>Afficher les infos de connexion</strong> pour copier le mot de passe.</p>
-                <div class="field-row">
-                    <div class="field"><label for="obsHost">Adresse</label><input type="text" id="obsHost" value="localhost"></div>
-                    <div class="field"><label for="obsPort">Port</label><input type="number" id="obsPort" value="4455"></div>
-                </div>
-                <div class="field"><label for="obsPassword">Mot de passe du serveur WebSocket <span class="help" tabindex="0" data-tip="Dans OBS : Outils › Paramètres du serveur WebSocket › Afficher les infos de connexion. Laisse vide si l'authentification est désactivée.">?</span></label><input type="password" id="obsPassword" autocomplete="off"></div>
-                <label style="display:block; font-size:13px; color:var(--text-muted); margin:var(--space-2) 0;">Scènes à préparer</label>
-                <div id="obsScenes"></div>
-                <label class="checkbox-row" style="margin-top:var(--space-3);"><input type="checkbox" id="obsAudio" checked> Faire passer le son des alertes par OBS (pour qu'il soit entendu sur le stream)</label>
-                <div class="msg" id="obsMsg" role="status"></div>
-                <ul id="obsReport" class="hint" style="margin:var(--space-2) 0 0; padding-left:18px;"></ul>
-            </div>
-            <div class="modal-foot">
-                <button type="button" class="btn btn-ghost" data-close>Fermer</button>
-                <button type="button" class="btn btn-primary" id="btnObsRun">Configurer</button>
-            </div>
-        </div>
-    </div>
 
     <details class="adv">
         <summary>Diagnostic</summary>
@@ -169,7 +145,7 @@
     const GS_STEPS = {
         style: ['Choisir le style de ton overlay', 'Couleurs, animations et logo.', '<a class="btn btn-sm" href="/welcome">Choisir</a>'],
         twitch: ['Connecter Twitch', 'Pour recevoir follows, subs, bits, raids et le chat.', '<a class="btn btn-sm" href="/setup">Connecter</a>'],
-        obs: ['Ajouter les scènes dans OBS', 'L\'app peut les créer pour toi, ou ajoute les URLs ci-dessous à la main.', '<button type="button" class="btn btn-sm" data-gs-obs>Configurer OBS</button> <button type="button" class="btn btn-sm btn-ghost" data-gs-done="obs">Déjà fait</button>'],
+        obs: ['Ajouter les scènes dans OBS', 'Ajoute chaque URL de « Sources pour OBS » en source navigateur 1920×1080.', '<button type="button" class="btn btn-sm" data-gs-obs>Voir les URLs</button> <button type="button" class="btn btn-sm btn-ghost" data-gs-done="obs">C\'est fait</button>'],
         test: ['Tester une alerte', 'Vérifie que tout s\'affiche dans OBS avant d\'être en live.', '<button type="button" class="btn btn-sm" data-gs-test>Lancer un follow de test</button>'],
         scene: ['Personnaliser une scène', 'Place le chat, les alertes et ajoute tes éléments.', '<a class="btn btn-sm" href="/scene-editor">Ouvrir l\'éditeur</a> <button type="button" class="btn btn-sm btn-ghost" data-gs-done="scene">Plus tard</button>']
     };
@@ -187,7 +163,7 @@
         }).catch(() => {});
     }
     $('gsSteps').addEventListener('click', (e) => {
-        if (e.target.closest('[data-gs-obs]')) $('btnObsOpen').click();
+        if (e.target.closest('[data-gs-obs]')) $('obsSources').scrollIntoView({ behavior: 'smooth', block: 'start' });
         const mark = e.target.closest('[data-gs-done]');
         if (mark) fetch('/api/app/getting-started', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ done: mark.dataset.gsDone }) }).then(refreshGettingStarted);
         if (e.target.closest('[data-gs-test]')) {
@@ -201,48 +177,6 @@
     refreshGettingStarted();
     setInterval(refreshGettingStarted, 5000);
     window.addEventListener('electrum-live', (event) => { if (event.detail.type === 'twitch-status') refreshGettingStarted(); });
-
-    // Configuration automatique d'OBS.
-    const obsModal = $('obsModal');
-    obsModal.addEventListener('click', (e) => { if (e.target === obsModal || e.target.closest('[data-close]')) obsModal.hidden = true; });
-    $('btnObsOpen').addEventListener('click', async () => {
-        $('obsMsg').textContent = '';
-        $('obsReport').innerHTML = '';
-        const info = await fetch('/api/obs', { cache: 'no-store' }).then((r) => r.json()).catch(() => null);
-        if (info) {
-            $('obsHost').value = info.host;
-            $('obsPort').value = info.port;
-            $('obsPassword').placeholder = info.hasPassword ? 'Déjà enregistré — laisser vide pour le garder' : '';
-            $('obsScenes').innerHTML = info.scenes.map((s) => '<label class="checkbox-row" style="margin-bottom:6px;"><input type="checkbox" class="obs-scene" value="' + esc(s.key) + '" checked> ' + esc(s.name) + '</label>').join('');
-        }
-        obsModal.hidden = false;
-    });
-    $('btnObsRun').addEventListener('click', async (e) => {
-        const button = e.currentTarget;
-        button.disabled = true;
-        $('obsMsg').textContent = 'Connexion à OBS…';
-        $('obsMsg').className = 'msg';
-        $('obsReport').innerHTML = '';
-        try {
-            const data = await fetch('/api/obs/setup', {
-                method: 'POST', headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    host: $('obsHost').value, port: Number($('obsPort').value), password: $('obsPassword').value,
-                    scenes: [...document.querySelectorAll('.obs-scene:checked')].map((c) => c.value), audio: $('obsAudio').checked
-                })
-            }).then((r) => r.json());
-            if (data.error) throw new Error(data.error);
-            $('obsMsg').textContent = 'OBS est prêt.';
-            $('obsMsg').className = 'msg success';
-            $('obsReport').innerHTML = data.report.map((line) => '<li>' + esc(line) + '</li>').join('');
-            refreshGettingStarted();
-            $('obsPassword').value = '';
-        } catch (error) {
-            $('obsMsg').textContent = error.message;
-            $('obsMsg').className = 'msg error';
-        }
-        button.disabled = false;
-    });
 
     // Derniers événements + rejouer une alerte.
     const KINDS = { 'channel.follow': ['Follow', ''], 'channel.subscribe': ['Sub', 'ok'], 'channel.subscription.gift': ['Subs offerts', 'ok'], 'channel.cheer': ['Bits', 'warn'], 'channel.raid': ['Raid', 'live'] };

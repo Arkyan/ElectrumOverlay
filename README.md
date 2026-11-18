@@ -118,10 +118,6 @@ Couleur principale des overlays, textes du bandeau du bas, et TruckyApp (optionn
 
 ## 📹 Ajouter les overlays dans OBS
 
-### Automatiquement
-Dans OBS : **Outils › Paramètres du serveur WebSocket**, coche **Activer le serveur WebSocket** et copie le mot de passe (**Afficher les infos de connexion**). Puis, sur le tableau de bord, clique sur **Configurer OBS automatiquement** : l'app crée les scènes (Démarrage, En direct, Pause, Fin et tes scènes personnalisées) et y ajoute chaque overlay en source navigateur 1920×1080. Tes scènes existantes sont gardées, et relancer la configuration ne crée pas de doublons.
-
-### À la main
 Le tableau de bord liste toutes tes scènes avec un bouton **Copier**. Ajoute chaque URL dans OBS comme **source navigateur** en 1920×1080 :
 
 | Scène | URL |

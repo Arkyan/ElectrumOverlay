@@ -133,7 +133,7 @@ async fn getting_started(State(state): State<AppState>) -> Json<serde_json::Valu
     let steps = [
         ("style", app["onboarded"].as_bool().unwrap_or(false)),
         ("twitch", twitch),
-        ("obs", app["obs"]["configuredAt"].is_string()),
+        ("obs", false), // coché à la main
         ("test", tested),
         ("scene", customized),
     ];

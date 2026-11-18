@@ -3,7 +3,6 @@
 pub mod app;
 pub mod backups;
 pub mod integrations;
-pub mod obs;
 pub mod overlay;
 pub mod pages;
 pub mod profiles;

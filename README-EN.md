@@ -120,10 +120,6 @@ Main overlay color, bottom banner texts, and TruckyApp (optional).
 
 ## 📹 Adding the overlays to OBS
 
-### Automatically
-In OBS: **Tools › WebSocket Server Settings**, tick **Enable WebSocket server** and copy the password (**Show Connect Info**). Then, on the dashboard, click **Set up OBS automatically**: the app creates the scenes (Starting, Live, Pause, Ending and your custom scenes) and adds each overlay as a 1920×1080 browser source. Your existing scenes are kept, and running it again does not create duplicates.
-
-### By hand
 The dashboard lists all your scenes with a **Copy** button. Add each URL in OBS as a **browser source** at 1920×1080:
 
 | Scene | URL |
