@@ -109,7 +109,7 @@
     });
 
     function refreshTwitch() {
-        fetch('/status').then((r) => r.json()).then((s) => {
+        fetch('/status', { cache: 'no-store' }).then((r) => r.json()).then((s) => {
             const e = s.eventsub || {};
             const [cls, text] = !s.twitchAuthenticated ? ['bad', 'Non autorisé'] : e.connected ? ['ok', 'Connecté'] : e.needsAuthorization ? ['bad', 'À ré-autoriser'] : ['warn', 'Connexion…'];
             $('twState').className = 'tag ' + cls;
@@ -124,7 +124,7 @@
     }
 
     function refreshStats() {
-        fetch('/api/stream-stats').then((r) => r.json()).then((s) => {
+        fetch('/api/stream-stats', { cache: 'no-store' }).then((r) => r.json()).then((s) => {
             $('stLive').className = 'tag' + (s.isLive ? ' live' : '');
             $('stLive').textContent = s.isLive ? 'En direct' : 'Hors ligne';
             $('stDuration').textContent = s.isLive ? s.streamDuration : '–';
@@ -140,7 +140,7 @@
     const esc = (t) => String(t ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
     let lastHistory = '';
     function refreshHistory() {
-        fetch('/api/events/history').then((r) => r.json()).then(({ events }) => {
+        fetch('/api/events/history', { cache: 'no-store' }).then((r) => r.json()).then(({ events }) => {
             const key = events.map((e) => e.id).join(',');
             if (key === lastHistory) return;
             lastHistory = key;
@@ -174,7 +174,11 @@
     refreshStats();
     refreshHistory();
     setInterval(refreshHistory, 3000);
-    setInterval(refreshTwitch, 10000);
+    setInterval(refreshTwitch, 5000);
+    // En direct (WebSocket, voir la barre latérale) : la carte change dès que Twitch se connecte.
+    window.addEventListener('electrum-live', (event) => {
+        if (event.detail.type === 'twitch-status') refreshTwitch();
+    });
     setInterval(refreshStats, 5000);
 
     // Mise à jour de l'app (uniquement dans l'app desktop).
@@ -197,6 +201,10 @@
         }
         api.getUpdaterStatus().then(renderUpdater);
         api.onUpdaterStatusChange(renderUpdater);
+        // En direct : bannière affichée dès que la mise à jour est téléchargée.
+        window.addEventListener('electrum-live', (event) => {
+            if (event.detail.type === 'updater-status') renderUpdater(event.detail.status);
+        });
         $('btnInstallUpdate').addEventListener('click', () => api.installUpdate());
     }
 })();

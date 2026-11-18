@@ -164,10 +164,14 @@ async fn connexion_notifications_reconnexions() {
     let (mock, endpoints) = start_mock().await;
     let (state, _dir) = new_state(endpoints, "bon-token");
     let mut overlay = state.subscribe();
+    let mut live = state.subscribe();
     tokio::spawn(eventsub::run(state.clone(), options()));
 
     // 1. Abonnements créés pour la session s1, avec le bon transport et les bonnes conditions.
     wait_for("connexion EventSub", || state.twitch.status().connected).await;
+    // Les pages de l'app sont prévenues en direct (sans attendre leur prochaine vérification).
+    let pushed: Vec<String> = std::iter::from_fn(|| live.try_recv().ok()).filter(|m| m.contains("\"twitch-status\"")).collect();
+    assert!(pushed.iter().any(|m| m.contains("\"connected\":true")), "{pushed:?}");
     let created = mock.subscriptions.lock().unwrap().clone();
     assert_eq!(created.len(), 12, "7 événements de base + le chat + titre/catégorie + 3 de sondage");
     // Abonnements facultatifs : seulement ceux que le token autorise.

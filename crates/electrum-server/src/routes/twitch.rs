@@ -72,6 +72,7 @@ async fn status(State(state): State<AppState>) -> Json<Value> {
         "twitchAuthenticated": !credentials(&state).token.is_empty(),
         "subscriptionsCount": eventsub["subscriptions"],
         "serverTime": electrum_core::time::now_iso(),
+        "wsPort": crate::configured_ports(&state).1,
         "eventsub": eventsub
     }))
 }

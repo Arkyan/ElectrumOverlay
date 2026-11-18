@@ -129,7 +129,7 @@ const CLOSE: &str = r#"</main>
         };
     }
     function refreshTwitch() {
-        fetch('/status').then((r) => r.ok ? r.json() : null).then((s) => {
+        fetch('/status', { cache: 'no-store' }).then((r) => r.ok ? r.json() : null).then((s) => {
             if (!s) return;
             const e = s.eventsub || {};
             const [cls, text] = !s.twitchAuthenticated ? ['bad', 'Twitch non autorisé']
@@ -142,7 +142,26 @@ const CLOSE: &str = r#"</main>
         }).catch(() => {});
     }
     refreshTwitch();
-    setInterval(refreshTwitch, 10000);
+    // Secours : l'état arrive normalement en direct par le WebSocket (plus bas).
+    setInterval(refreshTwitch, 5000);
+
+    // En direct : le serveur prévient dès que l'état de Twitch ou d'une mise à jour change. Les
+    // pages écoutent l'événement « electrum-live » (tableau de bord : carte Twitch, bannière).
+    function live() {
+        fetch('/status', { cache: 'no-store' }).then((r) => r.json()).then((s) => {
+            const ws = new WebSocket('ws://' + (location.hostname || 'localhost') + ':' + (s.wsPort || 8081));
+            ws.onmessage = (event) => {
+                let message;
+                try { message = JSON.parse(event.data); } catch (e) { return; }
+                if (message.type === 'twitch-status') refreshTwitch();
+                if (message.type === 'twitch-status' || message.type === 'updater-status') {
+                    window.dispatchEvent(new CustomEvent('electrum-live', { detail: message }));
+                }
+            };
+            ws.onclose = () => setTimeout(live, 3000);
+        }).catch(() => setTimeout(live, 3000));
+    }
+    live();
 
     // Couleur de l'app = couleur principale des overlays : suit en direct un changement fait dans
     // Paramètres › Thèmes ou un changement de profil.
