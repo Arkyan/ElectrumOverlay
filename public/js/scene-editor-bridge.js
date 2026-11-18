@@ -25,7 +25,7 @@
     // ajouté sans mettre à jour ces listes.
     const LABELS = {
         chatPanel: 'Chat',
-        leftPanel: 'Panneau gauche',
+        leftPanel: 'Panneau Trucky',
         bottomBar: 'Bandeau bas',
         alertContainer: 'Alertes',
         titleBlock: 'Titre / texte principal',

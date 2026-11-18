@@ -20,6 +20,7 @@ pub fn router() -> Router<AppState> {
         .route("/api/app/game-profiles", get(get_game_profiles).post(set_game_profiles))
         .route("/api/app/game-profiles/simulate", axum::routing::post(simulate_game))
         .route("/api/twitch/categories", get(search_categories))
+        .route("/api/app/getting-started", get(getting_started).post(update_getting_started))
 }
 
 impl AppState {
@@ -114,6 +115,43 @@ async fn search_categories(State(state): State<AppState>, axum::extract::Query(p
     let found = state.twitch.api.search_categories(&creds, &query).await.unwrap_or_default();
     let categories: Vec<_> = found.iter().map(|c| json!({ "name": c["name"], "image": c["box_art_url"] })).collect();
     Ok(Json(json!({ "categories": categories })))
+}
+
+/// Carte « Premiers pas » du tableau de bord : étapes faites ou non (détectées, ou cochées à la
+/// main par l'utilisateur), et masquage de la carte.
+async fn getting_started(State(state): State<AppState>) -> Json<serde_json::Value> {
+    let twitch = state.twitch.status().connected;
+    let tested = state.history().list().iter().any(|e| e["test"] == true);
+    let (app, customized) = {
+        let store = state.store();
+        let app = store.config()["app"].clone();
+        let display = store.active_profile_id().and_then(|id| store.effective_display(id).ok()).unwrap_or_default();
+        let has = |key: &str| display[key].as_object().is_some_and(|pages| pages.values().any(|p| p.as_object().is_some_and(|m| !m.is_empty())));
+        (app, has("customTexts") || has("layout") || has("texts"))
+    };
+    let manual = |key: &str| app["gettingStarted"]["done"][key].as_bool().unwrap_or(false);
+    let steps = [
+        ("style", app["onboarded"].as_bool().unwrap_or(false)),
+        ("twitch", twitch),
+        ("obs", app["obs"]["configuredAt"].is_string()),
+        ("test", tested),
+        ("scene", customized),
+    ];
+    let steps: Vec<_> = steps.iter().map(|(key, auto)| json!({ "key": key, "done": *auto || manual(key) })).collect();
+    Json(json!({ "hidden": app["gettingStarted"]["hidden"].as_bool().unwrap_or(false), "steps": steps }))
+}
+
+async fn update_getting_started(State(state): State<AppState>, body: Bytes) -> ApiResult {
+    let body = body_or_empty(&body);
+    let mut patch = json!({});
+    if let Some(hidden) = body["hidden"].as_bool() {
+        patch["hidden"] = json!(hidden);
+    }
+    if let Some(step) = body["done"].as_str().filter(|s| ["style", "twitch", "obs", "test", "scene"].contains(s)) {
+        patch["done"] = json!({ step: true });
+    }
+    state.store().save_config(&json!({ "app": { "gettingStarted": patch } }))?;
+    Ok(Json(json!({ "ok": true })))
 }
 
 /// Dictionnaire des overlays (`globalThis.OVERLAY_I18N`), chargé avant overlay-common.js.

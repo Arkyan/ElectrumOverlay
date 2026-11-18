@@ -3,6 +3,7 @@
 pub mod app;
 pub mod backups;
 pub mod integrations;
+pub mod obs;
 pub mod overlay;
 pub mod pages;
 pub mod profiles;
@@ -10,6 +11,7 @@ pub mod settings;
 pub mod setup;
 pub mod testtools;
 pub mod twitch;
+pub mod welcome;
 pub mod widgets;
 
 use axum::http::StatusCode;

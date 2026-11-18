@@ -40,6 +40,7 @@ A Windows app that runs your Twitch stream overlays: real-time alerts (follow, s
 - Four ready-made scenes (Starting, Live, Pause, Ending) plus as many custom scenes as you like
 
 ### 🎨 Customization
+- **For every kind of stream**: gaming, just chatting, creative or driving simulation; your logo and colors on every screen
 - **Custom widgets**: build your own elements in HTML/CSS/JS (Twitch events, stats, theme), import them and place them in the editor; full documentation in the app (Widgets page)
 - **Automatic profile per game**: when the Twitch category changes, the theme and scenes follow
 - Theme profiles (several ready-made ones), colors per page, animations (particles, stars, meteors, DVD logo), alerts, chat, panels
@@ -96,7 +97,11 @@ A Windows app that runs your Twitch stream overlays: real-time alerts (follow, s
 
 ## 🧙 First launch
 
-The wizard (**Configuration** in the menu) has three independent parts.
+On first launch, a welcome screen lets you pick the language, your kind of stream (gaming, just chatting, creative, driving simulation), colors, animations and your logo. Everything can be changed later (**Settings › Application › Run the first-launch assistant again**).
+
+The dashboard then shows a **Getting started** card (style, Twitch, OBS, test alert, scene) that ticks itself off as you go. Less obvious settings have a **?** bubble explaining them.
+
+Then comes the Twitch wizard (**Configuration** in the menu), in three independent parts.
 
 ### 1. Twitch application
 1. Create an application at [dev.twitch.tv/console/apps](https://dev.twitch.tv/console/apps):
@@ -115,6 +120,10 @@ Main overlay color, bottom banner texts, and TruckyApp (optional).
 
 ## 📹 Adding the overlays to OBS
 
+### Automatically
+In OBS: **Tools › WebSocket Server Settings**, tick **Enable WebSocket server** and copy the password (**Show Connect Info**). Then, on the dashboard, click **Set up OBS automatically**: the app creates the scenes (Starting, Live, Pause, Ending and your custom scenes) and adds each overlay as a 1920×1080 browser source. Your existing scenes are kept, and running it again does not create duplicates.
+
+### By hand
 The dashboard lists all your scenes with a **Copy** button. Add each URL in OBS as a **browser source** at 1920×1080:
 
 | Scene | URL |

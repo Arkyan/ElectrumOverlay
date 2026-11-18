@@ -86,6 +86,9 @@ $env:ELECTRUM_CONFIG_DIR = "C:\chemin\vers\une\copie\config"
 | Partage de profil en `.zip` (auteur, description, sons en option, aperçu avant import ; ancien `.json` accepté) | ✅ testé |
 | Interface en anglais (Paramètres › Application), langue de Windows au premier lancement | ✅ testé |
 | Profil automatique selon le jeu (Paramètres › Profil par jeu) | ✅ testé (à valider avec une vraie catégorie Twitch) |
+| Premier lancement guidé (`/welcome` : langue, type de stream, couleurs, animations, logo `/logo.png`) | ✅ testé |
+| Configuration automatique d'OBS par obs-websocket 5 (`/api/obs/setup`) | ✅ testé contre un faux OBS (à valider avec un vrai) |
+| Aide intégrée : carte « Premiers pas » (`/api/app/getting-started`) et bulles « ? » | ✅ testé |
 | Première pré-version Rust, test réel de la bascule 2.5.2 → 3.0 | ⏳ voir [RELEASE-RUST.md](RELEASE-RUST.md) |
 
 ## Différences volontaires avec la version Node

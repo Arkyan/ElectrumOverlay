@@ -87,7 +87,7 @@
                 </div>
                 <div class="field-row" style="margin-top:var(--space-4);">
                     <div class="field">
-                        <label for="gamesFallback">Pour les autres jeux</label>
+                        <label for="gamesFallback">Pour les autres jeux <span class="help" tabindex="0" data-tip="Profil utilisé quand tu passes sur un jeu qui n'a pas de règle. « Ne rien changer » garde le profil en cours.">?</span></label>
                         <select id="gamesFallback"></select>
                     </div>
                 </div>
@@ -116,7 +116,7 @@
                     <div class="field-row">
                         <div class="field"><label>&nbsp;</label><label class="checkbox-row"><input type="checkbox" id="alertsEnabled" {{expr:5}}> Activées</label></div>
                         <div class="field"><label for="alertsDuration">Durée affichage (ms)</label><input type="number" id="alertsDuration" value="{{expr:6}}" min="500" step="500"></div>
-                        <div class="field"><label for="alertsQueueDelay">Délai entre alertes (ms)</label><input type="number" id="alertsQueueDelay" value="{{expr:7}}" min="0" step="100"></div>
+                        <div class="field"><label for="alertsQueueDelay">Délai entre alertes (ms) <span class="help" tabindex="0" data-tip="Pause entre deux alertes qui arrivent en même temps (raid + follows…). 1000 ms = 1 seconde.">?</span></label><input type="number" id="alertsQueueDelay" value="{{expr:7}}" min="0" step="100"></div>
                         <div class="field"><label for="soundVolume">Volume des sons (%)</label><input type="number" id="soundVolume" value="{{expr:8}}" min="0" max="100" step="5"></div>
                     </div>
                     <div class="field-row" style="margin-top:var(--space-3);">
@@ -136,9 +136,9 @@
             <h2>Panneau gauche (index.html)</h2>
                 <label class="checkbox-row" style="margin-bottom:var(--space-4);"><input type="checkbox" id="leftPanelEnabled" {{expr:15}}> Activé</label>
                 <div class="field-row">
-                    <div class="field"><label for="leftPanelInterval">Intervalle (ms)</label><input type="number" id="leftPanelInterval" value="{{expr:16}}" min="0" step="1000"></div>
+                    <div class="field"><label for="leftPanelInterval">Intervalle (ms) <span class="help" tabindex="0" data-tip="Temps entre deux apparitions du panneau. 60000 ms = 1 minute ; 0 = toujours affiché.">?</span></label><input type="number" id="leftPanelInterval" value="{{expr:16}}" min="0" step="1000"></div>
                     <div class="field"><label for="leftPanelDuration">Durée affichage (ms)</label><input type="number" id="leftPanelDuration" value="{{expr:17}}" min="0" step="1000"></div>
-                    <div class="field"><label for="leftPanelFirstDelay">Premier délai (ms)</label><input type="number" id="leftPanelFirstDelay" value="{{expr:18}}" min="0" step="1000"></div>
+                    <div class="field"><label for="leftPanelFirstDelay">Premier délai (ms) <span class="help" tabindex="0" data-tip="Attente avant la toute première apparition, après l'ouverture de la scène dans OBS.">?</span></label><input type="number" id="leftPanelFirstDelay" value="{{expr:18}}" min="0" step="1000"></div>
                     <div class="field"><label for="leftPanelTimerColor">Couleur minuteur</label><input type="color" id="leftPanelTimerColor" value="{{expr:19}}"></div>
                 </div>
         </div>
@@ -153,7 +153,7 @@
                 <div class="field-row" style="margin-top:var(--space-3);">
                     <div class="field"><label for="bottomBarInterval">Intervalle (ms)</label><input type="number" id="bottomBarInterval" value="{{expr:25}}" min="0" step="1000"></div>
                     <div class="field"><label for="bottomBarDuration">Durée affichage (ms)</label><input type="number" id="bottomBarDuration" value="{{expr:26}}" min="0" step="1000"></div>
-                    <div class="field"><label for="bottomBarFirstDelay">Premier délai (ms)</label><input type="number" id="bottomBarFirstDelay" value="{{expr:27}}" min="0" step="1000"></div>
+                    <div class="field"><label for="bottomBarFirstDelay">Premier délai (ms) <span class="help" tabindex="0" data-tip="Attente avant la toute première apparition, après l'ouverture de la scène dans OBS.">?</span></label><input type="number" id="bottomBarFirstDelay" value="{{expr:27}}" min="0" step="1000"></div>
                 </div>
         </div>
 
@@ -202,7 +202,7 @@
                     <div class="field"><label for="statsAnimationDuration">Durée animation compteurs (ms)</label><input type="number" id="statsAnimationDuration" value="{{expr:42}}" min="0" step="100"></div>
                     <div class="field"><label for="statsUpdateInterval">Intervalle de mise à jour (ms)</label><input type="number" id="statsUpdateInterval" value="{{expr:43}}" min="0" step="1000"></div>
                 </div>
-                <label class="checkbox-row" style="margin-top:var(--space-3);"><input type="checkbox" id="statsSimulateData" {{expr:44}}> Simuler des données (tests, sans vrai stream)</label>
+                <label class="checkbox-row" style="margin-top:var(--space-3);"><input type="checkbox" id="statsSimulateData" {{expr:44}}> Simuler des données (tests, sans vrai stream) <span class="help" tabindex="0" data-tip="Affiche de faux chiffres dans les statistiques pour régler leur apparence hors live. À désactiver avant de streamer.">?</span></label>
         </div>
 
         <div class="settings-section card" id="section-app">
@@ -215,6 +215,11 @@
                     </div>
                 </div>
                 <p class="hint" style="margin-top:calc(-1 * var(--space-2));">La page se recharge dans la nouvelle langue. Les textes que tu as personnalisés ne changent pas.</p>
+                <div class="field-row" style="margin-bottom:var(--space-4);">
+                    <a class="btn btn-sm" href="/welcome">Relancer l'assistant de premier lancement</a>
+                    <a class="btn btn-sm btn-ghost" href="/welcome#logo">Changer le logo des overlays</a>
+                    <button type="button" class="btn btn-sm btn-ghost" id="btnShowGettingStarted">Réafficher les premiers pas</button>
+                </div>
                 <div id="autostartUnavailable" class="hint">Disponible dans l'app ElectrumOverlay pour Windows.</div>
                 <div id="autostartForm" hidden>
                     <label class="checkbox-row"><input type="checkbox" id="autostartEnabled"> Lancer ElectrumOverlay au démarrage de Windows</label>
@@ -950,7 +955,13 @@
             }
             btn.disabled = false;
         });
-    </script>
+
+        // Réaffiche la carte « Premiers pas » du tableau de bord.
+        document.getElementById('btnShowGettingStarted').addEventListener('click', () => {
+            fetch('/api/app/getting-started', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ hidden: false }) })
+                .then(() => { location.href = '/app'; });
+        });
+</script>
 {{shell:close}}
 </body>
 </html>

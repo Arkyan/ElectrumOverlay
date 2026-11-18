@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <title>Bienvenue - ElectrumOverlay</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="/css/app-v3.css">
+    <style>
+        .welcome { max-width: 880px; }
+        .welcome h1 { font-size: 26px; }
+        .choice-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 12px; }
+        .choice {
+            display: flex; flex-direction: column; gap: 6px; text-align: left; cursor: pointer;
+            padding: 14px 16px; border-radius: var(--radius); border: 1.5px solid var(--border);
+            background: var(--surface-elevated); color: var(--text); font-family: inherit;
+            transition: border-color 0.12s, background 0.12s;
+        }
+        .choice:hover { border-color: var(--border-strong); }
+        .choice.selected { border-color: var(--accent); background: rgba(var(--accent-rgb), 0.1); }
+        .choice strong { font-size: 14px; }
+        .choice span { font-size: 12.5px; color: var(--text-muted); line-height: 1.45; }
+        .choice .emoji { font-size: 22px; }
+        .swatch-row { display: flex; gap: 6px; }
+        .swatch-row i { width: 26px; height: 26px; border-radius: 6px; display: block; }
+        .logo-preview { width: 72px; height: 72px; object-fit: contain; border-radius: 10px; background: var(--surface-sunken); border: 1px solid var(--border); }
+        .step-label { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); margin-bottom: 4px; }
+    </style>
+</head>
+<body>
+{{shell:open}}
+<div class="page welcome">
+    <div class="step-label">Bienvenue</div>
+    <h1>Préparons ton overlay</h1>
+    <p class="hint" style="margin-top:0;">Quelques choix rapides : tout reste modifiable ensuite dans les Paramètres et l'éditeur de scène.</p>
+
+    <section class="card">
+        <h2 class="card-title">Langue</h2>
+        <div class="choice-grid" data-group="language">
+            <button type="button" class="choice" data-value="fr"><strong>Français</strong><span>Interface et textes des overlays en français</span></button>
+            <button type="button" class="choice" data-value="en"><strong>English</strong><span>Interface and overlay texts in English</span></button>
+        </div>
+    </section>
+
+    <section class="card">
+        <h2 class="card-title">Ton stream <span class="help" tabindex="0" data-tip="Prépare une disposition de départ adaptée. Tu peux tout changer ensuite dans l'éditeur de scène.">?</span></h2>
+        <div class="choice-grid" data-group="streamType">
+            <button type="button" class="choice" data-value="gaming"><span class="emoji">🎮</span><strong>Jeux vidéo</strong><span>Overlay discret autour de ton jeu, chat sur le côté.</span></button>
+            <button type="button" class="choice" data-value="chatting"><span class="emoji">💬</span><strong>Discussion</strong><span>Le chat en grand sur la scène En direct.</span></button>
+            <button type="button" class="choice" data-value="creative"><span class="emoji">🎨</span><strong>Créatif</strong><span>Dessin, musique, création : l'overlay laisse la place à ton travail.</span></button>
+            <button type="button" class="choice" data-value="driving"><span class="emoji">🚚</span><strong>Simulation de conduite</strong><span>ETS2 / ATS : panneau Trucky avec ton trajet et tes stats VTC.</span></button>
+        </div>
+        <div class="field-row" id="truckyRow" hidden style="margin-top:var(--space-4);">
+            <div class="field">
+                <label for="truckyId">ID utilisateur Trucky (facultatif)</label>
+                <input type="text" id="truckyId" placeholder="Visible dans l'URL de ton profil : truckyapp.com/user/TON_ID">
+            </div>
+        </div>
+    </section>
+
+    <section class="card">
+        <h2 class="card-title">Couleurs</h2>
+        <div class="choice-grid" data-group="theme">
+            <button type="button" class="choice" data-value=""><span class="swatch-row"><i style="background:#a855f7"></i><i style="background:#8b45f6"></i><i style="background:#1e1b4b"></i></span><strong>Violet néon</strong><span>Le thème par défaut</span></button>
+            <button type="button" class="choice" data-value="Bleu Cyber"><span class="swatch-row"><i style="background:#3b82f6"></i><i style="background:#2563eb"></i><i style="background:#0f172a"></i></span><strong>Bleu cyber</strong><span>Frais et lumineux</span></button>
+            <button type="button" class="choice" data-value="Vert Émeraude"><span class="swatch-row"><i style="background:#10b981"></i><i style="background:#059669"></i><i style="background:#0f172a"></i></span><strong>Vert émeraude</strong><span>Calme et naturel</span></button>
+            <button type="button" class="choice" data-value="Rouge Braise"><span class="swatch-row"><i style="background:#ef4444"></i><i style="background:#dc2626"></i><i style="background:#1c1917"></i></span><strong>Rouge braise</strong><span>Intense et énergique</span></button>
+            <button type="button" class="choice" data-value="custom"><span class="swatch-row"><input type="color" id="customColor" value="#f59e0b" style="width:60px;height:26px;padding:0;border:0;background:none;"></span><strong>Ma couleur</strong><span>Choisis ta couleur principale</span></button>
+        </div>
+    </section>
+
+    <section class="card">
+        <h2 class="card-title">Animations d'arrière-plan</h2>
+        <div class="choice-grid" data-group="animations">
+            <button type="button" class="choice" data-value="full"><strong>Animées</strong><span>Particules, étoiles et météores</span></button>
+            <button type="button" class="choice" data-value="light"><strong>Discrètes</strong><span>Quelques particules et étoiles</span></button>
+            <button type="button" class="choice" data-value="none"><strong>Aucune</strong><span>Fonds fixes, le plus sobre</span></button>
+        </div>
+    </section>
+
+    <section class="card">
+        <h2 class="card-title">Ton logo</h2>
+        <div class="field-row" style="align-items:center; gap:var(--space-4);">
+            <img class="logo-preview" id="logoPreview" src="/logo.png" alt="">
+            <div>
+                <p class="hint" style="margin:0 0 var(--space-2);">Affiché sur les écrans de démarrage, de pause et de fin (logo rebondissant). Facultatif : sans logo, celui d'ElectrumOverlay est utilisé.</p>
+                <button type="button" class="btn btn-sm" id="btnLogo">Choisir une image…</button>
+                <button type="button" class="btn btn-sm btn-ghost" id="btnLogoReset">Retirer</button>
+                <input type="file" id="logoFile" accept="image/*" hidden>
+            </div>
+        </div>
+    </section>
+
+    <div class="field-row" style="justify-content:flex-end; margin-top:var(--space-2);">
+        <div class="msg" id="msg" role="status" style="margin:0 auto 0 0;"></div>
+        <button type="button" class="btn btn-primary" id="btnContinue">Continuer : connecter Twitch</button>
+    </div>
+</div>
+
+<script>
+(function () {
+    const choices = { language: '{{expr:0}}', streamType: 'gaming', theme: '', animations: 'light' };
+    const msg = document.getElementById('msg');
+    // « Retirer » n'apparaît que s'il y a déjà un logo personnalisé.
+    if ('{{expr:1}}' !== '1') document.getElementById('btnLogoReset').hidden = true;
+
+    function select(group, value) {
+        choices[group] = value;
+        document.querySelectorAll('[data-group="' + group + '"] .choice').forEach((b) => b.classList.toggle('selected', b.dataset.value === value));
+        if (group === 'streamType') document.getElementById('truckyRow').hidden = value !== 'driving';
+    }
+    Object.entries(choices).forEach(([group, value]) => select(group, value));
+    document.querySelectorAll('[data-group]').forEach((grid) => {
+        grid.addEventListener('click', (e) => {
+            const choice = e.target.closest('.choice');
+            if (!choice) return;
+            select(grid.dataset.group, choice.dataset.value);
+            // La langue s'applique tout de suite : la page se recharge traduite.
+            if (grid.dataset.group === 'language') {
+                fetch('/api/app/language', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ language: choice.dataset.value }) })
+                    .then(() => location.reload());
+            }
+        });
+    });
+    document.getElementById('customColor').addEventListener('input', () => select('theme', 'custom'));
+
+    document.getElementById('btnLogo').addEventListener('click', () => document.getElementById('logoFile').click());
+    document.getElementById('logoFile').addEventListener('change', async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const formData = new FormData();
+        formData.append('file', file);
+        const data = await fetch('/api/branding/logo', { method: 'POST', body: formData }).then((r) => r.json());
+        if (data.error) { msg.textContent = data.error; msg.className = 'msg error'; return; }
+        document.getElementById('logoPreview').src = '/logo.png?t=' + Date.now();
+        document.getElementById('btnLogoReset').hidden = false;
+    });
+    document.getElementById('btnLogoReset').addEventListener('click', async () => {
+        await fetch('/api/branding/logo', { method: 'DELETE' });
+        document.getElementById('logoPreview').src = '/logo.png?t=' + Date.now();
+        document.getElementById('btnLogoReset').hidden = true;
+    });
+
+    document.getElementById('btnContinue').addEventListener('click', async (e) => {
+        e.currentTarget.disabled = true;
+        const body = {
+            language: choices.language,
+            streamType: choices.streamType,
+            theme: choices.theme === 'custom' ? '' : choices.theme,
+            color: choices.theme === 'custom' ? document.getElementById('customColor').value : '',
+            animations: choices.animations,
+            truckyId: document.getElementById('truckyId').value
+        };
+        try {
+            const data = await fetch('/api/welcome', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).then((r) => r.json());
+            if (data.error) throw new Error(data.error);
+            location.href = data.next;
+        } catch (error) {
+            msg.textContent = error.message; msg.className = 'msg error';
+            e.currentTarget.disabled = false;
+        }
+    });
+})();
+</script>
+{{shell:close}}
+</body>
+</html>

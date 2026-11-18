@@ -25,6 +25,15 @@ pub fn normalize_newlines(text: &str) -> std::borrow::Cow<'_, str> {
     if text.contains('\r') { std::borrow::Cow::Owned(text.replace("\r\n", "\n")) } else { std::borrow::Cow::Borrowed(text) }
 }
 
+/// Premier lancement : langue, type de stream, couleurs, animations, logo.
+pub fn welcome(config: &Value, has_logo: bool) -> String {
+    let language = crate::i18n::language_of(config);
+    shell::wrap(
+        &fill(template!("welcome"), &[language.to_string(), if has_logo { "1".into() } else { String::new() }]),
+        "",
+    )
+}
+
 /// Page des widgets personnalisés : import, liste, et documentation dans la langue de l'interface.
 pub fn widgets(language: &str) -> String {
     let doc = if language == "en" { template!("widgets-doc-en") } else { template!("widgets-doc-fr") };

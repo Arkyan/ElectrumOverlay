@@ -498,3 +498,34 @@ input:focus, textarea:focus, select:focus { border-color: var(--accent); box-sha
 .widget-list .widget-text { flex: 1; min-width: 0; }
 .widget-list .widget-text strong { display: block; font-size: 14px; }
 .widget-list .widget-text span { font-size: 12.5px; color: var(--text-muted); }
+
+/* Premiers pas (tableau de bord) */
+.gs-progress { height: 6px; border-radius: 99px; background: var(--surface-sunken); overflow: hidden; margin-bottom: var(--space-3); }
+.gs-progress-fill { height: 100%; width: 0; background: var(--accent); transition: width 0.4s ease; }
+.gs-steps { list-style: none; margin: 0; padding: 0; }
+.gs-steps li { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--border); }
+.gs-steps li:last-child { border-bottom: none; padding-bottom: 0; }
+.gs-check { flex: 0 0 24px; height: 24px; border-radius: 50%; border: 2px solid var(--border-strong); display: inline-flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; }
+.gs-steps li.done .gs-check { background: var(--accent); border-color: var(--accent); color: var(--accent-text); }
+.gs-steps li.done .gs-text { opacity: 0.55; }
+.gs-text { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.gs-text strong { font-size: 14px; }
+.gs-text span { font-size: 12.5px; color: var(--text-muted); }
+.gs-action { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+
+/* Bulles d'aide « ? » : <span class="help" tabindex="0" data-tip="…">?</span> */
+.help {
+    position: relative; display: inline-flex; align-items: center; justify-content: center; vertical-align: middle;
+    width: 16px; height: 16px; margin-left: 6px; border-radius: 50%; cursor: help;
+    font-size: 11px; font-weight: 700; line-height: 1; color: var(--text-muted);
+    border: 1px solid var(--border-strong); background: var(--surface-elevated);
+}
+.help:hover, .help:focus { color: var(--accent-text); background: var(--accent); border-color: var(--accent); outline: none; }
+.help::after {
+    content: attr(data-tip); position: absolute; left: 50%; bottom: calc(100% + 8px); transform: translateX(-50%);
+    width: max-content; max-width: 300px; padding: 9px 12px; border-radius: var(--radius-sm);
+    background: #0b0c10; border: 1px solid var(--border-strong); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+    font-size: 12.5px; font-weight: 400; line-height: 1.5; color: var(--text); text-align: left; white-space: normal; text-transform: none; letter-spacing: 0;
+    opacity: 0; pointer-events: none; transition: opacity 0.12s; z-index: 60;
+}
+.help:hover::after, .help:focus::after { opacity: 1; }

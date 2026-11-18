@@ -38,6 +38,7 @@ Application Windows qui gère tes overlays de stream Twitch : alertes en temps r
 - Quatre scènes prêtes à l'emploi (Démarrage, En direct, Pause, Fin) et autant de scènes personnalisées que tu veux
 
 ### 🎨 Personnalisation
+- **Pour tous les streams** : jeux, discussion, créatif ou simulation de conduite ; ton logo et tes couleurs sur tous les écrans
 - **Widgets personnalisés** : crée tes propres éléments en HTML/CSS/JS (événements Twitch, stats, thème), importe-les et place-les dans l'éditeur ; doc complète dans l'app (page Widgets)
 - **Profil automatique selon le jeu** : la catégorie Twitch change, le thème et les scènes suivent
 - Profils de thèmes (plusieurs prêts à l'emploi), couleurs par page, animations (particules, étoiles, météores, logo DVD), alertes, chat, panneaux
@@ -94,7 +95,11 @@ Application Windows qui gère tes overlays de stream Twitch : alertes en temps r
 
 ## 🧙 Premier lancement
 
-L'assistant (**Configuration** dans le menu) comporte trois parties indépendantes.
+Au premier lancement, un écran de bienvenue te fait choisir la langue, ton type de stream (jeux, discussion, créatif, simulation de conduite), les couleurs, les animations et ton logo. Tout reste modifiable ensuite (**Paramètres › Application › Relancer l'assistant**).
+
+Le tableau de bord affiche ensuite une carte **Premiers pas** (style, Twitch, OBS, alerte de test, scène) qui se coche toute seule au fur et à mesure. Les réglages moins évidents ont une bulle **?** qui les explique.
+
+Vient ensuite l'assistant Twitch (**Configuration** dans le menu), en trois parties indépendantes.
 
 ### 1. Application Twitch
 1. Crée une application sur [dev.twitch.tv/console/apps](https://dev.twitch.tv/console/apps) :
@@ -113,6 +118,10 @@ Couleur principale des overlays, textes du bandeau du bas, et TruckyApp (optionn
 
 ## 📹 Ajouter les overlays dans OBS
 
+### Automatiquement
+Dans OBS : **Outils › Paramètres du serveur WebSocket**, coche **Activer le serveur WebSocket** et copie le mot de passe (**Afficher les infos de connexion**). Puis, sur le tableau de bord, clique sur **Configurer OBS automatiquement** : l'app crée les scènes (Démarrage, En direct, Pause, Fin et tes scènes personnalisées) et y ajoute chaque overlay en source navigateur 1920×1080. Tes scènes existantes sont gardées, et relancer la configuration ne crée pas de doublons.
+
+### À la main
 Le tableau de bord liste toutes tes scènes avec un bouton **Copier**. Ajoute chaque URL dans OBS comme **source navigateur** en 1920×1080 :
 
 | Scène | URL |
