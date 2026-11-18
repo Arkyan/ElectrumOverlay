@@ -16,6 +16,7 @@ pub fn router() -> Router<AppState> {
     Router::new()
         .route("/app", get(app_home))
         .route("/tests", get(|| async { Html(pages::tests()) }))
+        .route("/widgets", get(|axum::extract::State(state): axum::extract::State<AppState>| async move { Html(pages::widgets(state.language())) }))
         .route("/logs", get(logs_page))
         .route("/api/logs", get(logs_api))
         .route("/scene-editor", get(scene_editor))

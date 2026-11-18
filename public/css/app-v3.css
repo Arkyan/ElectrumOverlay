@@ -476,3 +476,25 @@ input:focus, textarea:focus, select:focus { border-color: var(--accent); box-sha
 .share-stats strong { display: block; font-size: 20px; }
 .share-stats span { font-size: 12px; color: var(--text-muted); }
 .drop-hint { border: 1.5px dashed rgba(var(--accent-rgb), 0.5); border-radius: var(--radius); }
+
+/* Documentation (page Widgets) */
+.doc h3 { font-size: 15px; margin: var(--space-6) 0 var(--space-2); color: var(--text); }
+.doc h3:first-child { margin-top: 0; }
+.doc p, .doc li { font-size: 14px; line-height: 1.6; color: var(--text-muted); }
+.doc ul, .doc ol { padding-left: 20px; margin: 0 0 var(--space-3); }
+.doc pre {
+    background: var(--surface-sunken); border: 1px solid var(--border); border-radius: var(--radius-sm);
+    padding: 12px 14px; overflow-x: auto; font: 12.5px/1.55 "Cascadia Mono", Consolas, monospace; color: var(--text);
+    margin: 0 0 var(--space-4);
+}
+.doc pre code { background: none; padding: 0; font-size: inherit; }
+.doc .table td, .doc .table th { font-size: 13px; vertical-align: top; }
+.doc .table td:first-child { white-space: nowrap; }
+.widget-list .widget-row { display: flex; align-items: center; gap: 14px; padding: 12px 0; border-bottom: 1px solid var(--border); }
+.widget-list .widget-row:last-child { border-bottom: none; }
+.widget-list .widget-icon { flex: 0 0 38px; height: 38px; border-radius: 9px; display: flex; align-items: center; justify-content: center;
+    background: rgba(var(--accent-rgb), 0.12); color: color-mix(in srgb, var(--accent) 65%, white); }
+.widget-list .widget-icon svg { width: 20px; height: 20px; }
+.widget-list .widget-text { flex: 1; min-width: 0; }
+.widget-list .widget-text strong { display: block; font-size: 14px; }
+.widget-list .widget-text span { font-size: 12.5px; color: var(--text-muted); }

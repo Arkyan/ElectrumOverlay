@@ -56,7 +56,8 @@
         goal: 'Objectif Twitch',
         poll: 'Sondage',
         prediction: 'Prédiction',
-        hypetrain: 'Hype train'
+        hypetrain: 'Hype train',
+        widget: 'Widget'
     };
 
     // Cartes Twitch (objectif, sondage, prédiction, hype train) : hauteur = contenu, seule la
@@ -64,6 +65,7 @@
     const TWITCH_CARD_TYPES = ['goal', 'poll', 'prediction', 'hypetrain'];
 
     function customLabel(el) {
+        if (el.dataset.customType === 'widget' && el.dataset.widgetName) return el.dataset.widgetName;
         return CUSTOM_TYPE_LABELS[el.dataset.customType] || 'Texte';
     }
 
@@ -141,6 +143,10 @@
             /* Cartes Twitch (objectif, sondage...) : invisibles tant que rien n'est en cours sur
                Twitch — en édition, un exemple est affiché (fillWidgetPreview) pour les placer. */
             .tw-widget.tw-idle { display: block !important; }
+            /* Widgets personnalisés : en édition, le cadre ne capte pas la souris (sinon impossible
+               de déplacer l'élément) et reste repérable même si le widget n'affiche rien. */
+            .custom-widget iframe { pointer-events: none; }
+            .custom-widget { background: repeating-linear-gradient(45deg, rgba(34, 211, 238, 0.05) 0 10px, transparent 10px 20px); }
             [data-scene-alert-zone]:not(.show) .alert-box { display: none !important; }
             [data-scene-alert-zone]:not(.show)::after {
                 content: ${JSON.stringify(tr("Zone d'alerte — l'alerte s'y ajuste au plus grand"))};
@@ -860,7 +866,11 @@
                 showMovement: isCustom ? el.dataset.propShowMovement === '1' : undefined,
                 showModifiers: isCustom ? el.dataset.propShowModifiers === '1' : undefined,
                 showArrows: isCustom ? el.dataset.propShowArrows === '1' : undefined,
-                showMouse: isCustom ? el.dataset.propShowMouse === '1' : undefined
+                showMouse: isCustom ? el.dataset.propShowMouse === '1' : undefined,
+                // Widget personnalisé : identifiant et réglages (panneau de propriétés généré
+                // depuis son widget.json).
+                widget: isCustom ? (el.dataset.propWidget || '') : undefined,
+                settings: isCustom && el.dataset.propSettings ? JSON.parse(el.dataset.propSettings) : undefined
             };
         });
 

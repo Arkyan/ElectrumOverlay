@@ -77,6 +77,7 @@ $env:ELECTRUM_CONFIG_DIR = "C:\chemin\vers\une\copie\config"
 | Release (`cargo xtask release` : installateur, `latest.json`, `latest.yml` pour la bascule Electron, plugin Stream Deck) | ✅ `latest.yml` vérifié avec electron-updater |
 | Plugin Stream Deck en Rust (exécutable natif, sans Node) | ✅ testé contre un faux Stream Deck (à valider sur un vrai) |
 | Retrait du code Node/Electron et de npm | ✅ |
+| Widgets personnalisés (page Widgets, `public/js/electrum-widget.js`, élément `widget`) | ✅ testé |
 | Couleur de l'app = couleur principale des overlays du profil actif (`/css/accent.css`) | ✅ testé |
 | Tableau de bord : derniers événements (follow, sub, bits, raid) avec « Rejouer » | ✅ testé |
 | Objectifs, sondages, prédictions, hype train (EventSub, scopes facultatifs) + éléments de l'éditeur de scène | ✅ testé contre un faux Twitch (à valider avec un vrai compte) |

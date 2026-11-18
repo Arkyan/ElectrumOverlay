@@ -353,6 +353,7 @@
             spotify: svgIcon('<path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/>'),
             keys: svgIcon('<rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M8 14h8"/>'),
             infoPanel: svgIcon('<path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"/><path d="M15 18H9"/><path d="M19 18h2a1 1 0 0 0 1-1v-3.6a1 1 0 0 0-.2-.6l-3.5-4.4A1 1 0 0 0 17.5 8H14"/><circle cx="17" cy="18" r="2"/><circle cx="7" cy="18" r="2"/>'),
+            widget: svgIcon('<path d="M10 3H5a2 2 0 0 0-2 2v5h2.5a2 2 0 1 1 0 4H3v5a2 2 0 0 0 2 2h5v-2.5a2 2 0 1 1 4 0V21h5a2 2 0 0 0 2-2v-5h-2.5a2 2 0 1 1 0-4H21V5a2 2 0 0 0-2-2h-5v2.5a2 2 0 1 1-4 0z"/>'),
             builtin: svgIcon('<path d="m12 2 9 5-9 5-9-5z"/><path d="m3 12 9 5 9-5"/>'),
             sceneBuiltin: svgIcon('<rect x="2" y="4" width="20" height="14" rx="2"/><path d="M8 21h8M12 18v3"/>'),
             sceneCustom: svgIcon('<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M12 8v8M8 12h8"/>'),
@@ -570,6 +571,15 @@
             ] }
         ];
 
+        // Widgets personnalisés installés (page Widgets) : id -> widget.json.
+        let WIDGETS = {};
+        function loadWidgets() {
+            return fetch('/api/widgets').then((r) => r.json()).then(({ widgets }) => {
+                WIDGETS = Object.fromEntries((widgets || []).map((w) => [w.id, w]));
+            }).catch(() => {});
+        }
+        loadWidgets();
+
         function renderAddMenu(filter) {
             const q = (filter || '').trim().toLowerCase();
             const html = ELEMENT_CATALOG.map(({ group, items }) => {
@@ -581,7 +591,19 @@
                         <span class="se-menu-text"><strong>${esc(name)}</strong><span data-desc="${esc(desc)}">${esc(desc)}</span></span>
                     </button>`).join('');
             }).join('');
-            document.getElementById('addMenuList').innerHTML = html || '<p class="se-menu-empty">Aucun élément ne correspond.</p>';
+            // Mes widgets : widgets personnalisés installés.
+            const widgets = Object.values(WIDGETS).filter((w) => !q || (w.name + ' ' + (w.description || '')).toLowerCase().includes(q));
+            const widgetsHtml = '<div class="se-menu-group">Mes widgets</div>'
+                + widgets.map((w) => `
+                    <button type="button" class="se-menu-item" data-type="widget" data-widget="${esc(w.id)}">
+                        <span class="se-type-icon">${ICONS.widget}</span>
+                        <span class="se-menu-text"><strong>${esc(w.name)}</strong><span>${esc(w.description || (w.author ? 'Par ' + w.author : 'Widget personnalisé'))}</span></span>
+                    </button>`).join('')
+                + `<a class="se-menu-item" href="/widgets" style="text-decoration:none;">
+                        <span class="se-type-icon">+</span>
+                        <span class="se-menu-text"><strong>${Object.keys(WIDGETS).length ? 'Gérer mes widgets' : 'Importer un widget'}</strong><span>Crée ou importe tes propres éléments</span></span>
+                    </a>`;
+            document.getElementById('addMenuList').innerHTML = (html + (q && !widgets.length ? '' : widgetsHtml)) || '<p class="se-menu-empty">Aucun élément ne correspond.</p>';
             updateUniqueTypes();
         }
 
@@ -687,6 +709,7 @@
                 addMenu.style.maxHeight = Math.max(220, Math.min(620, top - titlebar - 16)) + 'px';
                 addMenuSearch.value = '';
                 renderAddMenu('');
+                loadWidgets().then(() => { if (addMenu.classList.contains('open')) renderAddMenu(addMenuSearch.value); });
                 addMenu.querySelector('.se-menu-list').scrollTop = 0;
                 addMenuSearch.focus();
             }
@@ -707,6 +730,7 @@
             const res = await callApi('/api/profiles/' + ACTIVE_PROFILE_ID + '/custom-text/' + currentKey,
                 jsonBody('POST', {
                     type: btn.dataset.type,
+                    widgetId: btn.dataset.widget,
                     top: 30 + Math.random() * 25,
                     left: 30 + Math.random() * 25
                 }));
@@ -968,7 +992,22 @@
             // plus attrapable à la souris dans l'aperçu, seulement sélectionnable dans la liste des
             // sources. Ce bouton le ramène toujours à une position sûrement visible.
             const recenterBtn = `<button type="button" class="btn btn-ghost btn-sm" id="btnRecenterEl" title="Ramène l'élément au centre du cadre s'il a été sorti de l'écran">Recentrer</button>`;
-            if (item.isCustom) {
+            if (item.isCustom && item.customType === 'widget') {
+                const manifest = WIDGETS[item.widget];
+                const view = { ...item };
+                const specs = ((manifest && manifest.settings) || []).map((s) => {
+                    view['setting:' + s.key] = (item.settings || {})[s.key];
+                    const kind = { checkbox: 'check', textarea: 'textarea', number: 'number', color: 'color', select: 'select' }[s.type] || 'text';
+                    return { prop: 'setting:' + s.key, label: s.label || s.key, kind, def: s.default ?? (kind === 'color' ? '#a855f7' : ''),
+                        min: s.min ?? '', max: s.max ?? '', step: s.step ?? 'any', placeholder: s.placeholder || '',
+                        options: (s.options || []).map((o) => ({ value: String(o.value), label: String(o.label) })) };
+                });
+                fields = specs.map((spec) => propFieldHtml(spec, view)).join('');
+                note = manifest
+                    ? '<p class="hint">' + esc(manifest.name) + ' ' + esc(manifest.version || '') + (manifest.author ? ' · ' + esc(manifest.author) : '') + '. Redimensionne le cadre pour régler sa taille. <a href="/widgets" target="_blank">Page Widgets</a></p>'
+                    : '<p class="hint">Widget « ' + esc(item.widget) + ' » introuvable : il a été supprimé. Réimporte-le depuis la page <a href="/widgets" target="_blank">Widgets</a>.</p>';
+                fields += `<div class="se-btn-row">${recenterBtn}</div>`;
+            } else if (item.isCustom) {
                 fields = (PROP_SPECS[item.customType] || []).map((spec) => propFieldHtml(spec, item)).join('');
                 if (item.customType === 'chat' || item.customType === 'chatTicker' || item.customType === 'alerts') {
                     note = '<p class="hint">Reprend les couleurs du thème de la scène (onglet Scène).</p>';
@@ -1128,6 +1167,14 @@
                 value = input.value;
             }
             const rawId = item.id.replace(/^custom:/, '');
+            if (input.dataset.prop.startsWith('setting:')) {
+                // Réglage d'un widget personnalisé : l'objet settings complet est renvoyé.
+                const settings = { ...(item.settings || {}), [input.dataset.prop.slice(8)]: value };
+                const saved = await callApi('/api/profiles/' + ACTIVE_PROFILE_ID + '/custom-text/' + currentKey + '/' + rawId,
+                    jsonBody('PATCH', { settings }));
+                if (saved) { item.settings = settings; toast('Enregistré.'); }
+                return;
+            }
             const res = await callApi('/api/profiles/' + ACTIVE_PROFILE_ID + '/custom-text/' + currentKey + '/' + rawId,
                 jsonBody('PATCH', { [input.dataset.prop]: value }));
             if (res) {

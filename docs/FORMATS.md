@@ -435,3 +435,12 @@ Zip contenant :
 
 L'import accepte ce zip et l'ancien `.electrumprofile.json` (sons/vidéos en base64). La version
 Electron n'importe que l'ancien format.
+
+## Widgets personnalisés (`<config>/widgets/<id>/`, version Rust)
+
+Un dossier par widget : `widget.json` (manifeste normalisé à l'installation : `id`, `name`,
+`version`, `author`, `description`, `entry`, `size`, `settings`) et ses fichiers. Élément de scène
+correspondant : `type: "widget"`, `widgetId`, `name`, `settings` (objet plat), `width`, `height`.
+Inclus dans les sauvegardes et dans le `.zip` d'un profil partagé (`widgets/<id>/...`).
+Documentation pour les auteurs de widgets : page Widgets de l'app
+(`crates/electrum-server/templates/pages/widgets-doc-*.html`).

@@ -1,0 +1,55 @@
+{
+  "id": "exemple-dernier-follow",
+  "name": "Exemple : dernier follow",
+  "version": "1.0.0",
+  "author": "ElectrumOverlay",
+  "description": "Affiche le dernier follower et le nombre de follows du live. Point de départ pour créer ton propre widget.",
+  "entry": "widget.html",
+  "size": {
+    "width": 24,
+    "height": 9
+  },
+  "settings": [
+    {
+      "key": "title",
+      "label": "Titre",
+      "type": "text",
+      "default": "Dernier follow"
+    },
+    {
+      "key": "fontSize",
+      "label": "Taille du texte (%)",
+      "type": "number",
+      "default": 100,
+      "min": 50,
+      "max": 300,
+      "step": 10
+    },
+    {
+      "key": "showCount",
+      "label": "Afficher le nombre de follows",
+      "type": "checkbox",
+      "default": true
+    },
+    {
+      "key": "animation",
+      "label": "Animation",
+      "type": "select",
+      "default": "pop",
+      "options": [
+        {
+          "value": "pop",
+          "label": "Rebond"
+        },
+        {
+          "value": "fade",
+          "label": "Fondu"
+        },
+        {
+          "value": "none",
+          "label": "Aucune"
+        }
+      ]
+    }
+  ]
+}

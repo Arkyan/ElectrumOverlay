@@ -14,6 +14,7 @@ pub mod paths;
 pub mod scene;
 pub mod store;
 pub mod time;
+pub mod widgets;
 
 pub use error::{Error, Result};
 pub use store::Store;

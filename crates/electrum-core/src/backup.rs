@@ -96,6 +96,7 @@ fn collect(paths: &ConfigPaths) -> Result<Vec<String>> {
         Ok(())
     }
     walk(&paths.profiles_dir, "profiles", &mut files)?;
+    walk(&crate::widgets::widgets_dir(paths), "widgets", &mut files)?;
     Ok(files)
 }
 
@@ -288,6 +289,11 @@ impl Backups {
         // sauvegarde « avant restauration »).
         if self.paths.profiles_dir.exists() {
             io(&self.paths.profiles_dir, fs::remove_dir_all(&self.paths.profiles_dir))?;
+        }
+        // Widgets personnalisés : remis comme dans la sauvegarde.
+        let widgets = crate::widgets::widgets_dir(&self.paths);
+        if widgets.exists() {
+            io(&widgets, fs::remove_dir_all(&widgets))?;
         }
         for (relative, print) in &files {
             if relative == "overlay-config.json" {
