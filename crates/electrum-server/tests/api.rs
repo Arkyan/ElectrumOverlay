@@ -729,6 +729,10 @@ async fn protection_contre_les_autres_sites_et_le_reseau() {
     assert_eq!(evil.status, StatusCode::FORBIDDEN);
     let no_origin = reply(&state, request("POST", "/api/setup/credentials", &[("host", "localhost:8080"), ("sec-fetch-site", "cross-site")], local)).await;
     assert_eq!(no_origin.status, StatusCode::FORBIDDEN);
+    // Corps en texte brut (formulaire d'un autre site sans en-tête Origin) : refusé.
+    let mut plain = request("POST", "/api/setup/credentials", &[("host", "localhost:8080"), ("content-length", "42")], local);
+    plain.headers_mut().insert("content-type", "text/plain".parse().unwrap());
+    assert_eq!(reply(&state, plain).await.status, StatusCode::UNSUPPORTED_MEDIA_TYPE);
     assert_eq!(state.store().config()["twitch"]["CLIENT_ID"], "test");
     // DNS rebinding : un nom de domaine qui pointe vers 127.0.0.1.
     let rebinding = reply(&state, request("GET", "/api/profiles", &[("host", "evil.example:8080")], local)).await;

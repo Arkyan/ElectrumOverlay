@@ -1,7 +1,8 @@
 //! Protection du serveur HTTP, qui n'a pas d'authentification :
 //! - depuis un autre appareil du réseau (OBS sur un second PC), seuls les overlays sont
 //!   accessibles, en lecture : pas de pages de gestion ni d'API qui modifient quoi que ce soit ;
-//! - un site web ouvert dans le navigateur ne peut rien modifier (en-tête `Origin` vérifié), et un
+//! - un site web ouvert dans le navigateur ne peut rien modifier (en-tête `Origin` vérifié, corps
+//!   JSON ou fichier exigé), et un
 //!   nom de domaine qui pointerait vers 127.0.0.1 (« DNS rebinding ») est refusé (`Host` vérifié).
 
 use axum::extract::{ConnectInfo, Request};
@@ -80,6 +81,14 @@ pub async fn protect(request: Request, next: Next) -> Response {
         };
         if cross_site {
             return forbidden("Requête refusée : elle ne vient pas d'ElectrumOverlay");
+        }
+        // Un corps doit être du JSON (ou un fichier envoyé) : un formulaire ou du texte brut, que
+        // n'importe quel site peut envoyer sans autorisation du navigateur, est refusé.
+        let has_body = header(header::CONTENT_LENGTH).is_some_and(|len| len.trim() != "0") || headers.contains_key(header::TRANSFER_ENCODING);
+        let content_type = header(header::CONTENT_TYPE).unwrap_or_default().to_ascii_lowercase();
+        if has_body && !content_type.starts_with("application/json") && !content_type.starts_with("multipart/form-data") {
+            return (StatusCode::UNSUPPORTED_MEDIA_TYPE, axum::Json(serde_json::json!({ "error": "Format de requête non pris en charge (JSON attendu)" })))
+                .into_response();
         }
     }
     next.run(request).await

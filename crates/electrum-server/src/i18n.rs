@@ -98,11 +98,22 @@ pub fn to_english(text: &str) -> String {
     translate(text, &[])
 }
 
-/// Zones d'une page à ne jamais traduire : les valeurs (`value="…"`, `data-value="…"`) et le
-/// contenu des `<textarea>`, qui sont des réglages de l'utilisateur ou des clés renvoyées au
+/// Balises (commentaires JS) autour des données de l'utilisateur insérées dans un script.
+pub const USER_DATA_START: &str = "/*user-data*/";
+pub const USER_DATA_END: &str = "/*end-user-data*/";
+
+/// Zones d'une page à ne jamais traduire : les valeurs (`value="…"`, `data-value="…"`), le
+/// contenu des `<textarea>` et les données balisées des scripts, qui sont des réglages de l'utilisateur ou des clés renvoyées au
 /// serveur. Les traduire les modifierait à l'enregistrement.
 fn protected_ranges(html: &str) -> Vec<(usize, usize)> {
     let mut ranges = Vec::new();
+    let mut from = 0;
+    while let Some(found) = html[from..].find(USER_DATA_START) {
+        let start = from + found;
+        let end = html[start..].find(USER_DATA_END).map_or(html.len(), |i| start + i);
+        ranges.push((start, end));
+        from = end;
+    }
     let mut from = 0;
     while let Some(found) = html[from..].find("value=\"") {
         let start = from + found + "value=\"".len();
@@ -183,6 +194,9 @@ mod tests {
         let en = page_to_english(html);
         assert!(en.contains(r#"value="Pause""#) && en.contains(r#"data-value="Bleu Cyber""#) && en.contains("<textarea>Pause</textarea>"), "{en}");
         assert!(!en.contains(">Bleu Cyber</button>"), "le texte affiché reste traduit : {en}");
+        let script = format!("<script>const PAUSE = {USER_DATA_START}[\"Fin\"]{USER_DATA_END}; say('Fin');</script>");
+        let en = page_to_english(&script);
+        assert!(en.contains("[\"Fin\"]") && !en.contains("say('Fin')"), "{en}");
     }
 
     #[test]

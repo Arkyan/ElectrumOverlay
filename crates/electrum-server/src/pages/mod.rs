@@ -120,7 +120,7 @@ pub fn logs(ws_port: &Value) -> String {
 
 /// `/stream-stats-html`.
 pub fn stream_stats(stats: &Value) -> String {
-    shell::wrap(&fill(template!("stream-stats"), &[js_json(stats)]), "/stream-stats-html")
+    shell::wrap(&fill(template!("stream-stats"), &[user_json(stats)]), "/stream-stats-html")
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -148,6 +148,12 @@ const SCENE_THEME_FIELDS: [(&str, &str, &str); 9] = [
 ];
 
 /// `/scene-editor` : édite toujours le profil actif.
+/// Données de l'utilisateur insérées dans un script (noms de scènes, messages de pause…) : balisées
+/// pour que la traduction anglaise n'y touche pas (voir `i18n::USER_DATA_START`).
+fn user_json(value: &Value) -> String {
+    format!("{}{}{}", crate::i18n::USER_DATA_START, js_json(value), crate::i18n::USER_DATA_END)
+}
+
 pub fn scene_editor(store: &Store) -> electrum_core::Result<String> {
     let active_id = store.active_profile_id().map(str::to_string);
     let display = store.effective_display(active_id.as_deref().unwrap_or_default())?;
@@ -194,16 +200,16 @@ pub fn scene_editor(store: &Store) -> electrum_core::Result<String> {
         &[
             CANVAS_W.into(),
             CANVAS_H.into(),
-            js_json(&json!(active_id)),
+            user_json(&json!(active_id)),
             js_json(&Value::Array(theme_fields)),
             CANVAS_W.into(),
             CANVAS_H.into(),
             js_json(&anim_defaults),
             js_json(&Value::Array(builtin)),
-            js_json(&scenes),
+            user_json(&scenes),
             js_json(&json!(builtin_keys)),
-            js_json(&themes),
-            js_json(&pause_lists),
+            user_json(&themes),
+            user_json(&pause_lists),
         ],
     ), "/scene-editor"))
 }
