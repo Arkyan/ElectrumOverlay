@@ -704,7 +704,7 @@
                 const THEME_NAMES = { starting: 'Démarrage', index: 'En direct', pause: 'Pause', ending: 'Fin' };
                 const swatches = Object.entries(THEME_NAMES).filter(([key]) => themes[key]).map(([key, label]) => {
                     const t = themes[key];
-                    const colors = [t.primary, t.secondary, t.accent].filter(Boolean).map((c) => '<i style="background:' + escHtml(c) + '"></i>').join('');
+                    const colors = [t.primary, t.secondary, t.accent].filter(Boolean).map((c) => (/^#[0-9a-f]{3,8}$/i.test(String(c)) ? '<i style="background:' + c + '"></i>' : '')).join('');
                     return '<div class="share-swatch"><span>' + colors + '</span>' + label + '</div>';
                 }).join('');
                 const customScenes = Object.entries(display.scenes || {}).filter(([key]) => !THEME_NAMES[key]).map(([, scene]) => scene.name || 'Scène');

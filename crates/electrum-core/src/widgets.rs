@@ -13,7 +13,6 @@ use crate::store::write_bytes_file;
 use crate::{Error, Result, Store};
 use serde_json::{json, Map, Value};
 use std::fs;
-use std::io::Read;
 use std::path::{Path, PathBuf};
 
 pub const MANIFEST: &str = "widget.json";
@@ -132,7 +131,7 @@ type WidgetFiles = (Value, Vec<(PathBuf, Vec<u8>)>);
 fn read_widget_zip(bytes: &[u8], prefix: Option<&str>) -> Result<Vec<WidgetFiles>> {
     let invalid = |e: zip::result::ZipError| Error::msg(format!("zip illisible ({e})"));
     let mut archive = zip::ZipArchive::new(std::io::Cursor::new(bytes)).map_err(invalid)?;
-    let names: Vec<String> = archive.file_names().map(str::to_string).collect();
+    let names: Vec<String> = archive.file_names().collect::<std::result::Result<Vec<_>, _>>().map_err(invalid)?.into_iter().map(|n| n.to_string()).collect();
     // Dossiers contenant un widget.json.
     let roots: Vec<String> = names
         .iter()
@@ -148,25 +147,21 @@ fn read_widget_zip(bytes: &[u8], prefix: Option<&str>) -> Result<Vec<WidgetFiles
     }
     let mut widgets = Vec::new();
     for root in roots {
-        let mut manifest_text = String::new();
-        archive
-            .by_name(&format!("{root}{MANIFEST}"))
-            .map_err(invalid)?
-            .read_to_string(&mut manifest_text)
-            .map_err(|e| Error::msg(e.to_string()))?;
+        let manifest_bytes = crate::read_capped(archive.by_name(&format!("{root}{MANIFEST}")).map_err(invalid)?, 1024 * 1024, MANIFEST)?;
+        let manifest_text = String::from_utf8_lossy(&manifest_bytes).to_string();
         let raw: Value = serde_json::from_str(&manifest_text).map_err(|e| Error::msg(format!("{MANIFEST} : {e}")))?;
         let manifest = normalize_manifest(&raw)?;
         let mut files = Vec::new();
         let mut total = 0u64;
         for name in names.iter().filter(|n| n.starts_with(&root) && !n.ends_with('/')) {
             let relative = safe_relative(&name[root.len()..]).ok_or_else(|| Error::msg(format!("chemin refusé dans le zip : {name}")))?;
-            let mut file = archive.by_name(name).map_err(invalid)?;
-            total += file.size();
-            if total > MAX_SIZE || files.len() >= MAX_FILES {
+            let file = archive.by_name(name).map_err(invalid)?;
+            if files.len() >= MAX_FILES {
                 return Err(Error::msg("widget trop volumineux (25 Mo et 300 fichiers au maximum)"));
             }
-            let mut data = Vec::new();
-            file.read_to_end(&mut data).map_err(|e| Error::msg(e.to_string()))?;
+            // Taille réelle une fois décompressé (celle annoncée par le zip peut mentir).
+            let data = crate::read_capped(file, MAX_SIZE - total, "widget (25 Mo au maximum)")?;
+            total += data.len() as u64;
             files.push((relative, data));
         }
         let entry = safe_relative(manifest["entry"].as_str().unwrap_or_default()).unwrap_or_default();
@@ -411,5 +406,10 @@ mod tests {
         let traversal = widget_zip("ok", &[("../../evil.txt", b"x")]);
         assert!(store.install_widget(&traversal).is_err());
         assert!(!dir.path().join("evil.txt").exists());
+        // « Zip bomb » : 30 Mo de zéros, quelques Ko une fois compressés.
+        let zeros = vec![0u8; 30 * 1024 * 1024];
+        let bomb = widget_zip("bombe", &[("gros.bin", &zeros)]);
+        assert!(bomb.len() < 1024 * 1024);
+        assert!(store.install_widget(&bomb).unwrap_err().to_string().contains("volumineux"));
     }
 }

@@ -39,12 +39,20 @@ impl Server {
     }
 
     fn request(&self, method: &str, path: &str, body: Option<&Value>) -> Result<Value, String> {
-        let address = (self.host.as_str(), self.port)
-            .to_socket_addrs()
-            .map_err(|e| e.to_string())?
-            .next()
-            .ok_or("adresse introuvable")?;
-        let mut stream = TcpStream::connect_timeout(&address, TIMEOUT).map_err(|e| e.to_string())?;
+        // « localhost » donne souvent ::1 puis 127.0.0.1 : on essaie chaque adresse, pas seulement
+        // la première.
+        let mut last_error = "adresse introuvable".to_string();
+        let mut connected = None;
+        for address in (self.host.as_str(), self.port).to_socket_addrs().map_err(|e| e.to_string())? {
+            match TcpStream::connect_timeout(&address, TIMEOUT) {
+                Ok(stream) => {
+                    connected = Some(stream);
+                    break;
+                }
+                Err(error) => last_error = error.to_string(),
+            }
+        }
+        let mut stream = connected.ok_or(last_error)?;
         stream.set_read_timeout(Some(TIMEOUT)).ok();
         stream.set_write_timeout(Some(TIMEOUT)).ok();
         let body = body.map(Value::to_string).unwrap_or_default();

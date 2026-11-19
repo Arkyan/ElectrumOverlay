@@ -98,16 +98,20 @@ async fn connexion_renouvellement_et_morceau_en_cours() {
     let saved = post_json(&state, "/api/spotify/credentials", json!({ "clientId": " spot-id ", "clientSecret": "spot-secret" })).await;
     assert_eq!(saved["redirectUri"], "http://127.0.0.1:8080/api/spotify/callback");
     let page = get_page(&state, "/integrations").await.1;
-    assert!(page.contains("/authorize?response_type=code&amp;client_id=spot-id&amp;redirect_uri=http%3A%2F%2F127.0.0.1%3A8080%2Fapi%2Fspotify%2Fcallback&amp;scope=user-read-currently-playing+user-read-playback-state&amp;show_dialog=true"));
+    assert!(page.contains("/authorize?response_type=code&amp;client_id=spot-id&amp;redirect_uri=http%3A%2F%2F127.0.0.1%3A8080%2Fapi%2Fspotify%2Fcallback&amp;scope=user-read-currently-playing+user-read-playback-state&amp;show_dialog=true&amp;state="));
 
     // Retours d'autorisation en erreur.
     let refused = get_page(&state, "/api/spotify/callback?error=access_denied").await.2.unwrap();
     assert_eq!(refused, "/integrations?error=Autorisation%20refus%C3%A9e%20sur%20Spotify.");
-    let failed = get_page(&state, "/api/spotify/callback?code=mauvais").await.2.unwrap();
+    // Retour d'autorisation sans le `state` de l'app (lien piégé) : refusé, rien n'est échangé.
+    let forged = get_page(&state, "/api/spotify/callback?code=bon").await.2.unwrap();
+    assert!(forged.starts_with("/integrations?error=Autorisation%20d"), "{forged}");
+    let with_state = |code: &str| format!("/api/spotify/callback?code={code}&state={}", state.oauth_state);
+    let failed = get_page(&state, &with_state("mauvais")).await.2.unwrap();
     assert_eq!(failed, "/integrations?error=%C3%89chec%20de%20la%20connexion%20%C3%A0%20Spotify.");
 
     // Connexion réussie : tokens enregistrés.
-    assert_eq!(get_page(&state, "/api/spotify/callback?code=bon").await.2.unwrap(), "/integrations?connected=1");
+    assert_eq!(get_page(&state, &with_state("bon")).await.2.unwrap(), "/integrations?connected=1");
     assert!(mock.token_requests.lock().unwrap()[1].contains("grant_type=authorization_code&code=bon&redirect_uri=http%3A%2F%2F127.0.0.1"));
     assert_eq!(state.store().config()["spotify"]["REFRESH_TOKEN"], "refresh-1");
     assert!(get_page(&state, "/integrations?connected=1").await.1.contains("Compte Spotify connecté."));

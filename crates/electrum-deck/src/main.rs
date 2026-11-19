@@ -58,6 +58,25 @@ fn refresh_period(action: &str) -> Option<Duration> {
     }
 }
 
+/// Profils au format de `sdpi-select` (texte affiché tel quel, jamais interprété comme du HTML).
+fn profile_items(server: &http::Server) -> Value {
+    let Ok(data) = server.get("/api/profiles") else {
+        return json!([{ "label": "ElectrumOverlay injoignable (serveur démarré ?)", "value": "", "disabled": true }]);
+    };
+    let active = data["activeId"].as_str();
+    let items: Vec<Value> = data["profiles"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|p| {
+            let id = p["id"].as_str()?;
+            let name = p["name"].as_str().unwrap_or(id);
+            Some(json!({ "label": if Some(id) == active { format!("{name} (actif)") } else { name.to_string() }, "value": id }))
+        })
+        .collect();
+    json!(items)
+}
+
 impl Plugin {
     fn send(&mut self, message: Value) {
         let _ = self.socket.send(Message::text(message.to_string()));
@@ -91,6 +110,16 @@ impl Plugin {
             }
             "willDisappear" => {
                 self.keys.remove(&context);
+            }
+            // Liste des profils demandée par la fenêtre de réglages (sdpi-select `datasource`) :
+            // le plugin la récupère pour elle, la fenêtre n'appelle pas le serveur elle-même.
+            "sendToPlugin" if message["payload"]["event"] == "getProfiles" => {
+                let settings = self.keys.get(&context).map(|key| key.settings.clone()).unwrap_or(settings);
+                let items = profile_items(&server(&settings));
+                self.send(json!({
+                    "event": "sendToPropertyInspector", "context": context, "action": message["action"],
+                    "payload": { "event": "getProfiles", "items": items }
+                }));
             }
             "keyDown" => {
                 if let Some(key) = self.keys.get_mut(&context) {

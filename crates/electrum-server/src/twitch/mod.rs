@@ -208,7 +208,9 @@ pub fn send_chat_message(state: &AppState, message: String) {
     });
 }
 
-/// Nombre de viewers toutes les 60 s (Twitch ne le pousse pas par EventSub).
+/// Nombre de viewers toutes les 60 s (Twitch ne le pousse pas par EventSub). Le premier passage,
+/// au démarrage, reprend aussi un live déjà commencé : `stream.online` n'arrive qu'au lancement du
+/// stream, pas quand l'app est ouverte en cours de route.
 pub async fn poll_viewer_count(state: AppState) {
     let mut interval = tokio::time::interval(std::time::Duration::from_secs(60));
     loop {
@@ -217,8 +219,17 @@ pub async fn poll_viewer_count(state: AppState) {
         if !creds.is_complete() {
             continue;
         }
-        if let Ok(count) = state.twitch.api.viewer_count(&creds).await {
-            state.stats().update_viewer_count(count);
+        match state.twitch.api.current_stream(&creds).await {
+            Ok(Some(stream)) => {
+                let text = |key: &str| stream[key].as_str().map(str::to_string);
+                let mut stats = state.stats();
+                if !stats.is_live {
+                    stats.resume_stream(text("started_at").as_deref(), text("title").as_deref(), text("game_name").as_deref());
+                }
+                stats.update_viewer_count(stream["viewer_count"].as_u64().unwrap_or(0));
+            }
+            Ok(None) => state.stats().update_viewer_count(0),
+            Err(_) => {}
         }
     }
 }

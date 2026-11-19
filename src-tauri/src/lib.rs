@@ -78,6 +78,12 @@ fn is_own_server(url: &Url, port: u16) -> bool {
 }
 
 fn open_in_browser(url: &Url) {
+    // Seulement des pages web (ou un e-mail) : jamais un fichier local, un partage réseau ou un
+    // protocole qui lancerait un programme (file:, smb:, ms-settings:…).
+    if !matches!(url.scheme(), "http" | "https" | "mailto") {
+        eprintln!("⛔ Lien ignoré (protocole non autorisé) : {}", url.scheme());
+        return;
+    }
     if let Err(error) = tauri_plugin_opener::open_url(url.as_str(), None::<&str>) {
         eprintln!("❌ Impossible d'ouvrir {url} : {error}");
     }
@@ -266,6 +272,14 @@ fn on_tray_menu(app: &AppHandle, event: MenuEvent) {
 pub(crate) async fn prepare_quit(app: &AppHandle) {
     app.state::<Desktop>().quitting.store(true, Ordering::SeqCst);
     stop_server(app).await;
+}
+
+/// Annule `prepare_quit` (installation de mise à jour ratée) : l'app et le serveur repartent.
+pub(crate) async fn cancel_quit(app: &AppHandle) {
+    app.state::<Desktop>().quitting.store(false, Ordering::SeqCst);
+    if let Err(error) = start_server(app).await {
+        app.state::<Desktop>().state.log("error", format!("❌ Erreur au démarrage du serveur : {error}"));
+    }
 }
 
 /// Met à jour le menu de l'icône en tâche de fond (après un changement d'état).

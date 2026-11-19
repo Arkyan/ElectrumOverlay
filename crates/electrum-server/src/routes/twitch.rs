@@ -35,7 +35,7 @@ pub fn authorize_url(state: &AppState) -> String {
     let scopes: Vec<String> = crate::twitch::authorization_scopes(
         twitch["SCOPES"].as_array().map(|s| s.iter().filter_map(Value::as_str).map(str::to_string).collect()).unwrap_or_default(),
     );
-    state.twitch.api.authorize_url(&text("CLIENT_ID"), &text("REDIRECT_URI"), &scopes)
+    state.twitch.api.authorize_url(&text("CLIENT_ID"), &text("REDIRECT_URI"), &scopes, &state.oauth_state)
 }
 
 async fn auth_url_page(State(state): State<AppState>) -> Html<String> {
@@ -48,11 +48,20 @@ async fn oauth_callback(State(state): State<AppState>, body: Bytes) -> ApiResult
     let body = body_or_empty(&body);
     let token = body.get("token").and_then(Value::as_str).filter(|t| !t.is_empty());
     let Some(token) = token else { return Err(ApiError::bad_request("Token manquant")) };
+    // Autorisation demandée par cette app (et pas un lien piégé qui ferait enregistrer le compte
+    // de quelqu'un d'autre).
+    if body.get("state").and_then(Value::as_str) != Some(state.oauth_state.as_str()) {
+        return Err(ApiError::bad_request("Autorisation expirée ou d'origine inconnue : relance l'autorisation depuis l'app"));
+    }
     let info = match state.twitch.api.validate(token).await {
         Ok(Some(info)) => info,
         Ok(None) => return Err(ApiError::bad_request("Token invalide")),
         Err(error) => return Err(ApiError(StatusCode::BAD_GATEWAY, error.to_string())),
     };
+    let client_id = state.store().config()["twitch"]["CLIENT_ID"].as_str().unwrap_or_default().to_string();
+    if !client_id.is_empty() && info.client_id != client_id {
+        return Err(ApiError::bad_request("Ce token a été créé pour une autre application Twitch"));
+    }
     state.store().save_config(&json!({
         "twitch": { "USER_ACCESS_TOKEN": token, "BROADCASTER_ID": info.user_id, "BROADCASTER_LOGIN": info.login }
     }))?;

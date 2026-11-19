@@ -117,6 +117,11 @@ pub async fn info_panel(state: &AppState) -> Result<Value, PanelError> {
     if !enabled {
         return Err((404, "Intégration Trucky désactivée".into()));
     }
+    // L'ID est inséré dans l'adresse de l'API : seulement des chiffres.
+    let user_id = user_id.trim().to_string();
+    if user_id.is_empty() || !user_id.chars().all(|c| c.is_ascii_digit()) {
+        return Err((400, "ID utilisateur Trucky invalide (un nombre, visible dans l'adresse de ton profil Trucky)".into()));
+    }
     let base = state.trucky_base.clone();
     let mut fetcher = Fetcher::new();
     let result = collect(&mut fetcher, state, &base, &user_id).await;

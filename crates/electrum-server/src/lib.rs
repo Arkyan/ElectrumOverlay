@@ -58,6 +58,7 @@ pub fn http_router(state: AppState) -> Router {
             axum::http::header::CACHE_CONTROL,
             axum::http::HeaderValue::from_static("no-cache"),
         ))
+        .layer(axum::middleware::from_fn(routes::guard::protect))
         .with_state(state)
 }
 
@@ -125,12 +126,12 @@ pub async fn start(state: AppState, http_port: u16, ws_port: u16) -> io::Result<
     let ws_signal = signal(&shutdown);
     let servers = vec![
         tokio::spawn(async move {
-            if let Err(error) = axum::serve(http_listener, http_app).with_graceful_shutdown(http_signal).await {
+            if let Err(error) = axum::serve(http_listener, http_app.into_make_service_with_connect_info::<SocketAddr>()).with_graceful_shutdown(http_signal).await {
                 eprintln!("❌ Serveur HTTP arrêté : {error}");
             }
         }),
         tokio::spawn(async move {
-            if let Err(error) = axum::serve(ws_listener, ws_app).with_graceful_shutdown(ws_signal).await {
+            if let Err(error) = axum::serve(ws_listener, ws_app.into_make_service_with_connect_info::<SocketAddr>()).with_graceful_shutdown(ws_signal).await {
                 eprintln!("❌ Serveur WebSocket arrêté : {error}");
             }
         }),

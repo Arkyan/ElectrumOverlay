@@ -92,6 +92,9 @@ function startMessageRotation() {
     const configured = Array.isArray(cfg.pause?.messages) ? cfg.pause.messages.filter(m => typeof m === 'string' && m.trim()) : [];
     const messages = configured.length > 0 ? configured : FALLBACK_PAUSE_MESSAGES;
 
+    // Relancée à chaque changement de réglages : on repart de zéro.
+    if (messageRotationInterval) clearInterval(messageRotationInterval);
+    messageRotationInterval = null;
     container.innerHTML = '';
     const messageElements = messages.map((text, index) => {
         const el = document.createElement('div');
@@ -131,12 +134,11 @@ function startProgressAnimation() {
 
     if (!progressFill || !progressText) return;
 
-    let progress = 0;
-    const cfg = getOverlayConfig();
-    const configured = Array.isArray(cfg.pause?.progressMessages) ? cfg.pause.progressMessages.filter(m => typeof m === 'string' && m.trim()) : [];
-    const messages = configured.length > 0 ? configured : FALLBACK_PROGRESS_MESSAGES;
-
     function updateProgress() {
+        // Relu à chaque fois : les messages modifiés dans les réglages s'appliquent sans recharger.
+        const cfg = getOverlayConfig();
+        const configured = Array.isArray(cfg.pause?.progressMessages) ? cfg.pause.progressMessages.filter(m => typeof m === 'string' && m.trim()) : [];
+        const messages = configured.length > 0 ? configured : FALLBACK_PROGRESS_MESSAGES;
         // Changer le texte aléatoirement
         const randomMessage = messages[Math.floor(Math.random() * messages.length)];
         progressText.textContent = tr(randomMessage);
@@ -227,6 +229,12 @@ function initializeParticleEffects() {
         createParticles(cfg.animations?.particles?.count ?? 20, cfg.animations?.particles?.duration ?? [5, 8]);
     }
 }
+
+// Messages de pause modifiés dans les réglages : appliqués tout de suite.
+window.addEventListener('overlay-config-updated', () => {
+    startMessageRotation();
+    // Le texte de progression est relu à sa prochaine mise à jour (toutes les 6 s).
+});
 
 // Nettoyage lors de la fermeture
 window.addEventListener('beforeunload', function () {

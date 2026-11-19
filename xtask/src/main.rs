@@ -247,7 +247,7 @@ mod tests {
         std::fs::create_dir_all(&dir).unwrap();
         package_plugin(&root().join("streamdeck-plugin").join(PLUGIN_DIR), b"MZ", &destination).unwrap();
         let mut archive = zip::ZipArchive::new(std::fs::File::open(&destination).unwrap()).unwrap();
-        let names: Vec<String> = archive.file_names().map(str::to_string).collect();
+        let names: Vec<String> = archive.file_names().map(|n| n.unwrap().to_string()).collect();
         assert!(names.contains(&format!("{PLUGIN_DIR}/manifest.json")));
         assert!(names.contains(&format!("{PLUGIN_DIR}/bin/{PLUGIN_EXE}")));
         assert!(names.iter().any(|n| n.starts_with(&format!("{PLUGIN_DIR}/ui/"))));

@@ -177,10 +177,10 @@ impl TwitchApi {
         Ok(data["data"][0].clone())
     }
 
-    /// Nombre de viewers si la chaîne est en direct, 0 sinon.
-    pub async fn viewer_count(&self, creds: &Credentials) -> Result<u64, TwitchError> {
+    /// Live en cours (`started_at`, `title`, `game_name`, `viewer_count`), `None` hors ligne.
+    pub async fn current_stream(&self, creds: &Credentials) -> Result<Option<Value>, TwitchError> {
         let data = self.helix_get(creds, &format!("/streams?user_id={}", creds.broadcaster_id)).await?;
-        Ok(data["data"][0]["viewer_count"].as_u64().unwrap_or(0))
+        Ok(data["data"].get(0).filter(|s| s.is_object()).cloned())
     }
 
     /// Jeu (catégorie) actuel de la chaîne.
@@ -220,13 +220,14 @@ impl TwitchApi {
     /// URL d'autorisation (flux « implicit grant » : le token revient dans le fragment de l'URL
     /// de redirection, lu par la page /auth-callback). Mêmes paramètres et même encodage que
     /// `generateAuthUrl()` côté Node (`URLSearchParams`).
-    pub fn authorize_url(&self, client_id: &str, redirect_uri: &str, scopes: &[String]) -> String {
+    pub fn authorize_url(&self, client_id: &str, redirect_uri: &str, scopes: &[String], oauth_state: &str) -> String {
         format!(
-            "{}/authorize?response_type=token&client_id={}&redirect_uri={}&scope={}",
+            "{}/authorize?response_type=token&client_id={}&redirect_uri={}&scope={}&state={}",
             self.endpoints.oauth,
             form_encode(client_id),
             form_encode(redirect_uri),
-            form_encode(&scopes.join(" "))
+            form_encode(&scopes.join(" ")),
+            form_encode(oauth_state)
         )
     }
 }
@@ -251,10 +252,10 @@ mod tests {
     #[test]
     fn url_d_autorisation_identique_a_node() {
         let api = TwitchApi::new(Endpoints::default());
-        let url = api.authorize_url("a b", "http://localhost:8080/auth-callback", &["user:read:chat".into(), "chat:edit".into()]);
+        let url = api.authorize_url("a b", "http://localhost:8080/auth-callback", &["user:read:chat".into(), "chat:edit".into()], "s1");
         assert_eq!(
             url,
-            "https://id.twitch.tv/oauth2/authorize?response_type=token&client_id=a+b&redirect_uri=http%3A%2F%2Flocalhost%3A8080%2Fauth-callback&scope=user%3Aread%3Achat+chat%3Aedit"
+            "https://id.twitch.tv/oauth2/authorize?response_type=token&client_id=a+b&redirect_uri=http%3A%2F%2Flocalhost%3A8080%2Fauth-callback&scope=user%3Aread%3Achat+chat%3Aedit&state=s1"
         );
     }
 }

@@ -38,6 +38,9 @@ pub struct Inner {
     pub trucky_base: String,
     /// Incrémenté à chaque arrêt du serveur : les overlays connectés se ferment.
     overlays_generation: tokio::sync::watch::Sender<u64>,
+    /// Valeur `state` des autorisations OAuth (Twitch, Spotify), tirée au hasard à chaque
+    /// lancement : un retour d'autorisation qui ne la porte pas vient d'ailleurs et est refusé.
+    pub oauth_state: String,
 }
 
 /// URLs des services externes, remplaçables par de faux serveurs dans les tests.
@@ -93,6 +96,7 @@ impl AppState {
             spotify: crate::spotify::SpotifyState::new(external.spotify),
             trucky_base: external.trucky,
             overlays_generation: tokio::sync::watch::channel(0).0,
+            oauth_state: uuid::Uuid::new_v4().simple().to_string(),
         }))
     }
 

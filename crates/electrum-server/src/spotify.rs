@@ -71,11 +71,12 @@ pub fn authorize_url(state: &AppState) -> String {
         .map(|s| s.iter().filter_map(Value::as_str).map(str::to_string).collect())
         .unwrap_or_default();
     format!(
-        "{}/authorize?response_type=code&client_id={}&redirect_uri={}&scope={}&show_dialog=true",
+        "{}/authorize?response_type=code&client_id={}&redirect_uri={}&scope={}&show_dialog=true&state={}",
         state.spotify.endpoints.accounts,
         form_encode(&text(state, "CLIENT_ID")),
         form_encode(&text(state, "REDIRECT_URI")),
-        form_encode(&scopes.join(" "))
+        form_encode(&scopes.join(" ")),
+        form_encode(&state.oauth_state)
     )
 }
 
