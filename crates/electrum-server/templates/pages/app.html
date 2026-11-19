@@ -20,6 +20,12 @@
         <button type="button" class="btn btn-primary btn-sm" id="btnInstallUpdate" hidden>Installer et redémarrer</button>
     </div>
 
+    <section class="card getting-started" id="gettingStarted" hidden>
+        <h2 class="card-title with-actions">Premiers pas <button type="button" class="btn btn-sm btn-ghost" id="btnGsHide">Masquer</button></h2>
+        <div class="gs-progress"><div class="gs-progress-fill" id="gsFill"></div></div>
+        <ol class="gs-steps" id="gsSteps"></ol>
+    </section>
+
     <div class="grid grid-3">
         <section class="card">
             <h2 class="card-title">Twitch</h2>
@@ -70,7 +76,7 @@
         </div>
     </section>
 
-    <section class="card">
+    <section class="card" id="obsSources">
         <h2 class="card-title">Sources pour OBS</h2>
         <table class="table">
             <thead><tr><th>Source</th><th>URL (source navigateur)</th><th></th></tr></thead>
@@ -134,6 +140,43 @@
             $('stMessages').textContent = String(s.chatMessages);
         }).catch(() => {});
     }
+
+    // Premiers pas : étapes pour être prêt à streamer, cochées toutes seules quand c'est fait.
+    const GS_STEPS = {
+        style: ['Choisir le style de ton overlay', 'Couleurs, animations et logo.', '<a class="btn btn-sm" href="/welcome">Choisir</a>'],
+        twitch: ['Connecter Twitch', 'Pour recevoir follows, subs, bits, raids et le chat.', '<a class="btn btn-sm" href="/setup">Connecter</a>'],
+        obs: ['Ajouter les scènes dans OBS', 'Ajoute chaque URL de « Sources pour OBS » en source navigateur 1920×1080.', '<button type="button" class="btn btn-sm" data-gs-obs>Voir les URLs</button> <button type="button" class="btn btn-sm btn-ghost" data-gs-done="obs">C\'est fait</button>'],
+        test: ['Tester une alerte', 'Vérifie que tout s\'affiche dans OBS avant d\'être en live.', '<button type="button" class="btn btn-sm" data-gs-test>Lancer un follow de test</button>'],
+        scene: ['Personnaliser une scène', 'Place le chat, les alertes et ajoute tes éléments.', '<a class="btn btn-sm" href="/scene-editor">Ouvrir l\'éditeur</a> <button type="button" class="btn btn-sm btn-ghost" data-gs-done="scene">Plus tard</button>']
+    };
+    function refreshGettingStarted() {
+        fetch('/api/app/getting-started', { cache: 'no-store' }).then((r) => r.json()).then(({ hidden, steps }) => {
+            const done = steps.filter((st) => st.done).length;
+            $('gettingStarted').hidden = hidden || done === steps.length;
+            $('gsFill').style.width = Math.round((done / steps.length) * 100) + '%';
+            $('gsSteps').innerHTML = steps.map((st) => {
+                const [title, text, action] = GS_STEPS[st.key] || [st.key, '', ''];
+                return '<li class="' + (st.done ? 'done' : '') + '"><span class="gs-check">' + (st.done ? '✓' : '') + '</span>'
+                    + '<span class="gs-text"><strong>' + title + '</strong><span>' + text + '</span></span>'
+                    + (st.done ? '' : '<span class="gs-action">' + action + '</span>') + '</li>';
+            }).join('');
+        }).catch(() => {});
+    }
+    $('gsSteps').addEventListener('click', (e) => {
+        if (e.target.closest('[data-gs-obs]')) $('obsSources').scrollIntoView({ behavior: 'smooth', block: 'start' });
+        const mark = e.target.closest('[data-gs-done]');
+        if (mark) fetch('/api/app/getting-started', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ done: mark.dataset.gsDone }) }).then(refreshGettingStarted);
+        if (e.target.closest('[data-gs-test]')) {
+            fetch('/api/tests/trigger', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'follow' }) })
+                .then(() => setTimeout(() => { refreshGettingStarted(); refreshHistory(); }, 300));
+        }
+    });
+    $('btnGsHide').addEventListener('click', () => {
+        fetch('/api/app/getting-started', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ hidden: true }) }).then(refreshGettingStarted);
+    });
+    refreshGettingStarted();
+    setInterval(refreshGettingStarted, 5000);
+    window.addEventListener('electrum-live', (event) => { if (event.detail.type === 'twitch-status') refreshGettingStarted(); });
 
     // Derniers événements + rejouer une alerte.
     const KINDS = { 'channel.follow': ['Follow', ''], 'channel.subscribe': ['Sub', 'ok'], 'channel.subscription.gift': ['Subs offerts', 'ok'], 'channel.cheer': ['Bits', 'warn'], 'channel.raid': ['Raid', 'live'] };

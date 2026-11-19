@@ -108,6 +108,12 @@ async fn redirige_vers_setup_tant_que_twitch_n_est_pas_configure() {
     let dir = tempfile::tempdir().unwrap();
     let assets = Assets { public_dir: repo().join("public"), templates_dir: repo().join("src").join("templates") };
     let state = AppState::new(Store::open(dir.path()).unwrap(), assets);
+    // Tout premier lancement : la page d'accueil (style du stream) d'abord...
+    assert_eq!(send(&state, "GET", "/app", None).await.headers["location"], "/welcome");
+    assert_eq!(send(&state, "GET", "/welcome", None).await.status, StatusCode::OK);
+    let done = send(&state, "POST", "/api/welcome", Some(json!({ "language": "fr", "streamType": "gaming", "theme": "", "animations": "light" }))).await.json();
+    assert_eq!(done["next"], "/setup");
+    // ... puis la connexion à Twitch.
     for path in ["/", "/app", "/settings", "/starting.html"] {
         let r = send(&state, "GET", path, None).await;
         assert_eq!(r.headers["location"], "/setup", "{path}");
@@ -645,4 +651,60 @@ async fn widgets_personnalises() {
     // Page Widgets + documentation.
     let page = send(&state, "GET", "/widgets", None).await.text();
     assert!(page.contains("Créer un widget en 4 étapes") && page.contains("Electrum.on(type, fn)"));
+}
+
+#[tokio::test]
+async fn premier_lancement_et_logo() {
+    let dir = tempfile::tempdir().unwrap();
+    let assets = Assets { public_dir: repo().join("public"), templates_dir: repo().join("src").join("templates") };
+    let state = AppState::new(Store::open(dir.path()).unwrap(), assets);
+    let id = active_id(&state);
+
+    let done = send(&state, "POST", "/api/welcome", Some(json!({
+        "language": "en", "streamType": "chatting", "theme": "", "color": "#f59e0b", "animations": "none"
+    }))).await.json();
+    assert_eq!(done["ok"], true);
+    let config = state.store().config().clone();
+    assert_eq!((config["app"]["onboarded"].as_bool(), config["app"]["language"].as_str(), config["app"]["streamType"].as_str()), (Some(true), Some("en"), Some("chatting")));
+    let display = state.store().effective_display(&id).unwrap();
+    assert_eq!(display["themes"]["pause"]["primary"], "#f59e0b");
+    assert_eq!(display["animations"]["enabled"], false);
+    assert_eq!(display["layout"]["index"]["chatPanel"]["scale"], 140);
+
+    // Thème prêt à l'emploi + conduite avec Trucky.
+    send(&state, "POST", "/api/welcome", Some(json!({ "streamType": "driving", "theme": "Vert Émeraude", "truckyId": "1234" }))).await;
+    let display = state.store().effective_display(&id).unwrap();
+    assert_eq!(display["themes"]["index"]["primary"], "#10b981");
+    assert_eq!(display["panels"]["left"]["enabled"], true);
+    assert_eq!(state.store().config()["trucky"]["USER_ID"], "1234");
+
+    // Logo : celui de l'app par défaut, celui de l'utilisateur une fois envoyé, retirable.
+    let default_logo = send(&state, "GET", "/logo.png", None).await.body;
+    assert!(default_logo.starts_with(b"\x89PNG"));
+    upload(&state, "/api/branding/logo", "logo.webp", "image/webp", b"RIFFxxxxWEBP").await;
+    let custom = send(&state, "GET", "/logo.png", None).await;
+    assert_eq!((custom.headers["content-type"].to_str().unwrap(), custom.body.as_slice()), ("image/webp", b"RIFFxxxxWEBP".as_slice()));
+    assert_eq!(upload(&state, "/api/branding/logo", "x.txt", "text/plain", b"x").await.status, StatusCode::BAD_REQUEST);
+    send(&state, "DELETE", "/api/branding/logo", None).await;
+    assert_eq!(send(&state, "GET", "/logo.png", None).await.body, default_logo);
+}
+
+#[tokio::test]
+async fn premiers_pas() {
+    let (state, _dir) = new_state();
+    let steps = |v: &Value| v["steps"].as_array().unwrap().iter().map(|s| (s["key"].as_str().unwrap().to_string(), s["done"].as_bool().unwrap())).collect::<Vec<_>>();
+    let start = send(&state, "GET", "/api/app/getting-started", None).await.json();
+    assert_eq!(start["hidden"], false);
+    assert!(steps(&start).iter().all(|(_, done)| !done));
+
+    // Une alerte de test coche « test », « Déjà fait » coche l'étape à la main.
+    send(&state, "POST", "/api/tests/trigger", Some(json!({ "action": "follow" }))).await;
+    send(&state, "POST", "/api/app/getting-started", Some(json!({ "done": "obs" }))).await;
+    send(&state, "POST", "/api/app/getting-started", Some(json!({ "done": "inconnue" }))).await;
+    let now = steps(&send(&state, "GET", "/api/app/getting-started", None).await.json());
+    let done: Vec<_> = now.iter().filter(|(_, d)| *d).map(|(k, _)| k.as_str()).collect();
+    assert_eq!(done, ["obs", "test"]);
+
+    send(&state, "POST", "/api/app/getting-started", Some(json!({ "hidden": true }))).await;
+    assert_eq!(send(&state, "GET", "/api/app/getting-started", None).await.json()["hidden"], true);
 }

@@ -47,6 +47,7 @@ pub fn http_router(state: AppState) -> Router {
         .merge(routes::backups::router())
         .merge(routes::app::router())
         .merge(routes::widgets::router())
+        .merge(routes::welcome::router())
         .fallback_service(public)
         .layer(axum::middleware::from_fn_with_state(state.clone(), routes::app::translate_responses))
         .layer(axum::middleware::from_fn_with_state(state.clone(), routes::setup::redirect_until_configured))

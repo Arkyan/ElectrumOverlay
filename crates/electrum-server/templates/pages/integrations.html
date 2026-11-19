@@ -72,7 +72,7 @@
                         <h2 class="card-title">Trucky</h2>
                         <label class="checkbox-row"><input type="checkbox" id="truckyEnabled" {{expr:6}}> Activer les statistiques Trucky</label>
                         <div class="field" style="margin-top:var(--space-3);">
-                            <label for="truckyUserId">ID utilisateur Trucky</label>
+                            <label for="truckyUserId">ID utilisateur Trucky <span class="help" tabindex="0" data-tip="Le nombre à la fin de l'adresse de ton profil Trucky : truckyapp.com/user/12345 → 12345.">?</span></label>
                             <input type="text" id="truckyUserId" value="{{expr:7}}">
                         </div>
                         <button type="button" class="btn btn-primary" id="btnSaveTrucky">Enregistrer</button>

@@ -25,8 +25,8 @@ pub fn router() -> Router<AppState> {
 }
 
 /// Chemins accessibles avant la fin de l'assistant (comme `SETUP_ALLOWED_PREFIXES` côté Node).
-const SETUP_ALLOWED_PREFIXES: [&str; 11] = [
-    "/setup", "/api/", "/auth-url", "/auth-callback", "/auth/callback", "/favicon.ico", "/logs", "/css/", "/js/", "/fonts/", "/logo.png",
+const SETUP_ALLOWED_PREFIXES: [&str; 12] = [
+    "/setup", "/welcome", "/api/", "/auth-url", "/auth-callback", "/auth/callback", "/favicon.ico", "/logs", "/css/", "/js/", "/fonts/", "/logo.png",
 ];
 
 /// Tant que la config Twitch n'est pas complète, toute page (overlays compris) redirige vers
@@ -35,8 +35,15 @@ pub async fn redirect_until_configured(State(state): State<AppState>, request: R
     let path = request.uri().path();
     let allowed = request.method() != axum::http::Method::GET
         || SETUP_ALLOWED_PREFIXES.iter().any(|p| path == *p || path.starts_with(p));
-    if allowed || state.store().is_configured() {
+    let (configured, onboarded) = {
+        let store = state.store();
+        (store.is_configured(), super::welcome::onboarded(store.config()))
+    };
+    if allowed || configured {
         next.run(request).await
+    } else if !onboarded {
+        // Tout premier lancement : style du stream d'abord, Twitch ensuite.
+        Redirect::to("/welcome").into_response()
     } else {
         Redirect::to("/setup").into_response()
     }

@@ -10,6 +10,7 @@ pub mod settings;
 pub mod setup;
 pub mod testtools;
 pub mod twitch;
+pub mod welcome;
 pub mod widgets;
 
 use axum::http::StatusCode;
