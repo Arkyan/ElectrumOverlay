@@ -97,4 +97,11 @@ fn plugin_de_bout_en_bout() {
     // Statistique.
     send(&mut ws, "willAppear", "stream-stats", "k4", settings(json!({ "stat": "viewerCount" })));
     assert_eq!(next_json(&mut ws)["payload"]["title"], "Viewers\n87");
+
+    // Fenêtre de réglages : la liste des profils passe par le plugin (texte, pas de HTML).
+    let ask = json!({ "event": "sendToPlugin", "action": "com.electrumvtc.overlay.streamdeck.activate-profile", "context": "k1", "payload": { "event": "getProfiles" } });
+    ws.send(Message::text(ask.to_string())).unwrap();
+    let reply = next_json(&mut ws);
+    assert_eq!((reply["event"].as_str(), reply["context"].as_str()), (Some("sendToPropertyInspector"), Some("k1")));
+    assert_eq!(reply["payload"], json!({ "event": "getProfiles", "items": [{ "label": "Néon (actif)", "value": "p1" }, { "label": "Vert", "value": "p2" }] }));
 }

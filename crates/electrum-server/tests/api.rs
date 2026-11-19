@@ -708,3 +708,42 @@ async fn premiers_pas() {
     send(&state, "POST", "/api/app/getting-started", Some(json!({ "hidden": true }))).await;
     assert_eq!(send(&state, "GET", "/api/app/getting-started", None).await.json()["hidden"], true);
 }
+
+#[tokio::test]
+async fn protection_contre_les_autres_sites_et_le_reseau() {
+    let (state, _dir) = new_state();
+    let request = |method: &str, uri: &str, headers: &[(&str, &str)], peer: Option<&str>| {
+        let mut builder = Request::builder().method(method).uri(uri).header("content-type", "application/json");
+        for (name, value) in headers {
+            builder = builder.header(*name, *value);
+        }
+        let mut request = builder.body(Body::from(r#"{"CLIENT_ID":"pirate","CLIENT_SECRET":"x"}"#)).unwrap();
+        if let Some(peer) = peer {
+            request.extensions_mut().insert(axum::extract::ConnectInfo(peer.parse::<std::net::SocketAddr>().unwrap()));
+        }
+        request
+    };
+    let local = Some("127.0.0.1:50000");
+    // Un autre site ne peut pas écraser les identifiants Twitch (ni en JSON, ni en text/plain).
+    let evil = reply(&state, request("POST", "/api/setup/credentials", &[("host", "localhost:8080"), ("origin", "https://evil.example")], local)).await;
+    assert_eq!(evil.status, StatusCode::FORBIDDEN);
+    let no_origin = reply(&state, request("POST", "/api/setup/credentials", &[("host", "localhost:8080"), ("sec-fetch-site", "cross-site")], local)).await;
+    assert_eq!(no_origin.status, StatusCode::FORBIDDEN);
+    assert_eq!(state.store().config()["twitch"]["CLIENT_ID"], "test");
+    // DNS rebinding : un nom de domaine qui pointe vers 127.0.0.1.
+    let rebinding = reply(&state, request("GET", "/api/profiles", &[("host", "evil.example:8080")], local)).await;
+    assert_eq!(rebinding.status, StatusCode::FORBIDDEN);
+    // L'app elle-même (même origine) et le plugin Stream Deck (sans Origin) passent.
+    let app = reply(&state, request("POST", "/api/tests/trigger", &[("host", "localhost:8080"), ("origin", "http://localhost:8080")], local)).await;
+    assert_ne!(app.status, StatusCode::FORBIDDEN);
+    let deck = reply(&state, request("POST", "/api/tests/trigger", &[("host", "localhost:8080")], local)).await;
+    assert_ne!(deck.status, StatusCode::FORBIDDEN);
+
+    // Depuis un autre PC du réseau : overlays en lecture seulement.
+    let lan = Some("192.168.1.20:50000");
+    assert_eq!(reply(&state, request("GET", "/starting.html", &[("host", "192.168.1.10:8080")], lan)).await.status, StatusCode::OK);
+    assert_eq!(reply(&state, request("GET", "/js/config.js", &[("host", "192.168.1.10:8080")], lan)).await.status, StatusCode::OK);
+    assert_eq!(reply(&state, request("GET", "/settings", &[("host", "192.168.1.10:8080")], lan)).await.status, StatusCode::FORBIDDEN);
+    assert_eq!(reply(&state, request("GET", "/api/profiles", &[("host", "192.168.1.10:8080")], lan)).await.status, StatusCode::FORBIDDEN);
+    assert_eq!(reply(&state, request("POST", "/api/tests/trigger", &[("host", "192.168.1.10:8080")], lan)).await.status, StatusCode::FORBIDDEN);
+}

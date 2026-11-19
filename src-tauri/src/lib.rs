@@ -268,6 +268,14 @@ pub(crate) async fn prepare_quit(app: &AppHandle) {
     stop_server(app).await;
 }
 
+/// Annule `prepare_quit` (installation de mise à jour ratée) : l'app et le serveur repartent.
+pub(crate) async fn cancel_quit(app: &AppHandle) {
+    app.state::<Desktop>().quitting.store(false, Ordering::SeqCst);
+    if let Err(error) = start_server(app).await {
+        app.state::<Desktop>().state.log("error", format!("❌ Erreur au démarrage du serveur : {error}"));
+    }
+}
+
 /// Met à jour le menu de l'icône en tâche de fond (après un changement d'état).
 pub(crate) fn refresh_tray_later(app: &AppHandle) {
     let app = app.clone();

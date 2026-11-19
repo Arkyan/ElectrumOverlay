@@ -81,7 +81,9 @@ function showBottomBar(force = false) {
     // `display:none !important` de applyLayoutFromConfig() (un style inline sans priorité REMPLACE
     // celui avec !important) — le bandeau ressortait au premier follow/sub et l'œil semblait
     // n'avoir aucun effet.
-    if (getOverlayConfig().layout?.[getThemeKeyFromLocation()]?.bottomBar?.hidden) return;
+    // Même chose s'il a été supprimé de la scène (éditeur › Supprimer).
+    const layoutEntry = getOverlayConfig().layout?.[getThemeKeyFromLocation()]?.bottomBar;
+    if (layoutEntry?.hidden || layoutEntry?.removed) return;
     bottomBar.style.display = 'flex';
     bottomBar.style.animation = 'slide-in-up 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards';
 

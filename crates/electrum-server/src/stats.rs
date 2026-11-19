@@ -12,6 +12,8 @@ pub struct StreamStats {
     pub title: String,
     pub game: String,
     pub viewer_count: u64,
+    /// Fin du dernier live (ms) : la durée reste affichée sur l'écran de fin.
+    pub end_ms: Option<i64>,
 }
 
 fn now_ms() -> i64 {
@@ -41,8 +43,18 @@ impl StreamStats {
         self.game = game.unwrap_or_default().to_string();
     }
 
-    /// `stream.offline` : les compteurs restent consultables (écran de fin).
+    /// Live déjà en cours à l'ouverture de l'app : passe en direct sans effacer les compteurs.
+    pub fn resume_stream(&mut self, started_at: Option<&str>, title: Option<&str>, game: Option<&str>) {
+        let counters = (self.follows, self.subscribers, self.chat_messages);
+        self.start_stream(started_at, title, game);
+        (self.follows, self.subscribers, self.chat_messages) = counters;
+    }
+
+    /// `stream.offline` : les compteurs et la durée restent consultables (écran de fin).
     pub fn end_stream(&mut self) {
+        if self.is_live {
+            self.end_ms = Some(now_ms());
+        }
         self.is_live = false;
     }
 
@@ -74,11 +86,9 @@ impl StreamStats {
     }
 
     fn duration_ms(&self) -> Option<i64> {
-        if !self.is_live {
-            return None;
-        }
         let start = parse_ms(self.start_time.as_deref()?)?;
-        Some(now_ms() - start)
+        let end = if self.is_live { now_ms() } else { self.end_ms? };
+        Some(end - start)
     }
 
     /// `HH:MM:SS`, ou « Stream hors ligne ».
@@ -128,8 +138,18 @@ mod tests {
         stats.end_stream();
         let json = stats.to_json();
         assert_eq!(json["subscribers"], 5);
-        assert_eq!(json["streamDurationMs"], 0);
+        assert!(json["streamDurationMs"].as_i64().unwrap() > 0, "la durée reste affichée après la fin du live");
+        assert_ne!(json["streamDuration"], "Stream hors ligne");
         let keys: Vec<_> = json.as_object().unwrap().keys().cloned().collect();
+        let ended = json["streamDurationMs"].clone();
+        std::thread::sleep(std::time::Duration::from_millis(5));
+        assert_eq!(stats.to_json()["streamDurationMs"], ended, "la durée ne bouge plus une fois le live fini");
+
+        // App ouverte en plein live : on passe en direct sans perdre les compteurs.
+        let mut stats = StreamStats::default();
+        stats.add_follow();
+        stats.resume_stream(Some("2020-01-01T00:00:00Z"), Some("Titre"), Some("Jeu"));
+        assert!(stats.is_live && stats.follows == 1);
         assert_eq!(keys, ["isLive", "startTime", "follows", "subscribers", "chatMessages", "title", "game", "viewerCount", "streamDuration", "streamDurationMs"]);
     }
 }

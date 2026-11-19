@@ -2,6 +2,7 @@
 
 pub mod app;
 pub mod backups;
+pub mod guard;
 pub mod integrations;
 pub mod overlay;
 pub mod pages;

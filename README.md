@@ -231,6 +231,9 @@ Une autre instance tourne déjà : regarde la zone de notification, ou ferme l'a
 #### Un overlay n'affiche pas les dernières modifications dans OBS
 Clic droit sur la source navigateur › **Propriétés** › **Actualiser le cache de la page actuelle**.
 
+#### Stream à deux PC
+Depuis un autre PC du réseau, les overlays s'affichent (remplace `localhost` par l'adresse du PC qui fait tourner l'app), mais l'app, ses réglages et ses API ne sont accessibles que depuis le PC où elle tourne. Le plugin Stream Deck doit donc être sur ce PC.
+
 ---
 
 ## 📄 Licence

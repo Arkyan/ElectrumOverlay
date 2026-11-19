@@ -95,6 +95,33 @@ fn is_word(c: Option<char>) -> bool {
 
 /// Applique le dictionnaire anglais à un texte, quelle que soit la langue courante.
 pub fn to_english(text: &str) -> String {
+    translate(text, &[])
+}
+
+/// Zones d'une page à ne jamais traduire : les valeurs (`value="…"`, `data-value="…"`) et le
+/// contenu des `<textarea>`, qui sont des réglages de l'utilisateur ou des clés renvoyées au
+/// serveur. Les traduire les modifierait à l'enregistrement.
+fn protected_ranges(html: &str) -> Vec<(usize, usize)> {
+    let mut ranges = Vec::new();
+    let mut from = 0;
+    while let Some(found) = html[from..].find("value=\"") {
+        let start = from + found + "value=\"".len();
+        let Some(len) = html[start..].find('"') else { break };
+        ranges.push((start, start + len));
+        from = start + len + 1;
+    }
+    from = 0;
+    while let Some(found) = html[from..].find("<textarea") {
+        let open = from + found;
+        let Some(body) = html[open..].find('>').map(|i| open + i + 1) else { break };
+        let end = html[body..].find("</textarea>").map_or(html.len(), |i| body + i);
+        ranges.push((body, end));
+        from = end;
+    }
+    ranges
+}
+
+fn translate(text: &str, protected: &[(usize, usize)]) -> String {
     let dict = dictionary();
     let mut out = String::with_capacity(text.len() + text.len() / 8);
     let mut copied = 0;
@@ -106,7 +133,8 @@ pub fn to_english(text: &str) -> String {
         let key = &text[m.start()..m.end()];
         let starts_word = key.chars().next().is_some_and(char::is_alphanumeric);
         let ends_word = key.chars().next_back().is_some_and(char::is_alphanumeric);
-        if (starts_word && is_word(before)) || (ends_word && is_word(after)) {
+        let in_value = protected.iter().any(|&(start, end)| m.start() < end && m.end() > start);
+        if in_value || (starts_word && is_word(before)) || (ends_word && is_word(after)) {
             // Pas un mot entier : on avance d'un caractère et on recherche plus loin.
             at = m.start() + key.chars().next().map_or(1, char::len_utf8);
             continue;
@@ -122,7 +150,7 @@ pub fn to_english(text: &str) -> String {
 
 /// Page HTML complète traduite en anglais.
 pub fn page_to_english(html: &str) -> String {
-    to_english(html).replacen("<html lang=\"fr\">", "<html lang=\"en\">", 1)
+    translate(html, &protected_ranges(html)).replacen("<html lang=\"fr\">", "<html lang=\"en\">", 1)
 }
 
 /// `/js/i18n.js` : dictionnaire des overlays (vide en français).
@@ -148,6 +176,14 @@ pub fn overlay_script(language: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn valeurs_de_l_utilisateur_non_traduites() {
+        let html = r#"<label>Pause</label><input value="Pause"><button data-value="Bleu Cyber">Bleu Cyber</button><textarea>Pause</textarea>"#;
+        let en = page_to_english(html);
+        assert!(en.contains(r#"value="Pause""#) && en.contains(r#"data-value="Bleu Cyber""#) && en.contains("<textarea>Pause</textarea>"), "{en}");
+        assert!(!en.contains(">Bleu Cyber</button>"), "le texte affiché reste traduit : {en}");
+    }
 
     #[test]
     fn mots_entiers_et_echappements() {

@@ -102,8 +102,12 @@ fn route(state: &AppState, event_type: &str, event: &Value, test: bool) {
             broadcast_alert(state, "channel.follow", event, test);
         }
         // Un renouvellement est diffusé comme un abonnement (même alerte côté overlay).
+        // Un abonnement offert arrive deux fois : dans `channel.subscription.gift` (avec le total)
+        // puis en `channel.subscribe` (is_gift) pour chaque bénéficiaire. Il n'est compté qu'une fois.
         "channel.subscribe" | "channel.subscription.message" => {
-            state.stats().add_subscriber(1);
+            if event.get("is_gift").and_then(Value::as_bool) != Some(true) {
+                state.stats().add_subscriber(1);
+            }
             broadcast_alert(state, "channel.subscribe", event, test);
         }
         "channel.subscription.gift" => {

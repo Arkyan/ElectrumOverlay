@@ -127,6 +127,14 @@ pub async fn install(app: &AppHandle) -> Result<(), String> {
     let ready = app.state::<Updater>().ready.lock().unwrap_or_else(|p| p.into_inner()).take();
     let Some((update, bytes)) = ready else { return Err("Aucune mise à jour prête à installer".into()) };
     crate::prepare_quit(app).await;
-    update.install(bytes).map_err(|e| e.to_string())?;
+    if let Err(error) = update.install(bytes) {
+        // Installation ratée (annulée, droits, antivirus…) : l'app reprend comme avant, serveur
+        // relancé, au lieu de rester sans overlays.
+        crate::cancel_quit(app).await;
+        let updater = app.state::<Updater>();
+        updater.set(app, json!({ "status": "error", "message": error.to_string() }));
+        crate::refresh_tray_later(app);
+        return Err(error.to_string());
+    }
     app.restart();
 }

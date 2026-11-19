@@ -1967,6 +1967,8 @@ function initWebSocket() {
             applyTextOverridesFromConfig();
             applyTextStylesFromConfig();
             renderCustomTextsFromConfig();
+            // Pour les scripts propres à une page (messages de pause…).
+            window.dispatchEvent(new CustomEvent('overlay-config-updated'));
             return;
         }
 

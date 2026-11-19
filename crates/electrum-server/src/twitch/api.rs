@@ -177,10 +177,10 @@ impl TwitchApi {
         Ok(data["data"][0].clone())
     }
 
-    /// Nombre de viewers si la chaîne est en direct, 0 sinon.
-    pub async fn viewer_count(&self, creds: &Credentials) -> Result<u64, TwitchError> {
+    /// Live en cours (`started_at`, `title`, `game_name`, `viewer_count`), `None` hors ligne.
+    pub async fn current_stream(&self, creds: &Credentials) -> Result<Option<Value>, TwitchError> {
         let data = self.helix_get(creds, &format!("/streams?user_id={}", creds.broadcaster_id)).await?;
-        Ok(data["data"][0]["viewer_count"].as_u64().unwrap_or(0))
+        Ok(data["data"].get(0).filter(|s| s.is_object()).cloned())
     }
 
     /// Jeu (catégorie) actuel de la chaîne.
