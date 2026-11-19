@@ -967,6 +967,9 @@ function renderCustomTextsFromConfig() {
             frame.src = '/widgets/' + encodeURIComponent(item.widgetId || '') + '/?page=' + encodeURIComponent(pageKey)
                 + '&element=' + encodeURIComponent(id) + (editing ? '&preview=1' : '')
                 + '#' + encodeURIComponent(JSON.stringify(item.settings || {}));
+            // Code tiers : isolé (origine à part), il ne peut ni modifier les réglages, ni ouvrir
+            // de fenêtre, ni naviguer la scène.
+            frame.setAttribute('sandbox', 'allow-scripts');
             frame.setAttribute('allowtransparency', 'true');
             frame.setAttribute('scrolling', 'no');
             frame.style.cssText = 'width:100%;height:100%;border:0;background:transparent;display:block;color-scheme:normal;';
@@ -1621,7 +1624,7 @@ function showAlert(type, username, message = '', amount = '') {
         }
 
         // Configuration de l'alerte
-        alertIcon.innerHTML = config.icon;
+        alertIcon.innerHTML = safeIconHtml(config.icon);
         alertTitle.textContent = tr(config.title);
         alertUsername.textContent = username || 'Anonymous';
         alertMessage.textContent = message || tr(config.defaultMessage);
@@ -1755,10 +1758,23 @@ function addAlertsToQueue(type, username, message = '', amount = '') {
 // ========== GESTION DU CHAT ==========
 
 function escapeHtml(text) {
-    if (!text) return '';
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
+    if (text === null || text === undefined) return '';
+    // Guillemets compris : le résultat est aussi inséré dans des attributs (alt, title...).
+    return String(text).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+/** Couleur CSS sûre (#rgb, #rrggbb, #rrggbbaa) pour un style écrit dans du HTML, sinon `fallback`. */
+function safeColor(value, fallback) {
+    return /^#[0-9a-f]{3,8}$/i.test(String(value || '')) ? value : fallback;
+}
+
+/**
+ * Icône d'alerte : seulement une icône Font Awesome (`<i class="fas fa-heart"></i>`). Une valeur
+ * venue d'un profil partagé ne doit jamais pouvoir insérer du HTML arbitraire dans l'overlay.
+ */
+function safeIconHtml(icon) {
+    const match = /^\s*<i class="([a-z0-9 -]+)"\s*><\/i>\s*$/i.exec(String(icon || ''));
+    return match ? '<i class="' + match[1] + '"></i>' : '<i class="fas fa-bell"></i>';
 }
 
 /**
@@ -1774,7 +1790,7 @@ function renderChatMessageHTML(message, fragments) {
     }
     return fragments.map((fragment) => {
         if (fragment.type === 'emote' && fragment.emote?.id) {
-            const src = `https://static-cdn.jtvnw.net/emoticons/v2/${fragment.emote.id}/default/dark/1.0`;
+            const src = `https://static-cdn.jtvnw.net/emoticons/v2/${encodeURIComponent(fragment.emote.id)}/default/dark/1.0`;
             return `<img src="${src}" alt="${escapeHtml(fragment.text || '')}" title="${escapeHtml(fragment.text || '')}" class="chat-emote">`;
         }
         return escapeHtml(fragment.text || '');
@@ -1783,9 +1799,11 @@ function renderChatMessageHTML(message, fragments) {
 
 function addChatMessage(username, message, color, badgeUrls, fragments) {
     const cfg = getOverlayConfig();
-    const nameColor = color || cfg.chat?.defaultColor || '#3b82f6';
+    const nameColor = safeColor(color, safeColor(cfg.chat?.defaultColor, '#3b82f6'));
     const badgesHTML = badgeUrls
-        ? Object.entries(badgeUrls).map(([key, url]) => `<img src="${url}" alt="${key} badge" class="chat-badge">`).join('')
+        ? Object.entries(badgeUrls)
+            .filter(([, url]) => /^https:\/\//.test(String(url)))
+            .map(([key, url]) => `<img src="${escapeHtml(url)}" alt="${escapeHtml(key)} badge" class="chat-badge">`).join('')
         : '';
     const textHTML = renderChatMessageHTML(message, fragments);
 

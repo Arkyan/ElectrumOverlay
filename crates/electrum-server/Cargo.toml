@@ -6,6 +6,7 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
+uuid = { version = "1", features = ["v4"] }
 electrum-core = { path = "../electrum-core" }
 serde.workspace = true
 serde_json.workspace = true
@@ -18,7 +19,7 @@ tokio-tungstenite = { version = "0.27", features = ["rustls-tls-webpki-roots", "
 futures-util = "0.3"
 base64 = "0.22"
 aho-corasick = "1"
-zip = { version = "2", default-features = false, features = ["deflate"] }
+zip = { version = "9", default-features = false, features = ["deflate"] }
 chromiumoxide = { version = "0.7", default-features = false, features = ["tokio-runtime"] }
 
 [dev-dependencies]

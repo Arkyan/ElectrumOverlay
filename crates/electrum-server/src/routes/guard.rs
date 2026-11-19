@@ -6,7 +6,7 @@
 //!   nom de domaine qui pointerait vers 127.0.0.1 (« DNS rebinding ») est refusé (`Host` vérifié).
 
 use axum::extract::{ConnectInfo, Request};
-use axum::http::{header, Method, StatusCode};
+use axum::http::{header, HeaderValue, Method, StatusCode};
 use axum::middleware::Next;
 use axum::response::{IntoResponse, Response};
 use std::net::SocketAddr;
@@ -50,6 +50,41 @@ fn forbidden(message: &str) -> Response {
 }
 
 pub async fn protect(request: Request, next: Next) -> Response {
+    if let Some(refused) = check(&request) {
+        return refused;
+    }
+    let path = request.uri().path().to_string();
+    let null_origin = request.headers().get(header::ORIGIN).is_some_and(|o| o == "null");
+    let mut response = next.run(request).await;
+    harden(&mut response, &path, null_origin);
+    response
+}
+
+/// En-têtes de sécurité ajoutés à toutes les réponses.
+fn harden(response: &mut Response, path: &str, null_origin: bool) {
+    let headers = response.headers_mut();
+    // Type annoncé respecté (un fichier ne peut pas se faire passer pour une page) et pages
+    // impossibles à afficher dans le cadre d'un autre site (« clickjacking »).
+    headers.insert(header::X_CONTENT_TYPE_OPTIONS, HeaderValue::from_static("nosniff"));
+    headers.insert(header::X_FRAME_OPTIONS, HeaderValue::from_static("SAMEORIGIN"));
+    headers.insert(header::REFERRER_POLICY, HeaderValue::from_static("no-referrer"));
+    let is_svg = headers.get(header::CONTENT_TYPE).is_some_and(|t| t.as_bytes().starts_with(b"image/svg"));
+    let is_widget_file = path.starts_with("/widgets/") && path.len() > "/widgets/".len();
+    if is_widget_file {
+        // Widget (code tiers) : isolé dans une origine à part. Il lit les données des overlays
+        // mais ne peut ni modifier les réglages ni lire les identifiants.
+        headers.insert(header::CONTENT_SECURITY_POLICY, HeaderValue::from_static("sandbox allow-scripts"));
+    } else if is_svg {
+        // Une image SVG ouverte directement ne doit pas pouvoir exécuter de script.
+        headers.insert(header::CONTENT_SECURITY_POLICY, HeaderValue::from_static("sandbox"));
+    }
+    // Les widgets isolés (origine `null`) lisent ce que lisent les overlays (données, polices…).
+    if null_origin && allowed_from_network(&Method::GET, path) {
+        headers.insert(header::ACCESS_CONTROL_ALLOW_ORIGIN, HeaderValue::from_static("null"));
+    }
+}
+
+fn check(request: &Request) -> Option<Response> {
     // Sans adresse (tests, appels internes), la requête est considérée comme locale.
     let local = request
         .extensions()
@@ -61,14 +96,14 @@ pub async fn protect(request: Request, next: Next) -> Response {
 
     if !local {
         if !allowed_from_network(request.method(), request.uri().path()) {
-            return forbidden("Accessible uniquement depuis le PC où tourne ElectrumOverlay");
+            return Some(forbidden("Accessible uniquement depuis le PC où tourne ElectrumOverlay"));
         }
-        return next.run(request).await;
+        return None;
     }
 
     // En local : seul un nom local est accepté (protège du DNS rebinding).
     if host.as_deref().is_some_and(|h| !is_local_host(h)) {
-        return forbidden("Adresse non autorisée : utilise http://localhost");
+        return Some(forbidden("Adresse non autorisée : utilise http://localhost"));
     }
     // Requêtes qui modifient : refusées si elles viennent d'un autre site.
     if !matches!(*request.method(), Method::GET | Method::HEAD | Method::OPTIONS) {
@@ -80,18 +115,20 @@ pub async fn protect(request: Request, next: Next) -> Response {
             None => header(header::HeaderName::from_static("sec-fetch-site")).is_some_and(|site| site == "cross-site"),
         };
         if cross_site {
-            return forbidden("Requête refusée : elle ne vient pas d'ElectrumOverlay");
+            return Some(forbidden("Requête refusée : elle ne vient pas d'ElectrumOverlay"));
         }
         // Un corps doit être du JSON (ou un fichier envoyé) : un formulaire ou du texte brut, que
         // n'importe quel site peut envoyer sans autorisation du navigateur, est refusé.
         let has_body = header(header::CONTENT_LENGTH).is_some_and(|len| len.trim() != "0") || headers.contains_key(header::TRANSFER_ENCODING);
         let content_type = header(header::CONTENT_TYPE).unwrap_or_default().to_ascii_lowercase();
         if has_body && !content_type.starts_with("application/json") && !content_type.starts_with("multipart/form-data") {
-            return (StatusCode::UNSUPPORTED_MEDIA_TYPE, axum::Json(serde_json::json!({ "error": "Format de requête non pris en charge (JSON attendu)" })))
-                .into_response();
+            return Some(
+                (StatusCode::UNSUPPORTED_MEDIA_TYPE, axum::Json(serde_json::json!({ "error": "Format de requête non pris en charge (JSON attendu)" })))
+                    .into_response(),
+            );
         }
     }
-    next.run(request).await
+    None
 }
 
 #[cfg(test)]

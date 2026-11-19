@@ -78,6 +78,12 @@ fn is_own_server(url: &Url, port: u16) -> bool {
 }
 
 fn open_in_browser(url: &Url) {
+    // Seulement des pages web (ou un e-mail) : jamais un fichier local, un partage réseau ou un
+    // protocole qui lancerait un programme (file:, smb:, ms-settings:…).
+    if !matches!(url.scheme(), "http" | "https" | "mailto") {
+        eprintln!("⛔ Lien ignoré (protocole non autorisé) : {}", url.scheme());
+        return;
+    }
     if let Err(error) = tauri_plugin_opener::open_url(url.as_str(), None::<&str>) {
         eprintln!("❌ Impossible d'ouvrir {url} : {error}");
     }

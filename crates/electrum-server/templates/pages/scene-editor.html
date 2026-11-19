@@ -432,7 +432,7 @@
             const builtin = SCENES.filter((s) => s.builtin);
             const custom = SCENES.filter((s) => !s.builtin);
             const row = (s) => `
-                <div class="se-row${s.key === currentKey ? ' active' : ''}" data-scene="${s.key}">
+                <div class="se-row${s.key === currentKey ? ' active' : ''}" data-scene="${esc(s.key)}">
                     <span class="se-row-icon">${s.builtin ? ICONS.sceneBuiltin : ICONS.sceneCustom}</span>
                     <span class="se-row-name">${esc(s.label)}</span>
                 </div>`;
@@ -586,7 +586,7 @@
                 const shown = items.filter(([, name, desc]) => !q || (name + ' ' + desc).toLowerCase().includes(q));
                 if (shown.length === 0) return '';
                 return '<div class="se-menu-group">' + group + '</div>' + shown.map(([type, name, desc]) => `
-                    <button type="button" class="se-menu-item" data-type="${type}">
+                    <button type="button" class="se-menu-item" data-type="${esc(type)}">
                         <span class="se-type-icon">${ICONS[type]}</span>
                         <span class="se-menu-text"><strong>${esc(name)}</strong><span data-desc="${esc(desc)}">${esc(desc)}</span></span>
                     </button>`).join('');
@@ -614,10 +614,10 @@
                 el.innerHTML = '<p class="se-empty">Aucune source sur cette scène — ajoute un élément avec +</p>';
             } else {
                 el.innerHTML = elements.map((item) => `
-                    <div class="se-row${item.id === selectedId ? ' active' : ''}" data-el="${item.id}">
+                    <div class="se-row${item.id === selectedId ? ' active' : ''}" data-el="${esc(item.id)}">
                         <span class="se-row-icon">${item.isCustom ? (ICONS[item.customType] || ICONS.text) : ICONS.builtin}</span>
                         <span class="se-row-name">${esc(item.label)}</span>
-                        <button type="button" class="se-row-eye${item.hidden ? ' off' : ''}" data-el="${item.id}" title="${item.hidden ? 'Afficher' : 'Masquer'}">${item.hidden ? ICONS.eyeOff : ICONS.eye}</button>
+                        <button type="button" class="se-row-eye${item.hidden ? ' off' : ''}" data-el="${esc(item.id)}" title="${item.hidden ? 'Afficher' : 'Masquer'}">${item.hidden ? ICONS.eyeOff : ICONS.eye}</button>
                     </div>`).join('');
             }
             // Éléments intégrés retirés : listés à part, avec un bouton de rétablissement — sans
@@ -944,7 +944,7 @@
             if (spec.kind === 'number') {
                 const val = (typeof raw === 'number') ? raw : spec.def;
                 return `<div class="field"><label>${esc(spec.label)}</label>
-                    <input type="number" class="se-prop" data-prop="${spec.prop}" data-kind="number" value="${val}" step="${spec.step}" min="${spec.min}" max="${spec.max}"></div>`;
+                    <input type="number" class="se-prop" data-prop="${spec.prop}" data-kind="number" value="${esc(val)}" step="${spec.step}" min="${spec.min}" max="${spec.max}"></div>`;
             }
             if (spec.kind === 'font') {
                 const val = raw || 'baron';
@@ -1197,17 +1197,17 @@
             // "auto" / option "(par défaut)") : un texte sans override doit suivre le CSS de la
             // page, et revider le champ est ce qui l'y ramène (voir la route text-style).
             el.innerHTML = texts.map((item) => `
-                <div class="se-text-row" data-text="${item.textId}">
+                <div class="se-text-row" data-text="${esc(item.textId)}">
                     <label>${esc(item.label)}</label>
                     <div class="field-row">
-                        <input type="text" class="se-static-text" data-text="${item.textId}" value="${esc(item.value)}">
-                        <button type="button" class="btn btn-ghost btn-sm se-static-text-reset" data-text="${item.textId}" title="Revenir au texte et au style par défaut">↺</button>
+                        <input type="text" class="se-static-text" data-text="${esc(item.textId)}" value="${esc(item.value)}">
+                        <button type="button" class="btn btn-ghost btn-sm se-static-text-reset" data-text="${esc(item.textId)}" title="Revenir au texte et au style par défaut">↺</button>
                     </div>
                     <div class="field-row se-text-style-row">
-                        <input type="number" class="se-text-style" data-text="${item.textId}" data-prop="size"
+                        <input type="number" class="se-text-style" data-text="${esc(item.textId)}" data-prop="size"
                             value="${typeof item.size === 'number' ? item.size : ''}" placeholder="auto"
                             step="0.1" min="0.5" max="30" title="Taille en vh (vide = taille par défaut de la page)">
-                        <select class="se-text-style" data-text="${item.textId}" data-prop="font" title="Police">
+                        <select class="se-text-style" data-text="${esc(item.textId)}" data-prop="font" title="Police">
                             <option value=""${!item.font ? ' selected' : ''}>(par défaut)</option>
                             <option value="baron"${item.font === 'baron' ? ' selected' : ''}>Baron Neue</option>
                             <option value="inter"${item.font === 'inter' ? ' selected' : ''}>Inter</option>

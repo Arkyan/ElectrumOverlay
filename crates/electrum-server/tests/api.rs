@@ -751,3 +751,38 @@ async fn protection_contre_les_autres_sites_et_le_reseau() {
     assert_eq!(reply(&state, request("GET", "/api/profiles", &[("host", "192.168.1.10:8080")], lan)).await.status, StatusCode::FORBIDDEN);
     assert_eq!(reply(&state, request("POST", "/api/tests/trigger", &[("host", "192.168.1.10:8080")], lan)).await.status, StatusCode::FORBIDDEN);
 }
+
+#[tokio::test]
+async fn profil_partage_piege_et_en_tetes_de_securite() {
+    let (state, _dir) = new_state();
+    // Profil piégé : un « média » qui est en fait une page HTML, et une adresse de serveur WebSocket
+    // détournée pour les overlays.
+    let payload = json!({
+        "name": "Piège",
+        "display": { "server": { "host": "evil.example", "wsPort": 666 }, "twitch": { "broadcasterId": "x" } },
+        "media": { "follow": { "filename": "a.html", "mimeType": "text/html", "dataBase64": "PHNjcmlwdD5hbGVydCgxKTwvc2NyaXB0Pg==" } }
+    });
+    let imported = upload(&state, "/api/profiles/import", "p.json", "application/json", payload.to_string().as_bytes()).await.json();
+    let id = imported["profile"]["id"].as_str().unwrap().to_string();
+    send(&state, "POST", &format!("/api/profiles/{id}/activate"), None).await;
+    let media = send(&state, "GET", &format!("/api/profiles/{id}/media/follow"), None).await;
+    assert_eq!(media.headers["content-type"], "application/octet-stream", "jamais servi comme une page");
+    assert_eq!(media.headers["x-content-type-options"], "nosniff");
+    let config = send(&state, "GET", "/js/config.js", None).await.text();
+    assert!(!config.contains("evil.example") && !config.contains("666"), "{config}");
+
+    // En-têtes : pas d'affichage dans le cadre d'un autre site.
+    let page = send(&state, "GET", "/app", None).await;
+    assert_eq!(page.headers["x-frame-options"], "SAMEORIGIN");
+
+    // Widgets : isolés dans une origine à part.
+    let example = send(&state, "GET", "/api/widgets/example.zip", None).await.body;
+    upload(&state, "/api/widgets/import", "w.zip", "application/zip", &example).await;
+    let widget_id = send(&state, "GET", "/api/widgets", None).await.json()["widgets"][0]["id"].as_str().unwrap().to_string();
+    let widget = send(&state, "GET", &format!("/widgets/{widget_id}/"), None).await;
+    assert_eq!(widget.headers["content-security-policy"], "sandbox allow-scripts");
+
+    // Autorisation Twitch sans le `state` de l'app (lien piégé) : refusée.
+    let forged = send(&state, "POST", "/api/oauth-callback", Some(json!({ "token": "abc" }))).await;
+    assert_eq!(forged.status, StatusCode::BAD_REQUEST);
+}

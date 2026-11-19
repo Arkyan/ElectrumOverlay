@@ -71,6 +71,9 @@ async fn spotify_callback(State(state): State<AppState>, Query(query): Query<Has
     if query.get("error").is_some_and(|e| !e.is_empty()) {
         return back_with_error("Autorisation refusée sur Spotify.");
     }
+    if query.get("state") != Some(&state.oauth_state) {
+        return back_with_error("Autorisation d'origine inconnue : relance la connexion depuis l'app.");
+    }
     let Some(code) = query.get("code").filter(|c| !c.is_empty()) else {
         return back_with_error("Code d'autorisation manquant.");
     };

@@ -193,7 +193,12 @@ async fn serve_asset(state: AppState, kind: AssetKind, id: String, alert_type: S
     let Some(file) = file else { return StatusCode::NOT_FOUND.into_response() };
     match tokio::fs::read(&file.path).await {
         Ok(bytes) => {
-            let mime = if file.mime_type.is_empty() { "application/octet-stream".to_string() } else { file.mime_type };
+            // Seulement des sons, images ou vidéos : un « média » HTML venu d'un profil partagé ne
+            // doit jamais être servi comme une page (il s'exécuterait avec les droits de l'app).
+            let playable = ["audio/", "video/", "image/png", "image/jpeg", "image/gif", "image/webp"]
+                .iter()
+                .any(|prefix| file.mime_type.starts_with(prefix));
+            let mime = if playable { file.mime_type } else { "application/octet-stream".to_string() };
             ([(header::CONTENT_TYPE, mime)], bytes).into_response()
         }
         Err(_) => StatusCode::NOT_FOUND.into_response(),

@@ -55,6 +55,10 @@ impl Store {
         out.insert("twitch".into(), Value::Object(twitch));
         if let Value::Object(display) = display {
             for (key, value) in display {
+                // Ces clés viennent de la config de l'app : un profil (importé) ne les remplace pas.
+                if key == "server" || key == "twitch" {
+                    continue;
+                }
                 out.insert(key, value);
             }
         }

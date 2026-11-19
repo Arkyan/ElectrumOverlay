@@ -24,14 +24,16 @@
                             fetch('/api/oauth-callback', {
                                 method: 'POST',
                                 headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ token })
+                                body: JSON.stringify({ token, state: params.get('state') })
                             })
                                 .then(r => r.json())
                                 .then(data => {
                                     if (data.ok) {
-                                        container.innerHTML = '<p class="msg success">Autorisation réussie pour <strong>' + data.login + '</strong> (ID ' + data.broadcasterId + ').</p><p class="hint">Vous pouvez fermer cet onglet et revenir à ElectrumOverlay.</p>';
+                                        container.innerHTML = '<p class="msg success">Autorisation réussie pour <strong></strong>.</p><p class="hint">Vous pouvez fermer cet onglet et revenir à ElectrumOverlay.</p>';
+                                        container.querySelector('strong').textContent = data.login + ' (ID ' + data.broadcasterId + ')';
                                     } else {
-                                        container.innerHTML = '<p class="msg error">' + (data.error || 'Erreur inconnue') + '</p>';
+                                        container.innerHTML = '<p class="msg error"></p>';
+                                        container.querySelector('p').textContent = data.error || 'Erreur inconnue';
                                     }
                                 })
                                 .catch(() => {

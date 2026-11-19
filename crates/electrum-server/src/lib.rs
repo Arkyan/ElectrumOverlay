@@ -131,7 +131,7 @@ pub async fn start(state: AppState, http_port: u16, ws_port: u16) -> io::Result<
             }
         }),
         tokio::spawn(async move {
-            if let Err(error) = axum::serve(ws_listener, ws_app).with_graceful_shutdown(ws_signal).await {
+            if let Err(error) = axum::serve(ws_listener, ws_app.into_make_service_with_connect_info::<SocketAddr>()).with_graceful_shutdown(ws_signal).await {
                 eprintln!("❌ Serveur WebSocket arrêté : {error}");
             }
         }),

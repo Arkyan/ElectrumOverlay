@@ -311,27 +311,28 @@ impl Store {
     /// Contenu d'un fichier de profil à importer, au format de `export_profile` (sons/vidéos en
     /// base64) : zip (`.electrumprofile.zip`) ou ancien JSON (`.electrumprofile.json`).
     pub fn read_profile_package(bytes: &[u8]) -> Result<Value> {
-        use std::io::Read;
         if !bytes.starts_with(b"PK\x03\x04") {
             let text = String::from_utf8_lossy(bytes);
             return serde_json::from_str(&text).map_err(|e| Error::msg(e.to_string()));
         }
         let invalid = |e: zip::result::ZipError| Error::msg(format!("zip illisible ({e})"));
         let mut archive = zip::ZipArchive::new(std::io::Cursor::new(bytes)).map_err(invalid)?;
-        let mut text = String::new();
-        archive
+        // Plafonds une fois décompressé (un zip piégé peut annoncer une petite taille).
+        const SETTINGS_MAX: u64 = 20 * 1024 * 1024;
+        const FILES_MAX: u64 = 300 * 1024 * 1024;
+        let settings = archive
             .by_name(PACKAGE_PROFILE_FILE)
-            .map_err(|_| Error::msg(format!("{PACKAGE_PROFILE_FILE} absent du zip")))?
-            .read_to_string(&mut text)
-            .map_err(|e| Error::msg(e.to_string()))?;
+            .map_err(|_| Error::msg(format!("{PACKAGE_PROFILE_FILE} absent du zip")))?;
+        let text = String::from_utf8_lossy(&crate::read_capped(settings, SETTINGS_MAX, PACKAGE_PROFILE_FILE)?).to_string();
+        let mut budget = FILES_MAX;
         let mut payload: Value = serde_json::from_str(&text).map_err(|e| Error::msg(e.to_string()))?;
         for kind in [AssetKind::Audio, AssetKind::Media] {
             let Some(Value::Object(entries)) = payload.get_mut(kind.key()) else { continue };
             for entry in entries.values_mut() {
                 let Some(path) = entry.get("file").and_then(Value::as_str).map(str::to_string) else { continue };
-                let mut file = archive.by_name(&path).map_err(|_| Error::msg(format!("{path} absent du zip")))?;
-                let mut data = Vec::new();
-                file.read_to_end(&mut data).map_err(|e| Error::msg(e.to_string()))?;
+                let file = archive.by_name(&path).map_err(|_| Error::msg(format!("{path} absent du zip")))?;
+                let data = crate::read_capped(file, budget, "profil (sons et vidéos)")?;
+                budget -= data.len() as u64;
                 if let Value::Object(entry) = entry {
                     entry.remove("file");
                     entry.insert("dataBase64".into(), json!(base64::engine::general_purpose::STANDARD.encode(&data)));
